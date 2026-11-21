@@ -12,7 +12,7 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
   1. Run the QA gate.
   2. Report the result.
   3. **Wait for the user's go-ahead** before the next step.
-- Use one git branch per phase (`phase-N-name`). **Never commit or push unless the user asks.**
+- All work happens directly on `main` (no phase branches — the user's decision, 2026-11-22). **Never commit or push unless the user asks.**
 - **Ask before adding any composer or npm package.**
   - Approved: `laravel/fortify`, `stripe/stripe-php`, `intervention/image-laravel`, `barryvdh/laravel-dompdf`, `lucide` (npm), and `laravel/boost` (**dev only**, added before Phase 2 — PLAN D17).
   - **Not used, by the user's decision:** Filament, Livewire, Alpine.js, Spatie packages.

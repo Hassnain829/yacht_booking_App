@@ -783,10 +783,10 @@ There are also in-app notifications (bell icon) for customers, owners and the ad
 ## 14. Phases and steps
 
 - Each step ends with its QA gate (§15) and your go-ahead before the next step starts.
-- There is one git branch per phase, merged to `main` after QA.
+- All work happens on `main` (decided 2026-11-22); each phase ends with one or more commits made by the user.
 - **v1 launch = Phases 0–9 + 11.** Phase 10 (CMS / SEO / reports) starts as a minimal version before launch and grows afterwards.
 
-### Phase 0 — Foundation (setup) ✅ done 2026-11-21 (branch `phase-0-foundation`, awaiting approval)
+### Phase 0 — Foundation (setup) ✅ done 2026-11-21 (committed on `main` together with Phase 1)
 0.1 Replace the Laravel-Boost bootstrap text in `CLAUDE.md` / `AGENTS.md` with **our own project rules**: stack, conventions, the §8.2 security standard, the QA gate. (No Boost.)
 0.2 Pin `config.platform.php` to **PHP 8.4.1** (R1) ✅ done; set up `.env.example`, APP_NAME and the timezone handling (UTC storage, Chicago display).
 0.3 Tailwind v4 `@theme` from the mockup (navy, brass, shell, container); self-hosted Playfair Display + Manrope; Lucide via npm.
