@@ -32,7 +32,7 @@ class HeaderComposer
                 'first_name' => $user->first_name,
                 'email' => $user->email,
                 'initials' => $user->initials,
-                'role' => 'customer', // Phase 2.2: $user->role
+                'role' => $user->role->value,
             ]);
         }
 

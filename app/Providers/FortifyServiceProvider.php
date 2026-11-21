@@ -8,11 +8,14 @@ use App\Actions\Fortify\UpdateUserPassword;
 use App\Actions\Fortify\UpdateUserProfileInformation;
 use App\Http\Responses\Auth\PasswordResetLinkResponse;
 use App\Http\Responses\Auth\RegisterResponse;
+use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Actions\RedirectIfTwoFactorAuthenticatable;
 use Laravel\Fortify\Contracts\FailedPasswordResetLinkRequestResponse;
 use Laravel\Fortify\Contracts\RegisterResponse as RegisterResponseContract;
@@ -25,6 +28,9 @@ use Laravel\Fortify\Fortify;
  */
 class FortifyServiceProvider extends ServiceProvider
 {
+    /** bcrypt hash of a random string — compared when the email is unknown, to even out timing. */
+    private const TIMING_HASH = '$2y$12$5SXMNMaAylVjcW4ze0wBy.Q2cVcsikxFeuXGgP4tBD/gWqIUluHye';
+
     public function register(): void
     {
         $this->app->singleton(RegisterResponseContract::class, RegisterResponse::class);
@@ -41,6 +47,8 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
         Fortify::redirectUserForTwoFactorAuthenticationUsing(RedirectIfTwoFactorAuthenticatable::class);
 
+        Fortify::authenticateUsing(fn (Request $request) => $this->authenticate($request));
+
         Fortify::loginView(fn () => view('auth.login'));
         Fortify::registerView(fn () => view('auth.register'));
         Fortify::requestPasswordResetLinkView(fn () => view('auth.forgot-password'));
@@ -52,6 +60,35 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::confirmPasswordView(fn () => view('auth.confirm-password'));
 
         $this->configureRateLimiting();
+    }
+
+    /**
+     * Email + password check for every login.
+     * - A wrong password and an unknown email both return null → the same generic error (no enumeration).
+     *   An unknown email still runs one hash check, so both take about the same time.
+     * - A suspended or banned account is refused (only after the correct password, so nothing leaks).
+     */
+    private function authenticate(Request $request): ?User
+    {
+        $email = Str::lower((string) $request->input(Fortify::username()));
+        $password = (string) $request->input('password');
+        $user = User::query()->where('email', $email)->first();
+
+        if (! $user) {
+            Hash::check($password, self::TIMING_HASH);
+
+            return null;
+        }
+        if (! Hash::check($password, $user->password)) {
+            return null;
+        }
+        if (! $user->isActive()) {
+            throw ValidationException::withMessages([
+                Fortify::username() => 'This account is not active. Please contact us if you think this is a mistake.',
+            ]);
+        }
+
+        return $user;
     }
 
     private function configureRateLimiting(): void

@@ -5,13 +5,15 @@
 @php
     $account = $headerAccount ?? null;
     $link = 'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-navy-700 transition hover:bg-navy-50 hover:text-navy-950';
+    // Links per role (PLAN §4.4 access matrix): admins don't book or list boats.
     $links = $account ? array_filter([
-        ['calendar-check', 'My trips', route('account.trips.index')],
+        $account->role === 'admin' ? ['shield-check', 'Admin dashboard', route('admin.dashboard')] : null,
+        $account->role !== 'admin' ? ['calendar-check', 'My trips', route('account.trips.index')] : null,
         ['user-round', 'Profile & security', route('account.profile')],
         $account->role === 'owner' ? ['layout-dashboard', 'Owner dashboard', route('owner.dashboard')] : null,
         $account->role === 'owner' ? ['sailboat', 'My boats', route('owner.boats.index')] : null,
         $account->role === 'owner' ? ['wallet', 'Earnings & payouts', route('owner.earnings')] : null,
-        $account->role !== 'owner' ? ['sailboat', 'List your boat', route('list-your-boat')] : null,
+        $account->role === 'customer' ? ['sailboat', 'List your boat', route('list-your-boat')] : null,
     ]) : [
         ['calendar-check', 'My trips', route('account.trips.index')],
         ['sailboat', 'List your boat', route('list-your-boat')],

@@ -2,10 +2,14 @@
 
 namespace App\Providers;
 
+use App\Models\User;
 use App\View\Composers\FooterComposer;
 use App\View\Composers\HeaderComposer;
+use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -31,6 +35,16 @@ class AppServiceProvider extends ServiceProvider
 
         $this->configureRateLimiting();
         $this->configurePasswords();
+
+        // Remember the last successful login (shown to the admin). Phase 2.4 adds the full login_events log.
+        Event::listen(Login::class, function (Login $event) {
+            if ($event->user instanceof User) {
+                DB::table('users')->where('id', $event->user->getKey())->update([
+                    'last_login_at' => now(),
+                    'last_login_ip' => request()->ip(),
+                ]);
+            }
+        });
     }
 
     /**

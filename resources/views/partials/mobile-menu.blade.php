@@ -32,7 +32,7 @@
                     <span class="min-w-0"><span class="block truncate text-sm font-bold">{{ $account->name }}</span><span class="block truncate text-xs text-white/50">{{ $account->email }}</span></span>
                 </div>
                 <div class="mt-4 grid grid-cols-2 gap-2 text-sm font-semibold">
-                    <a href="{{ route('account.trips.index') }}" class="rounded-xl bg-white/5 px-3 py-2.5 text-center hover:bg-white/10">My trips</a>
+                    <a href="{{ $account->role === 'admin' ? route('admin.dashboard') : route('account.trips.index') }}" class="rounded-xl bg-white/5 px-3 py-2.5 text-center hover:bg-white/10">{{ $account->role === 'admin' ? 'Admin dashboard' : 'My trips' }}</a>
                     @if ($account->role === 'owner')
                         <a href="{{ route('owner.dashboard') }}" class="rounded-xl bg-white/5 px-3 py-2.5 text-center hover:bg-white/10">Owner dashboard</a>
                     @else
