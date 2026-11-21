@@ -26,6 +26,17 @@ class HeaderComposer
 
     private function account(): ?Fluent
     {
+        if ($user = $this->request->user()) {
+            return new Fluent([
+                'name' => $user->name,
+                'first_name' => $user->first_name,
+                'email' => $user->email,
+                'initials' => $user->initials,
+                'role' => 'customer', // Phase 2.2: $user->role
+            ]);
+        }
+
+        // PHASE 1 PREVIEW (until Phase 2.3 puts these areas behind login).
         $profile = match (true) {
             $this->request->routeIs('owner.*') => [app(DemoOwner::class)->profile(), 'owner'],
             $this->request->routeIs('account.*') => [app(DemoCustomer::class)->profile(), 'customer'],

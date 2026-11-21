@@ -4,7 +4,7 @@
     <h1 class="font-display text-4xl text-navy-950">Create your account</h1>
     <p class="mt-2 text-sm text-navy-500">Book faster, keep your receipts in one place — and list your boat any time with the same account.</p>
 
-    <form method="POST" action="{{ url('/register') }}" class="mt-8 grid gap-5 sm:grid-cols-2" data-demo-form="Demo: creating accounts goes live in Phase 2.">
+    <form method="POST" action="{{ url('/register') }}" class="mt-8 grid gap-5 sm:grid-cols-2">
         @csrf
         <x-form.input name="first_name" label="First name" required autofocus autocomplete="given-name" maxlength="60" />
         <x-form.input name="last_name" label="Last name" required autocomplete="family-name" maxlength="60" />

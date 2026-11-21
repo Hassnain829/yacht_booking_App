@@ -96,20 +96,15 @@ Route::view('/cancellation-policy', 'pages.legal.cancellation')->name('legal.can
 
 /*
 |--------------------------------------------------------------------------
-| Auth screens — PHASE 1 PREVIEW ONLY (GET, no logic)
+| Auth
 |--------------------------------------------------------------------------
 |
-| Same URLs and names Fortify registers in Phase 2. Then these lines are deleted and
-| FortifyServiceProvider points Fortify::loginView() etc. at the same Blade views.
+| Login, register, password reset, email verification, password confirmation and
+| logout are registered by Fortify (config/fortify.php, FortifyServiceProvider).
+| PHASE 2.4 removes this last preview, when two-factor authentication is switched on.
 |
 */
-Route::view('/login', 'auth.login')->name('login');
-Route::view('/register', 'auth.register')->name('register');
-Route::view('/forgot-password', 'auth.forgot-password')->name('password.request');
-Route::view('/reset-password/{token}', 'auth.reset-password')->where('token', '[A-Za-z0-9]{1,100}')->name('password.reset');
-Route::view('/email/verify', 'auth.verify-email')->name('verification.notice');
 Route::view('/two-factor-challenge', 'auth.two-factor-challenge')->name('two-factor.login');
-Route::view('/user/confirm-password', 'auth.confirm-password')->name('password.confirm');
 
 /*
 |--------------------------------------------------------------------------

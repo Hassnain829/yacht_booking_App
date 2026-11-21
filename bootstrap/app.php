@@ -15,6 +15,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // Set by JS when a visitor closes the promo strip. It only holds the promo id
         // (compared exactly in the header), so it doesn't need to be encrypted.
         $middleware->encryptCookies(except: ['promo_hidden']);
+
+        // Signed-in users who open /login or /register. Phase 2.5: by role (admin → /admin, owner → /owner).
+        $middleware->redirectUsersTo('/account/trips');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

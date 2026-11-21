@@ -2,24 +2,51 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Fortify\TwoFactorAuthenticatable;
 
-#[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
+/**
+ * One account for everyone (PLAN §4.1). The public id is `ulid`; the numeric id never leaves the server.
+ * Phase 2.2 adds role + status — neither is ever mass-assignable.
+ */
+#[Fillable(['first_name', 'last_name', 'email', 'phone', 'password', 'marketing_opt_in'])]
+#[Hidden(['id', 'password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'])]
+class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, HasUlids, Notifiable, TwoFactorAuthenticatable;
+
+    /** ULIDs fill the `ulid` column only — the primary key stays an auto-increment id. */
+    public function uniqueIds(): array
+    {
+        return ['ulid'];
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'ulid';
+    }
+
+    /** "Jane Doe" (read-only; first_name / last_name are stored). */
+    protected function name(): Attribute
+    {
+        return Attribute::get(fn () => trim($this->first_name.' '.$this->last_name));
+    }
+
+    protected function initials(): Attribute
+    {
+        return Attribute::get(fn () => strtoupper(mb_substr($this->first_name, 0, 1).mb_substr($this->last_name, 0, 1)));
+    }
 
     /**
-     * Get the attributes that should be cast.
-     *
      * @return array<string, string>
      */
     protected function casts(): array
@@ -27,6 +54,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'marketing_opt_in' => 'boolean',
+            'two_factor_confirmed_at' => 'datetime',
         ];
     }
 }

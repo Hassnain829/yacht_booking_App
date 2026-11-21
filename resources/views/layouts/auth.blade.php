@@ -37,8 +37,12 @@
 
         <section class="flex items-center justify-center px-5 py-12 sm:px-10">
             <div class="w-full max-w-md">
-                @if (session('status'))
-                    <p class="mb-6 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200" role="status">{{ session('status') }}</p>
+                @php
+                    $status = session('status');
+                    $status = is_string($status) ? (['verification-link-sent' => 'A new confirmation link is on its way to your inbox.'][$status] ?? $status) : null;
+                @endphp
+                @if ($status)
+                    <p class="mb-6 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200" role="status">{{ $status }}</p>
                 @endif
                 @yield('form')
             </div>

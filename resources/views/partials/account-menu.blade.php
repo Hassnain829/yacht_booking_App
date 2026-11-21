@@ -59,7 +59,7 @@
         </nav>
 
         @if ($account)
-            <form method="POST" action="{{ url('/logout') }}" class="border-t border-navy-100 p-2" data-demo-form="Demo: logging out goes live in Phase 2.">
+            <form method="POST" action="{{ url('/logout') }}" class="border-t border-navy-100 p-2">
                 @csrf
                 <button type="submit" class="{{ $link }} w-full text-left"><i data-lucide="log-out" class="h-4 w-4 text-navy-400"></i>Log out</button>
             </form>

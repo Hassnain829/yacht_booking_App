@@ -5,7 +5,7 @@
     <h1 class="mt-6 font-display text-4xl text-navy-950">Forgot your password?</h1>
     <p class="mt-2 text-sm leading-relaxed text-navy-500">Enter the email you use for {{ config('site.business.name') }}. If it has an account, we'll send a link to choose a new password. The link works for 60 minutes.</p>
 
-    <form method="POST" action="{{ url('/forgot-password') }}" class="mt-8 space-y-5" data-demo-form="Demo: reset emails go live in Phase 2.">
+    <form method="POST" action="{{ url('/forgot-password') }}" class="mt-8 space-y-5">
         @csrf
         <x-form.input name="email" type="email" label="Email" required autofocus autocomplete="email" maxlength="254" placeholder="you@email.com" icon="mail" />
         <x-button type="submit" size="block">Email me a reset link</x-button>

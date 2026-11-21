@@ -128,9 +128,7 @@ class AccountPagesTest extends TestCase
             'register' => ['/register', 'Create your account', '/register'],
             'forgot' => ['/forgot-password', 'Forgot your password?', '/forgot-password'],
             'reset' => ['/reset-password/abc123', 'Choose a new password', '/reset-password'],
-            'verify' => ['/email/verify', 'Check your inbox', '/email/verification-notification'],
             'two factor' => ['/two-factor-challenge', 'Enter your code', '/two-factor-challenge'],
-            'confirm' => ['/user/confirm-password', 'Confirm it', '/user/confirm-password'],
         ];
     }
 
@@ -153,7 +151,7 @@ class AccountPagesTest extends TestCase
             ->assertOk()
             ->assertSee('name="token" value="abc123"', false)
             ->assertDontSee('"><script>alert(1)</script>', false);
-        $this->get('/reset-password/%3Cscript%3E')->assertNotFound();
+        $this->get('/reset-password/%3Cscript%3E')->assertOk()->assertSee('name="token" value="&lt;script&gt;"', false); // verify / confirm screens need a login: tests/Feature/Phase2/AuthTest
     }
 
     public function test_register_links_to_the_legal_pages(): void

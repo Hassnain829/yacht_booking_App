@@ -4,7 +4,7 @@
     <h1 class="font-display text-4xl text-navy-950">Welcome back</h1>
     <p class="mt-2 text-sm text-navy-500">Log in to see your trips, or to manage your boats if you're an owner.</p>
 
-    <form method="POST" action="{{ url('/login') }}" class="mt-8 space-y-5" data-demo-form="Demo: logging in goes live in Phase 2.">
+    <form method="POST" action="{{ url('/login') }}" class="mt-8 space-y-5">
         @csrf
         <x-form.input name="email" type="email" label="Email" required autofocus autocomplete="username" maxlength="254" placeholder="you@email.com" icon="mail" />
         <x-form.password name="password" label="Password" autocomplete="current-password" maxlength="128">

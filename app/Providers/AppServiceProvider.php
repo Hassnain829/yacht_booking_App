@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Validation\Rules\Password;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -29,6 +30,21 @@ class AppServiceProvider extends ServiceProvider
         View::composer(['partials.header', 'partials.mobile-menu'], HeaderComposer::class);
 
         $this->configureRateLimiting();
+        $this->configurePasswords();
+    }
+
+    /**
+     * Password rules (PLAN §8.1): 12+ characters, upper + lower case, a number, and not in a known data breach
+     * (Have I Been Pwned, k-anonymity — only 5 characters of the hash leave the server). The breach check is
+     * skipped in automated tests so they never call the internet.
+     */
+    private function configurePasswords(): void
+    {
+        Password::defaults(function () {
+            $rule = Password::min(12)->max(128)->mixedCase()->numbers();
+
+            return $this->app->runningUnitTests() ? $rule : $rule->uncompromised();
+        });
     }
 
     /**
