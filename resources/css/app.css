@@ -3,7 +3,428 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
+/* ==========================================================================
+   Chicago Yacht Booking — theme (ported from the mockup's tailwind.config.js)
+   ========================================================================== */
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    /* Fonts: the variables come from the @fonts directive (vite.config.js). */
+    --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-display: var(--font-playfair-display), Georgia, serif;
+
+    --color-navy-50: #f2f5f9;
+    --color-navy-100: #e2e8f1;
+    --color-navy-200: #c6d2e2;
+    --color-navy-300: #9bb0c9;
+    --color-navy-400: #6a86a8;
+    --color-navy-500: #48668b;
+    --color-navy-600: #365071;
+    --color-navy-700: #2a3f5a;
+    --color-navy-800: #1a2b42;
+    --color-navy-900: #0f1e31;
+    --color-navy-950: #07111e;
+
+    --color-brass-50: #fbf7ee;
+    --color-brass-100: #f4eacf;
+    --color-brass-200: #e9d4a1;
+    --color-brass-300: #dcbb72;
+    --color-brass-400: #cfa34c;
+    --color-brass-500: #bd8c37;
+    --color-brass-600: #a2702d;
+    --color-brass-700: #835628;
+    --color-brass-800: #6c4626;
+    --color-brass-900: #5a3b23;
+
+    --color-shell: #f7f4ee;
+
+    /* Tailwind v3 line heights (fixed rem). v4 uses unitless ratios, which children with a
+       smaller font (e.g. text-[11px] inside text-sm) inherit differently. Restored so the
+       mockup's spacing stays pixel-identical. */
+    --text-xs--line-height: 1rem;
+    --text-sm--line-height: 1.25rem;
+    --text-base--line-height: 1.5rem;
+    --text-lg--line-height: 1.75rem;
+    --text-xl--line-height: 1.75rem;
+    --text-2xl--line-height: 2rem;
+    --text-3xl--line-height: 2.25rem;
+    --text-4xl--line-height: 2.5rem;
+
+    --shadow-soft: 0 10px 40px -12px rgb(7 17 30 / 0.18);
+    --shadow-card: 0 1px 2px rgb(7 17 30 / 0.04), 0 18px 40px -18px rgb(7 17 30 / 0.28);
+    --shadow-glow: 0 10px 30px -8px rgb(207 163 76 / 0.55);
+
+    /* The mockup's container tops out at 1320px. The mockup never uses `2xl:`,
+       so the 2xl breakpoint is moved to 1320px to give `container` that width. */
+    --breakpoint-2xl: 82.5rem;
+
+    --animate-marquee: marquee 40s linear infinite;
+    --animate-scroll-dot: scroll-dot 1.8s ease-in-out infinite;
+
+    @keyframes marquee {
+        0% {
+            transform: translateX(0);
+        }
+        100% {
+            transform: translateX(-50%);
+        }
+    }
+
+    @keyframes scroll-dot {
+        0% {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        80% {
+            transform: translateY(14px);
+            opacity: 0;
+        }
+        100% {
+            opacity: 0;
+        }
+    }
+}
+
+/* Mockup container: centered, padding 1rem → 1.5rem (sm) → 2rem (lg). */
+@utility container {
+    margin-inline: auto;
+    padding-inline: 1rem;
+
+    @media (width >= 40rem) {
+        padding-inline: 1.5rem;
+    }
+
+    @media (width >= 64rem) {
+        padding-inline: 2rem;
+    }
+}
+
+/* ==========================================================================
+   Base: restore the Tailwind v3 defaults the mockup was designed with
+   ========================================================================== */
+@layer base {
+    *,
+    ::after,
+    ::before,
+    ::backdrop,
+    ::file-selector-button {
+        border-color: var(--color-gray-200, currentColor);
+    }
+
+    button:not(:disabled),
+    [role='button']:not(:disabled) {
+        cursor: pointer;
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+        color: var(--color-gray-400);
+    }
+
+    html {
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+        text-rendering: optimizeLegibility;
+    }
+
+    ::selection {
+        background: var(--color-brass-400);
+        color: var(--color-navy-950);
+    }
+
+    /* Number inputs without spinners */
+    input[type='number']::-webkit-inner-spin-button,
+    input[type='number']::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    input[type='number'] {
+        -moz-appearance: textfield;
+    }
+}
+
+/* ==========================================================================
+   Components: the mockup's custom CSS (assets/css/app.css), unchanged
+   ========================================================================== */
+@layer components {
+    /* Scroll reveal (only when JS is running: <html class="js">) */
+    .js .reveal {
+        opacity: 0;
+        transform: translateY(28px);
+        transition:
+            opacity 0.8s cubic-bezier(0.2, 0.7, 0.2, 1),
+            transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+    }
+    .js .reveal.is-visible {
+        opacity: 1;
+        transform: none;
+    }
+    .js .reveal[data-delay='1'] {
+        transition-delay: 0.08s;
+    }
+    .js .reveal[data-delay='2'] {
+        transition-delay: 0.16s;
+    }
+    .js .reveal[data-delay='3'] {
+        transition-delay: 0.24s;
+    }
+    .js .reveal[data-delay='4'] {
+        transition-delay: 0.32s;
+    }
+
+    /* Header */
+    #header.is-solid {
+        background: rgb(7 17 30 / 0.92);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        box-shadow: 0 10px 30px -15px rgb(0 0 0 / 0.5);
+    }
+    #header.is-solid #promo-bar {
+        display: none; /* the promo strip only shows at the top of the page */
+    }
+    .nav-link {
+        position: relative;
+    }
+    .nav-link::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -6px;
+        height: 1.5px;
+        background: var(--color-brass-400);
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 0.3s ease;
+    }
+    .nav-link:hover::after,
+    .nav-link.is-active::after {
+        transform: scaleX(1);
+    }
+
+    /* Mobile drawer */
+    #mobile-menu {
+        transition:
+            opacity 0.3s ease,
+            visibility 0.3s ease;
+    }
+    #mobile-menu .drawer {
+        transition: transform 0.4s cubic-bezier(0.2, 0.7, 0.2, 1);
+    }
+    #mobile-menu:not(.is-open) {
+        opacity: 0;
+        visibility: hidden;
+    }
+    #mobile-menu:not(.is-open) .drawer {
+        transform: translateX(100%);
+    }
+
+    /* Accordion */
+    .acc-panel {
+        display: grid;
+        grid-template-rows: 0fr;
+        transition: grid-template-rows 0.35s ease;
+    }
+    .acc-panel > div {
+        overflow: hidden;
+    }
+    .acc-item.is-open .acc-panel {
+        grid-template-rows: 1fr;
+    }
+    .acc-item .acc-icon {
+        transition: transform 0.3s ease;
+    }
+    .acc-item.is-open .acc-icon {
+        transform: rotate(45deg);
+    }
+
+    /* Horizontal scrollers */
+    .no-scrollbar {
+        scrollbar-width: none;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* Toasts */
+    .toast {
+        animation: toast-in 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
+    }
+    .toast.toast-out {
+        opacity: 0;
+        transform: translateY(10px);
+        transition: all 0.3s ease;
+    }
+
+    /* Booking: step panels */
+    .step-panel {
+        animation: panel-in 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+    }
+
+    /* Lightbox */
+    #lightbox {
+        transition:
+            opacity 0.3s ease,
+            visibility 0.3s ease;
+    }
+    #lightbox:not(.is-open) {
+        opacity: 0;
+        visibility: hidden;
+    }
+
+    /* Hero video: subtle zoom */
+    .hero-video {
+        animation: hero-zoom 24s ease-in-out infinite alternate;
+    }
+
+    /* Spinner */
+    .spinner {
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        animation: spin 0.7s linear infinite;
+    }
+
+    /* Header account dropdown */
+    .account-panel:not([hidden]) {
+        transform-origin: top right;
+        animation: menu-in 0.18s cubic-bezier(0.2, 0.7, 0.2, 1);
+    }
+
+    /* Long-form text (legal pages). Phase 10: the same class styles CMS page bodies. */
+    .legal {
+        color: var(--color-navy-700);
+        font-size: 0.9375rem;
+        line-height: 1.75;
+    }
+    .legal h2 {
+        margin-top: 3rem;
+        scroll-margin-top: 7rem;
+        font-family: var(--font-display);
+        font-size: 1.75rem;
+        line-height: 2.25rem;
+        color: var(--color-navy-950);
+    }
+    .legal h3 {
+        margin-top: 1.75rem;
+        font-weight: 800;
+        color: var(--color-navy-950);
+    }
+    .legal p,
+    .legal ul,
+    .legal table {
+        margin-top: 1rem;
+    }
+    .legal ul {
+        list-style: disc;
+        padding-left: 1.25rem;
+    }
+    .legal li + li {
+        margin-top: 0.5rem;
+    }
+    .legal a {
+        font-weight: 700;
+        color: var(--color-navy-950);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+    .legal strong {
+        color: var(--color-navy-950);
+    }
+    .legal table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+    }
+    .legal th,
+    .legal td {
+        border-bottom: 1px solid var(--color-navy-100);
+        padding: 0.75rem 0.75rem 0.75rem 0;
+        text-align: left;
+        vertical-align: top;
+    }
+    .legal th {
+        font-weight: 800;
+        color: var(--color-navy-950);
+    }
+}
+
+@keyframes toast-in {
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes panel-in {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* Defined here too: Tailwind only outputs its own `spin` when `animate-spin` is used. */
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes hero-zoom {
+    from {
+        transform: scale(1);
+    }
+    to {
+        transform: scale(1.08);
+    }
+}
+
+/* Print (confirmation page, receipts) */
+@media print {
+    #header,
+    #site-footer,
+    .no-print {
+        display: none !important;
+    }
+    body {
+        background: #fff !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+    .js .reveal {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes menu-in {
+    from {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
 }

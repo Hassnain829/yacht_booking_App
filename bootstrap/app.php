@@ -12,7 +12,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Set by JS when a visitor closes the promo strip. It only holds the promo id
+        // (compared exactly in the header), so it doesn't need to be encrypted.
+        $middleware->encryptCookies(except: ['promo_hidden']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

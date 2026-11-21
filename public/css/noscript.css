@@ -1,0 +1,6 @@
+/* Loaded only when JavaScript is off (<noscript> in layouts/app.blade.php).
+   The server always renders <html class="js">, so undo the JS-only hiding of scroll-reveal content. */
+.js .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+}
