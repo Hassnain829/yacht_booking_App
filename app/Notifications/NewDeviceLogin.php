@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\SkipsDeletedAccounts;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -13,7 +14,7 @@ use Illuminate\Notifications\Notification;
  */
 class NewDeviceLogin extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, SkipsDeletedAccounts;
 
     public function __construct(public SecurityContext $context) {}
 

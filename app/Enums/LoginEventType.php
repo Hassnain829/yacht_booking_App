@@ -15,6 +15,8 @@ enum LoginEventType: string
     case TwoFactorDisabled = '2fa_disabled';
     case RecoveryCodeUsed = 'recovery_code_used';
     case OtherDevicesLoggedOut = 'other_devices_logged_out';
+    case EmailChanged = 'email_changed';
+    case AccountDeleted = 'account_deleted';
 
     public function label(): string
     {
@@ -29,6 +31,8 @@ enum LoginEventType: string
             self::TwoFactorDisabled => 'Two-factor login turned off',
             self::RecoveryCodeUsed => 'Recovery code used',
             self::OtherDevicesLoggedOut => 'Logged out other devices',
+            self::EmailChanged => 'Email changed',
+            self::AccountDeleted => 'Account deleted',
         };
     }
 }

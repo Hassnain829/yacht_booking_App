@@ -68,6 +68,7 @@ Route::prefix('owner')->name('owner.')->middleware(['auth', 'active', 'verified'
 // Customer account — signed-in and active. Content is demo data until Phase 4 (BookingPolicy: other people's trips → 404).
 Route::prefix('account')->name('account.')->middleware(['auth', 'active'])->group(function () {
     Route::get('/', [AccountProfileController::class, 'show'])->name('profile');
+    Route::delete('/', [AccountProfileController::class, 'destroy'])->middleware('throttle:account-security')->name('destroy');
     Route::get('/trips', [AccountTripController::class, 'index'])->name('trips.index');
     Route::get('/trips/{ulid}', [AccountTripController::class, 'show'])->where('ulid', '[0-9A-HJKMNP-TV-Z]{26}')->name('trips.show');
 

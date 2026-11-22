@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\SkipsDeletedAccounts;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -10,7 +11,7 @@ use Illuminate\Notifications\Notification;
 /** "Two-factor login was turned on / off" (PLAN §11), including a reset by our team. */
 class TwoFactorChanged extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, SkipsDeletedAccounts;
 
     public function __construct(
         public bool $enabled,

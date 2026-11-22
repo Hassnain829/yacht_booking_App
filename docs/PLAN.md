@@ -225,9 +225,9 @@ If someone opens another user's record, the app returns **404, not 403**, so att
   - id, ulid, first_name, last_name, email (unique), email_verified_at, phone, password, avatar_path.
   - **role** (customer|owner|admin, *not fillable*), status (active|suspended|banned), status_reason.
   - two_factor_secret, two_factor_recovery_codes, two_factor_confirmed_at.
-  - stripe_customer_id, marketing_opt_in, last_login_at, last_login_ip, timestamps, deleted_at.
+  - stripe_customer_id, marketing_opt_in, last_login_at, last_login_ip, password_changed_at (2.5), timestamps, deleted_at.
 - **sessions, password_reset_tokens, cache, jobs, failed_jobs:** already exist.
-- **login_events:** user_id?, email, event (login|failed|logout|lockout|2fa_failed|password_changed|2fa_enabled|2fa_disabled|recovery_code_used|other_devices_logged_out), ip, user_agent, device_id (SHA-256 of the device cookie), created_at. Kept 1 year (pruned daily). *(Built in 2.4; the last four events and `device_id` were added then.)*
+- **login_events:** user_id?, email, event (login|failed|logout|lockout|2fa_failed|password_changed|2fa_enabled|2fa_disabled|recovery_code_used|other_devices_logged_out|email_changed|account_deleted), ip, user_agent, device_id (SHA-256 of the device cookie), created_at. Kept 1 year (pruned daily). *(Built in 2.4 — `2fa_enabled` … `other_devices_logged_out` and `device_id` added then; `email_changed` and `account_deleted` in 2.5.)*
 - **audit_logs:** id, user_id?, action (e.g. `payout.approved`, `boat.price_changed`), subject_type (short morph name, e.g. `user`), subject_id, before (json), after (json), reason, ip, user_agent, created_at. Never changed or deleted; kept for good. *(Built in 2.4.)*
 - **owner_profiles:**
   - user_id (unique), business_type (individual|company), company_name, address fields, years_operating.
@@ -510,7 +510,7 @@ draft → pending_review → approved → published ⇄ paused (owner)
   - Login and reset errors are generic.
   - Reset links are single-use and expire after 60 minutes.
 - **Account changes:**
-  - Changing the email needs re-verification.
+  - Changing the email needs the current password and re-verification, and the old address is told (2.5).
   - Changing the password logs out all other devices and sends an email.
   - A login from a new device sends an email to owners and the admin.
 - **Sessions:**
@@ -827,7 +827,14 @@ There are also in-app notifications (bell icon) for customers, owners and the ad
   - **Fix (found by the user, 2026-11-22): the setup QR code could not be scanned** ("Unrecognized QR code" from the Chrome Authenticator extension). Fortify's QR has no quiet zone (margin 0), is grey and was shown at 176 px (≈3.9 px per module, blurred). Now our own render: black on white, the standard 4-module quiet zone inside the frame, exactly 5 screen pixels per module (265–285 px), shown at its real size. Checked by decoding the real page's QR with two decoders (jsQR + the stricter qrcode-reader): both read it at 100% zoom; the setup key always works as a fallback.
   - Open: "alerts on repeated failures" (§8.5) — the data is in `login_events`; the alert/admin view comes with the admin Users screen (Phase 3). The privacy policy should mention the device cookie when the legal text is written.
   - QA: 342 PHP (1,788 assertions) + 39 JS tests (16 2FA, 13 security-log, 9 user-agent, access matrix incl. "admin without 2FA"); migrations roll back; real-browser flows on an isolated SQLite server — admin at 390 px (forced to 2FA → confirm password → QR → wrong / right code → recovery codes → /admin opens → devices → log out others → challenge with a wrong / real recovery code → fresh TOTP at 1280) and owner at 1280 px (turn on, wrong code, payouts checklist, turn off); zero console errors / CSP violations, no overflow; the 5 queued emails delivered with device, IP and Chicago time.
-2.5 Role-based redirects, header account menu (UI built in Phase 1: `partials/account-menu`, `HeaderComposer` — switch it to `$request->user()`), account pages (profile, email change, password, delete account).
+2.5 Role-based redirects, header account menu (UI built in Phase 1: `partials/account-menu`, `HeaderComposer` — switch it to `$request->user()`), account pages (profile, email change, password, delete account). ✅ done 2026-11-22.
+  - **Redirects (§4.2):** after login, after the 2FA code, and when a signed-in user opens /login: the page they wanted, else admin → `/admin`, owner → `/owner`, everyone else → My trips (`App\Support\Home`, our `LoginResponse`). The header account menu already showed the real user (2.3).
+  - **Your details** (Fortify `updateProfileInformation`, PUT `/user/profile-information`, errors in their own bag): name, phone, marketing (the checkbox posts a hidden 0, so a failed password form no longer unticks it). **Email change:** needs the current password (the box appears as you edit the email; the server requires it too), the new address must be verified again (owner area and listing wait for it; "Send the link again" on the page), the **old address gets an email** (new address partly hidden), security-log entry.
+  - **Password** (Fortify `updatePasswords`, PUT `/user/password`): current password + the password rules; logs every other device out (this one stays), "password changed" email, log entry. "Last changed" comes from the new `users.password_changed_at` (set by the User model on every password change; existing accounts start from their sign-up date).
+  - **Delete account** (`DELETE /account`, `DeleteAccountRequest` — own account only, never the admin (403), password, `throttle:account-security`): a dialog with the password (it reopens after a wrong one). `UserAccountService::deleteAccount`: anonymize (name "Deleted account", `deleted-{ulid}@deleted.invalid`, phone, password, 2FA cleared) + soft delete — bookings and payments keep pointing at the row (§8.5); every session ends; the security log forgets the email; audit entry; confirmation email to the real address; logged out → login page with a message. The address is free for a new sign-up. `deletionBlockers()` is the hook for Phase 4 (upcoming trips) and Phases 6–7 (owner boats / money owed).
+  - Queued security emails skip an account deleted before the queue sent them (found in QA: one went to the anonymized address).
+  - Demo removed: `DemoCustomer::profile()` and its config (saved cards stay demo until Phase 5).
+  - QA: 356 PHP (1,948 assertions) + 39 JS tests (14 new account tests: redirects per role / intended / 2FA, details, email change, invalid input + JSON 422, role/status ignored, password change, delete incl. guest / admin 403 / wrong password / rate limit / anonymization); migration rolls back; real-browser flows on an isolated SQLite server with `npm run dev` running (dev CSP): login per role, email change → verify, wrong / right password change, delete dialog wrong → reopens → right → login page; 1280 + 390 px, zero console / CSP errors, no overflow; queued emails checked.
 2.6 JSON endpoint foundation: error format, named rate limiters, API Resource base, idempotency-key middleware.
 **QA:** route × role access-matrix test; throttle tests; no-enumeration tests; session regeneration and cookie-flag tests; CSP check (no console violations).
 

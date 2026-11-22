@@ -7,6 +7,7 @@ use App\Actions\Fortify\ResetUserPassword;
 use App\Actions\Fortify\UpdateUserPassword;
 use App\Actions\Fortify\UpdateUserProfileInformation;
 use App\Http\Middleware\EnsureAccountIsActive;
+use App\Http\Responses\Auth\LoginResponse;
 use App\Http\Responses\Auth\PasswordResetLinkResponse;
 use App\Http\Responses\Auth\RegisterResponse;
 use App\Models\User;
@@ -21,8 +22,10 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Actions\RedirectIfTwoFactorAuthenticatable;
 use Laravel\Fortify\Contracts\FailedPasswordResetLinkRequestResponse;
+use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 use Laravel\Fortify\Contracts\RegisterResponse as RegisterResponseContract;
 use Laravel\Fortify\Contracts\SuccessfulPasswordResetLinkRequestResponse;
+use Laravel\Fortify\Contracts\TwoFactorLoginResponse as TwoFactorLoginResponseContract;
 use Laravel\Fortify\Fortify;
 
 /**
@@ -37,6 +40,9 @@ class FortifyServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(RegisterResponseContract::class, RegisterResponse::class);
+        // After login (and after the 2FA code): the page they wanted, else their role's home (PLAN §4.2).
+        $this->app->singleton(LoginResponseContract::class, LoginResponse::class);
+        $this->app->singleton(TwoFactorLoginResponseContract::class, LoginResponse::class);
         // Same answer whether the email exists or not (no account enumeration).
         $this->app->bind(SuccessfulPasswordResetLinkRequestResponse::class, PasswordResetLinkResponse::class);
         $this->app->bind(FailedPasswordResetLinkRequestResponse::class, PasswordResetLinkResponse::class);

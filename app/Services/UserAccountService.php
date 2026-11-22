@@ -5,13 +5,18 @@ namespace App\Services;
 use App\Enums\LoginEventType;
 use App\Enums\Role;
 use App\Enums\UserStatus;
+use App\Models\LoginEvent;
 use App\Models\User;
+use App\Notifications\AccountDeleted;
 use App\Notifications\SecurityContext;
 use App\Notifications\TwoFactorChanged;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
- * The only place that changes a user's role, status or two-factor reset (CLAUDE.md: one service
+ * The only place that changes a user's role, status, two-factor reset or deletion (CLAUDE.md: one service
  * method per status change). Every change is written to the audit log (PLAN §8.5).
  * Phase 3 wires the admin Users screen to it.
  */
@@ -61,6 +66,57 @@ class UserAccountService
         if (! $status->canLogIn()) {
             $this->logOutEverywhere($user);
         }
+    }
+
+    /**
+     * Why this account can't be deleted yet (empty = it can). The admin account never can.
+     * Phase 4 adds upcoming trips; Phases 6–7 add an owner's boats with future bookings and money still owed.
+     *
+     * @return list<string>
+     */
+    public function deletionBlockers(User $user): array
+    {
+        return $user->isAdmin() ? ["The admin account can't be deleted."] : [];
+    }
+
+    /**
+     * Delete an account at its owner's request (PLAN §8.5). Personal data is anonymized and the row is
+     * soft-deleted, so bookings and payments keep pointing at it (financial records are kept about 7 years).
+     * Every session ends, the security log forgets the email, and a confirmation goes to the old address.
+     */
+    public function deleteAccount(User $user): void
+    {
+        $blockers = $this->deletionBlockers($user);
+        if ($blockers !== []) {
+            throw new InvalidArgumentException($blockers[0]);
+        }
+
+        $email = $user->email;
+        $context = SecurityContext::fromRequest();
+
+        DB::transaction(function () use ($user) {
+            $user->forceFill([
+                'first_name' => 'Deleted',
+                'last_name' => 'account',
+                'email' => 'deleted-'.$user->ulid.'@deleted.invalid', // frees the real address for a new sign-up
+                'phone' => null,
+                'marketing_opt_in' => false,
+                'email_verified_at' => null,
+                'password' => Str::random(64),
+                'two_factor_secret' => null,
+                'two_factor_recovery_codes' => null,
+                'two_factor_confirmed_at' => null,
+                'last_login_ip' => null,
+            ])->save();
+            $user->delete();
+
+            LoginEvent::query()->where('user_id', $user->getKey())->update(['email' => null]);
+        });
+
+        $this->logOutEverywhere($user);
+        $this->log->record(LoginEventType::AccountDeleted, $user);
+        $this->audit->record('user.deleted', $user, after: ['anonymized' => true], actor: $user);
+        Notification::route('mail', $email)->notify(new AccountDeleted($context));
     }
 
     /** Delete every stored session of the user and rotate the remember-me token. */

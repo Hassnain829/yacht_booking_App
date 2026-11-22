@@ -16,6 +16,7 @@ use Illuminate\Auth\Events\Logout;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Laravel\Fortify\Events\PasswordUpdatedViaController;
 use Laravel\Fortify\Events\RecoveryCodeReplaced;
 use Laravel\Fortify\Events\TwoFactorAuthenticationConfirmed;
 use Laravel\Fortify\Events\TwoFactorAuthenticationDisabled;
@@ -41,7 +42,8 @@ class SecurityEventSubscriber
             Failed::class => 'onFailed',
             Lockout::class => 'onLockout',
             Logout::class => 'onLogout',
-            PasswordReset::class => 'onPasswordReset',
+            PasswordReset::class => 'onPasswordChanged',
+            PasswordUpdatedViaController::class => 'onPasswordChanged',
             TwoFactorAuthenticationFailed::class => 'onTwoFactorFailed',
             TwoFactorAuthenticationConfirmed::class => 'onTwoFactorEnabled',
             TwoFactorAuthenticationDisabled::class => 'onTwoFactorDisabled',
@@ -95,7 +97,8 @@ class SecurityEventSubscriber
         }
     }
 
-    public function onPasswordReset(PasswordReset $event): void
+    /** A reset from the email link, or a change on Profile & security. */
+    public function onPasswordChanged(PasswordReset|PasswordUpdatedViaController $event): void
     {
         if ($event->user instanceof User) {
             $this->log->record(LoginEventType::PasswordChanged, $event->user);

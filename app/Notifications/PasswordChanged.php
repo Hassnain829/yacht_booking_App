@@ -2,15 +2,16 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\SkipsDeletedAccounts;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-/** "Your password was changed" (PLAN §8.1, §11). Sent after a password reset (and a password change, Phase 2.5). */
+/** "Your password was changed" (PLAN §8.1, §11). Sent after a password reset and after a change on Profile & security. */
 class PasswordChanged extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, SkipsDeletedAccounts;
 
     public function __construct(public SecurityContext $context) {}
 
@@ -24,7 +25,7 @@ class PasswordChanged extends Notification implements ShouldQueue
     {
         return (new MailMessage)
             ->subject('Your password was changed')
-            ->line('The password for your '.config('app.name').' account was just changed, and you were logged out on every device.')
+            ->line('The password for your '.config('app.name').' account was just changed, and your other devices were logged out.')
             ->line($this->context->summary())
             ->line('If this was you, there is nothing else to do.')
             ->action('Reset your password', route('password.request'))

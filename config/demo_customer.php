@@ -5,24 +5,14 @@
 | Demo customer account (Phase 1 only)
 |--------------------------------------------------------------------------
 |
-| One sample guest for the account screens (/account, /account/trips). Read through
-| App\Support\Demo\DemoCustomer: day offsets become dates relative to today (Chicago) and
-| prices come from DemoQuote, like a real booking's price snapshot.
-| Phase 2/4 replaces this with the users / bookings tables; then this file is deleted.
+| Sample trips and saved cards for the account screens (/account/trips, the cards on /account). Read
+| through App\Support\Demo\DemoCustomer: day offsets become dates relative to today (Chicago) and
+| prices come from DemoQuote, like a real booking's price snapshot. The profile is real since Phase 2.5.
+| Phase 4 (bookings) and Phase 5 (Stripe cards) replace the rest; then this file is deleted.
 |
 */
 
 return [
-
-    'profile' => [
-        'first_name' => 'Alex',
-        'last_name' => 'Morgan',
-        'email' => 'alex@example.com',
-        'phone' => '(312) 555-0100',
-        'member_since_days' => -200,
-        'marketing' => true,
-        'password_changed_days' => -95,
-    ],
 
     // Display cache of Stripe payment methods (PLAN §6.6) — never full card numbers.
     'cards' => [

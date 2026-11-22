@@ -35,6 +35,16 @@ class User extends Authenticatable implements MustVerifyEmail
         'status' => 'active',
     ];
 
+    /** Every password change (sign-up, reset, update, account deletion) stamps password_changed_at. */
+    protected static function booted(): void
+    {
+        static::saving(function (User $user) {
+            if ($user->isDirty('password')) {
+                $user->setAttribute('password_changed_at', now());
+            }
+        });
+    }
+
     /** ULIDs fill the `ulid` column only — the primary key stays an auto-increment id. */
     public function uniqueIds(): array
     {
@@ -90,6 +100,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'role' => Role::class,
             'status' => UserStatus::class,
             'last_login_at' => 'datetime',
+            'password_changed_at' => 'datetime',
         ];
     }
 }

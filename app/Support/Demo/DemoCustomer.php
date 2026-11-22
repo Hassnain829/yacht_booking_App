@@ -35,19 +35,6 @@ class DemoCustomer
         return $this->now;
     }
 
-    public function profile(): Fluent
-    {
-        $p = $this->config['profile'];
-
-        return new Fluent([
-            ...$p,
-            'name' => $p['first_name'].' '.$p['last_name'],
-            'initials' => strtoupper($p['first_name'][0].$p['last_name'][0]),
-            'member_since' => $this->now->startOfDay()->addDays($p['member_since_days']),
-            'password_changed_at' => $this->now->startOfDay()->addDays($p['password_changed_days']),
-        ]);
-    }
-
     /** @return Collection<int, Fluent> */
     public function cards(): Collection
     {

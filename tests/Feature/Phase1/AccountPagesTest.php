@@ -115,11 +115,12 @@ class AccountPagesTest extends TestCase
 
     public function test_profile_page_renders_every_section_without_card_numbers(): void
     {
-        $html = $this->asCustomer()->get('/account')
+        $user = User::factory()->create(['email' => 'jane.doe@example.com']);
+        $html = $this->actingAs($user)->get('/account')
             ->assertOk()
-            ->assertSee('value="alex@example.com"', false)
-            ->assertSee('Visa •••• 4242')
-            ->assertSee('data-demo-form', false)
+            ->assertSee('value="jane.doe@example.com"', false) // the real account since Phase 2.5
+            ->assertSee('Visa •••• 4242') // saved cards stay demo until Phase 5
+            ->assertDontSee('data-demo-form', false)
             ->assertSee('name="_token"', false)
             ->getContent();
         $this->assertMatchesRegularExpression('/aria-current="page"[^>]*>Profile &amp; security</', $html);
