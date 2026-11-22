@@ -14,11 +14,13 @@ use App\Models\Captain;
 use App\Models\Experience;
 use App\Models\Harbor;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * The mockup's 6 boats as real, editable records (PLAN 3.2, user decision B), with their photos copied to
- * the public disk. Run CatalogSeeder first (harbors, policies, experiences, highlights).
+ * The mockup's 6 boats as real, editable records (PLAN 3.2, user decision B), with their photos stored
+ * through MediaService (WebP + card / thumb sizes, about a minute for the 27 photos).
+ * Run CatalogSeeder first (harbors, policies, experiences, highlights).
  *
  * - Live server (`php artisan db:seed --class=DemoFleetSeeder --force`): every demo boat carries the
  *   Unavailable tag; the admin can edit, hide or delete them. Demo captains are NOT created there
@@ -52,55 +54,54 @@ class DemoFleetSeeder extends Seeder
                 continue;
             }
 
-            $boat = new Boat([
-                'slug' => $yacht['slug'],
-                'title' => $yacht['title'],
-                'short' => $yacht['short'],
-                'description' => $yacht['description'],
-                'type' => str_contains(strtolower($yacht['category']), 'sail') ? BoatType::Sail : BoatType::Power,
-                'category' => $yacht['category'],
-                'year' => $yacht['year'],
-                'length_ft' => $yacht['length_ft'],
-                'max_guests' => $yacht['max_guests'],
-                'staterooms' => $yacht['staterooms'],
-                'heads' => $yacht['heads'],
-                'harbor_id' => Harbor::query()->where('slug', $yacht['harbor'])->value('id'),
-                'country' => 'US',
-                'state' => 'IL',
-                'city' => 'Chicago',
-                'cancellation_policy_id' => $policy?->id,
-                'captain_source' => CaptainSource::Platform,
-                'hourly_rate_cents' => $yacht['hourly_rate_cents'],
-                'min_hours' => $yacht['min_hours'],
-                'cleaning_fee_cents' => $yacht['cleaning_fee_cents'],
-                'captain_rate_cents' => $yacht['captain_rate_cents'],
-                'crew_count' => $yacht['crew_count'],
-                'badge' => $yacht['badge'],
-                'is_featured' => $yacht['is_featured'],
-                'sort' => $sort,
-                'rating_avg' => $yacht['rating_avg'],
-                'reviews_count' => $yacht['reviews_count'],
-                'booking_enabled' => $live ? false : $yacht['booking_enabled'],
-                'unavailable_reason' => $live || ! $yacht['booking_enabled'] ? self::UNAVAILABLE_REASON : null,
-            ]);
-            // System fields: a published house boat (never fillable).
-            $boat->forceFill(['ownership' => BoatOwnership::House, 'status' => BoatStatus::Published, 'published_at' => now()])->save();
+            // All or nothing: a boat whose photos failed (e.g. no GD) must not stay behind, or re-running would skip it.
+            DB::transaction(fn () => $this->createBoat($yacht, $sort, $policy, $live));
+        }
+    }
 
-            $boat->amenities()->sync(Amenity::query()->where('group', 'highlight')->whereIn('name', $yacht['amenities'])->pluck('id'));
-            $boat->experiences()->sync(Experience::query()->whereIn('slug', $yacht['experiences'])->pluck('id'));
+    /** @param  array<string, mixed>  $yacht  one entry of config('demo.yachts') */
+    private function createBoat(array $yacht, int $sort, ?CancellationPolicy $policy, bool $live): void
+    {
+        $boat = new Boat([
+            'slug' => $yacht['slug'],
+            'title' => $yacht['title'],
+            'short' => $yacht['short'],
+            'description' => $yacht['description'],
+            'type' => str_contains(strtolower($yacht['category']), 'sail') ? BoatType::Sail : BoatType::Power,
+            'category' => $yacht['category'],
+            'year' => $yacht['year'],
+            'length_ft' => $yacht['length_ft'],
+            'max_guests' => $yacht['max_guests'],
+            'staterooms' => $yacht['staterooms'],
+            'heads' => $yacht['heads'],
+            'harbor_id' => Harbor::query()->where('slug', $yacht['harbor'])->value('id'),
+            'country' => 'US',
+            'state' => 'IL',
+            'city' => 'Chicago',
+            'cancellation_policy_id' => $policy?->id,
+            'captain_source' => CaptainSource::Platform,
+            'hourly_rate_cents' => $yacht['hourly_rate_cents'],
+            'min_hours' => $yacht['min_hours'],
+            'cleaning_fee_cents' => $yacht['cleaning_fee_cents'],
+            'captain_rate_cents' => $yacht['captain_rate_cents'],
+            'crew_count' => $yacht['crew_count'],
+            'badge' => $yacht['badge'],
+            'is_featured' => $yacht['is_featured'],
+            'sort' => $sort,
+            'rating_avg' => $yacht['rating_avg'],
+            'reviews_count' => $yacht['reviews_count'],
+            'booking_enabled' => $live ? false : $yacht['booking_enabled'],
+            'unavailable_reason' => $live || ! $yacht['booking_enabled'] ? self::UNAVAILABLE_REASON : null,
+        ]);
+        // System fields: a published house boat (never fillable).
+        $boat->forceFill(['ownership' => BoatOwnership::House, 'status' => BoatStatus::Published, 'published_at' => now()])->save();
 
-            foreach (array_values(array_unique([$yacht['cover'], ...$yacht['gallery']])) as $i => $image) {
-                $path = $this->copyDesignImage($image, "boats/{$boat->ulid}/".($i + 1).'-'.pathinfo($image, PATHINFO_FILENAME));
-                $boat->photos()->create([
-                    'collection' => 'photos',
-                    'disk' => 'public',
-                    'path' => $path,
-                    'original_name' => basename($image),
-                    'alt' => $yacht['title'],
-                    'sort' => $i,
-                    ...$this->imageFacts($path),
-                ]);
-            }
+        $boat->amenities()->sync(Amenity::query()->where('group', 'highlight')->whereIn('name', $yacht['amenities'])->pluck('id'));
+        $boat->experiences()->sync(Experience::query()->whereIn('slug', $yacht['experiences'])->pluck('id'));
+
+        // Cover first: MediaService puts each new photo last.
+        foreach (array_unique([$yacht['cover'], ...$yacht['gallery']]) as $image) {
+            $this->media()->addImage($boat, 'photos', $this->designImage($image), alt: $yacht['title']);
         }
     }
 

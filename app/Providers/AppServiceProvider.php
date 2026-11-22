@@ -94,8 +94,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('checkout', fn (Request $request) => Limit::perMinute(10)->by($perVisitor($request)));
         RateLimiter::for('promo', fn (Request $request) => Limit::perMinute(10)->by($perVisitor($request))); // stops code guessing
 
-        // Files (listing photos, documents, complaint photos — Phases 6–7).
+        // Files: uploads (listing photos, documents, complaint photos — Phases 3.4, 6, 7) and opening a private file.
         RateLimiter::for('uploads', fn (Request $request) => Limit::perMinute(30)->by($perVisitor($request)));
+        RateLimiter::for('files', fn (Request $request) => Limit::perMinute(60)->by($perVisitor($request)));
 
         // Public forms (Phase 8): always per IP — these are the ones bots aim at.
         RateLimiter::for('contact', fn (Request $request) => Limit::perHour(5)->by('ip:'.$request->ip()));

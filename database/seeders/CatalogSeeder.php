@@ -19,7 +19,8 @@ use Illuminate\Database\Seeder;
  *
  * It only ADDS what is missing (matched by slug / key); running it again never overwrites the admin's
  * changes and never brings back something the admin deleted (soft-deleted rows count as existing).
- * Images are copied to the public disk (SeedsImages): the design files in public/images are never touched.
+ * Images are stored through MediaService (SeedsImages) as WebP copies: the design files in public/images
+ * are never touched. Needs the GD extension (enable `extension=gd` in php.ini).
  */
 class CatalogSeeder extends Seeder
 {
@@ -121,7 +122,7 @@ class CatalogSeeder extends Seeder
                 'area' => $harbor['area'],
                 'notes' => $harbor['notes'],
                 'map_query' => $harbor['map_query'],
-                'image_path' => $this->copyDesignImage($harbor['image'], 'harbors/'.$harbor['slug']),
+                'image_path' => $this->media()->storeImage($this->designImage($harbor['image']), 'harbors', variants: false)->path,
                 'is_active' => true,
                 'sort' => $sort,
             ]);
@@ -139,7 +140,7 @@ class CatalogSeeder extends Seeder
                 'name' => $experience['name'],
                 'category' => $experience['category'],
                 'icon' => $experience['icon'],
-                'image_path' => $this->copyDesignImage($experience['image'], 'experiences/'.$experience['slug']),
+                'image_path' => $this->media()->storeImage($this->designImage($experience['image']), 'experiences', variants: false)->path,
                 'tagline' => $experience['tagline'],
                 'description' => $experience['description'],
                 'includes' => $experience['includes'],

@@ -34,6 +34,7 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
 - **Icons:** `lucide` npm. Register every icon you use in `resources/js/lib/icons.js` (brand icons are custom there). Markup: `<i data-lucide="name"></i>`.
 - **Fonts:** self-hosted through the `laravel-vite-plugin` fonts helper (`vite.config.js`), rendered with `@fonts` in the layout.
 - **Queue:** the database driver. On shared hosting, one cron job runs `schedule:run`, and the scheduler starts `queue:work --stop-when-empty`.
+- **Images:** `intervention/image-laravel` v4 with the **GD** extension (needed by uploads, the seeders and the tests). Locally enable `extension=gd` in `C:\xampp\php\php.ini`, then restart **every** PHP process (`artisan serve`, Apache): on Windows they share one OPcache, and a mix of processes with and without GD breaks it ("Cannot instantiate interface RecursiveIterator").
 
 ## Conventions
 
@@ -49,7 +50,9 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
   - `<form data-demo-form="message">` = a form whose endpoint doesn't exist yet: the browser validates it, then shows a toast. Remove the attribute when the endpoint is built.
 - **Components with built-in classes take props, never a second conflicting class:** `x-button` → `size`/`variant`, `x-admin.pill` → `tone`, `x-admin.table` → `min`.
 - **Files:**
-  - Uploads go through `MediaService`. The DB stores **only the relative path**.
+  - Uploads go through `MediaService` (WebP re-encode, sizes, random names — PLAN §9). The DB stores **only the relative path**.
+  - FormRequests validate every file with `App\Rules\SafeUpload::image()` / `::document()`, never with bare `mimes:`.
+  - Tests that run the seeders use `Storage::fake('public')` + `Tests\Concerns\FakesDesignImages` (tiny stand-ins; real WebP encoding of the design images takes ~45 s).
   - Private documents go on the `local` (private) disk and are served only through a controller that checks a Policy.
   - Design assets live in `public/images`, `public/video` and `public/favicon.svg`.
 

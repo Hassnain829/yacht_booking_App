@@ -20,20 +20,24 @@ use Database\Seeders\DemoFleetSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Tests\Concerns\FakesDesignImages;
 use Tests\TestCase;
 
 /**
  * Phase 3.2 — the catalog and demo fleet seeders (PLAN 3.2, user decision B): the mockup's data as real,
- * editable records; images copied to the public disk; re-running never overwrites the admin's edits.
+ * editable records; images stored through MediaService (3.3); re-running never overwrites the admin's edits.
  */
 class SeedersTest extends TestCase
 {
-    use RefreshDatabase;
+    use FakesDesignImages, RefreshDatabase;
+
+    private const STORED_IMAGE = '[0-9a-f-]{36}\.webp';
 
     protected function setUp(): void
     {
         parent::setUp();
         Storage::fake('public');
+        $this->fakeDesignImages();
     }
 
     /** Runs the seeder classes directly (`db:seed` would ask for a confirmation in the "production" test). */
@@ -63,9 +67,12 @@ class SeedersTest extends TestCase
         $this->assertSame(7, Addon::count());
 
         $sunset = Experience::query()->where('slug', 'sunset')->first();
+        $harbor = Harbor::query()->where('slug', 'dusable')->first();
         $this->assertSame(config('demo.experiences.0.time_slots'), $sunset->time_slots);
-        $this->assertSame('experiences/sunset.jpg', $sunset->image_path);
-        Storage::disk('public')->assertExists(['experiences/sunset.jpg', 'harbors/dusable.jpg']);
+        $this->assertMatchesRegularExpression('#^experiences/'.self::STORED_IMAGE.'$#', $sunset->image_path);
+        $this->assertMatchesRegularExpression('#^harbors/'.self::STORED_IMAGE.'$#', $harbor->image_path);
+        Storage::disk('public')->assertExists([$sunset->image_path, $harbor->image_path]);
+        $this->assertSame(count(config('demo.experiences')), count(Storage::disk('public')->files('experiences')), 'one file each: no card / thumb copies for single images');
         $this->assertFileExists(public_path(config('demo.experiences.0.image')), 'the design image is copied, never moved');
     }
 
@@ -88,11 +95,14 @@ class SeedersTest extends TestCase
         $this->assertSame(BoatType::Sail, Boat::query()->where('slug', 'windward')->value('type'));
 
         $photos = $azure->photos;
+        $cover = $photos->first();
         $this->assertSame(count(array_unique([$yacht['cover'], ...$yacht['gallery']])), $photos->count());
-        $this->assertStringStartsWith("boats/{$azure->ulid}/1-yacht-azure", $photos->first()->path, 'the cover comes first');
-        $this->assertSame('image/jpeg', $photos->first()->mime);
-        $this->assertGreaterThan(0, $photos->first()->width);
-        Storage::disk('public')->assertExists($photos->pluck('path')->all());
+        $this->assertSame(basename($yacht['cover']), $cover->original_name, 'the cover comes first');
+        $this->assertMatchesRegularExpression("#^boats/{$azure->ulid}/photos/".self::STORED_IMAGE.'$#', $cover->path);
+        $this->assertSame(['image/webp', 1600], [$cover->mime, $cover->width]);
+        $this->assertSame(['card', 'thumb'], array_keys($cover->variants));
+        $this->assertSame($yacht['title'], $cover->alt);
+        Storage::disk('public')->assertExists($photos->flatMap->paths()->all());
 
         // Local: bookable (for testing) and the demo captains are there, licenses mapped and encrypted.
         $this->assertSame(6, Boat::query()->bookable()->count());

@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\SystemController as AdminSystemController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\ExperienceController;
+use App\Http\Controllers\FileController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ListingController;
 use App\Http\Controllers\Owner\BoatController as OwnerBoatController;
@@ -78,6 +79,10 @@ Route::prefix('account')->name('account.')->middleware(['auth', 'active'])->grou
     Route::delete('/sessions', [AccountSessionController::class, 'destroyOthers'])
         ->middleware(['password.confirm', 'throttle:account-security'])->name('sessions.destroy-others');
 });
+
+// Private files (insurance, licenses, complaint photos — PLAN §9): only after MediaPolicy allows it, else 404.
+Route::get('/files/{media:uuid}', FileController::class)->whereUuid('media')
+    ->middleware(['auth', 'active', 'throttle:files'])->name('files.show');
 
 // Admin — signed-in, active, verified, admin role, 30-minute idle logout (PLAN §4.5). Two-factor login is the
 // admin's choice (Settings → Security; user decision 2026-11-22), so no `2fa` here.

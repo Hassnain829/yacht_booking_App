@@ -1,0 +1,10 @@
+# Uploaded files (served at /storage through `php artisan storage:link`, PLAN §9).
+# MediaService only ever writes .webp / .pdf files under random names; this is a second lock:
+# if a script ever ended up here, the web server refuses to serve or run it.
+<FilesMatch "(?i)(\.(php\d?|phtml|phar|pht|phps|cgi|pl|py|rb|sh|asp|aspx|jsp|shtml|htaccess|htpasswd|ini|env)|^\.)">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>

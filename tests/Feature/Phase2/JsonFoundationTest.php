@@ -77,7 +77,7 @@ class JsonFoundationTest extends TestCase
 
     public function test_every_named_limiter_exists_and_counts_accounts_separately_from_guests(): void
     {
-        foreach (['quote', 'hold', 'checkout', 'promo', 'uploads', 'contact', 'newsletter', 'account-security', 'login', 'two-factor', 'auth-forms'] as $name) {
+        foreach (['quote', 'hold', 'checkout', 'promo', 'uploads', 'files', 'contact', 'newsletter', 'account-security', 'login', 'two-factor', 'auth-forms'] as $name) {
             $this->assertNotNull(RateLimiter::limiter($name), "limiter {$name}");
         }
 
