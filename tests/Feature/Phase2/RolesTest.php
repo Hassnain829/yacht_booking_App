@@ -12,6 +12,7 @@ use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -259,6 +260,7 @@ class RolesTest extends TestCase
 
     public function test_local_seeder_creates_test_accounts_and_can_run_twice(): void
     {
+        Storage::fake('public'); // it also runs the catalog seeders, which copy images (Phase 3.2)
         $this->seed(DatabaseSeeder::class);
         $this->seed(DatabaseSeeder::class);
 

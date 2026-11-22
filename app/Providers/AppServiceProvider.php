@@ -3,6 +3,14 @@
 namespace App\Providers;
 
 use App\Listeners\SecurityEventSubscriber;
+use App\Models\Addon;
+use App\Models\Amenity;
+use App\Models\Boat;
+use App\Models\CancellationPolicy;
+use App\Models\Captain;
+use App\Models\Experience;
+use App\Models\Harbor;
+use App\Models\Setting;
 use App\Models\User;
 use App\View\Composers\FooterComposer;
 use App\View\Composers\HeaderComposer;
@@ -43,9 +51,17 @@ class AppServiceProvider extends ServiceProvider
         // Logins, failures, 2FA and password events → login_events + security emails (PLAN §8.1, §8.5).
         Event::subscribe(SecurityEventSubscriber::class);
 
-        // Polymorphic columns (audit_logs.subject_type) store these short names, never class names.
+        // Polymorphic columns (audit_logs.subject_type, media.model_type) store these short names, never class names.
         Relation::enforceMorphMap([
             'user' => User::class,
+            'boat' => Boat::class,
+            'harbor' => Harbor::class,
+            'experience' => Experience::class,
+            'addon' => Addon::class,
+            'amenity' => Amenity::class,
+            'cancellation_policy' => CancellationPolicy::class,
+            'captain' => Captain::class,
+            'setting' => Setting::class,
         ]);
     }
 

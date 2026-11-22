@@ -8,7 +8,7 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 
 /**
- * LOCAL TEST ACCOUNTS ONLY — refuses to run in production.
+ * LOCAL ONLY — refuses to run in production: the test accounts, then the catalog + demo fleet.
  * The admin is never seeded: create it with `php artisan app:create-admin`.
  * Safe to run again (accounts are updated, not duplicated).
  */
@@ -37,5 +37,9 @@ class DatabaseSeeder extends Seeder
         }
 
         $this->command?->table(['Email', 'Role', 'Password'], array_map(fn ($a) => [$a[0], $a[3]->label(), self::PASSWORD], $accounts));
+
+        // The catalog and the demo fleet (Phase 3.2). On the live server they run on their own:
+        // php artisan db:seed --class=CatalogSeeder --force && php artisan db:seed --class=DemoFleetSeeder --force
+        $this->call([CatalogSeeder::class, DemoFleetSeeder::class]);
     }
 }

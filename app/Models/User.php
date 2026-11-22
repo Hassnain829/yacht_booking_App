@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -54,6 +55,12 @@ class User extends Authenticatable implements MustVerifyEmail
     public function getRouteKeyName(): string
     {
         return 'ulid';
+    }
+
+    /** Boats this owner listed (house boats have no owner). @return HasMany<Boat, $this> */
+    public function boats(): HasMany
+    {
+        return $this->hasMany(Boat::class, 'owner_id');
     }
 
     public function isAdmin(): bool
