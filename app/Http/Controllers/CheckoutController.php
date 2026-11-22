@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\CheckoutRequest;
 use App\Http\Requests\PromoCodeRequest;
+use App\Http\Resources\PromoCodeResource;
 use App\Support\Demo\BookingSelection;
 use App\Support\Demo\DemoCatalog;
 use App\Support\Demo\DemoQuote;
@@ -67,7 +68,7 @@ class CheckoutController extends Controller
     }
 
     /** One promo code at a time (rate-limited). Returns the discount rule, never the list of codes. */
-    public function promo(PromoCodeRequest $request, DemoCatalog $catalog): JsonResponse
+    public function promo(PromoCodeRequest $request, DemoCatalog $catalog): JsonResponse|PromoCodeResource
     {
         $code = strtoupper($request->validated('code'));
         $promo = collect($catalog->pricing()['promos'])->firstWhere('code', $code);
@@ -76,7 +77,7 @@ class CheckoutController extends Controller
             return response()->json(['message' => 'That promo code is not valid.', 'errors' => ['code' => ['That promo code is not valid.']]], 422);
         }
 
-        return response()->json(collect($promo)->only(['code', 'type', 'value', 'label']));
+        return new PromoCodeResource($promo);
     }
 
     /** PHASE 1 DEMO: validates, recalculates the price on the server, then shows the confirmation. */

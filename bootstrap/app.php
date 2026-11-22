@@ -2,14 +2,17 @@
 
 use App\Http\Middleware\AdminIdleTimeout;
 use App\Http\Middleware\EnsureAccountIsActive;
+use App\Http\Middleware\EnsureIdempotency;
 use App\Http\Middleware\EnsureTwoFactorEnabled;
 use App\Http\Middleware\ForceHttps;
 use App\Http\Middleware\SecurityHeaders;
 use App\Support\Home;
+use App\Support\JsonErrors;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -36,10 +39,15 @@ return Application::configure(basePath: dirname(__DIR__))
             'active' => EnsureAccountIsActive::class,
             'admin.idle' => AdminIdleTimeout::class,
             '2fa' => EnsureTwoFactorEnabled::class,
+            'idempotent' => EnsureIdempotency::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        // JSON errors: one shape, generic messages (no model names, ids or routes). Validation (422) keeps
+        // Laravel's {message, errors}; 500s have no trace when APP_DEBUG=false (PLAN §8.2 rule 8).
+        $exceptions->render(fn (HttpExceptionInterface $e, Request $request) => $request->expectsJson() ? JsonErrors::from($e) : null);
     })->create();

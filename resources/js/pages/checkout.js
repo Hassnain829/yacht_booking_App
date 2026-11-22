@@ -120,7 +120,7 @@ export default function checkout() {
             return;
         }
         try {
-            promo = await http.post(data.promoUrl, { code });
+            promo = (await http.post(data.promoUrl, { code })).data; // an API Resource: { data: { code, type, value, label } }
             showPromo();
             renderTotals();
             toast(`Promo ${promo.code} applied — ${promo.label}`);

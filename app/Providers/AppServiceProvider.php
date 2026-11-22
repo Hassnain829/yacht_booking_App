@@ -64,14 +64,28 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Named rate limiters — every form / JSON endpoint uses one (PLAN §8.2).
-     * Phase 2.6 adds the rest (login, contact, holds, payments); keys move to the user id once logged in.
+     * Named rate limiters — every form / JSON endpoint uses one (PLAN §8.2 rule 11; a test checks every
+     * non-GET route has a throttle). Signed-in visitors are counted per account, guests per IP.
+     * The auth limiters (login, two-factor, auth-forms) live in FortifyServiceProvider.
      */
     private function configureRateLimiting(): void
     {
-        RateLimiter::for('checkout', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
-        RateLimiter::for('promo', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
-        // Security settings of a signed-in account (log out other devices, …).
-        RateLimiter::for('account-security', fn (Request $request) => Limit::perMinute(10)->by('user:'.$request->user()?->getKey()));
+        $perVisitor = fn (Request $request): string => $request->user() ? 'user:'.$request->user()->getKey() : 'ip:'.$request->ip();
+
+        // Booking (Phases 3–5): live price / availability checks, holding a slot, checkout, promo codes.
+        RateLimiter::for('quote', fn (Request $request) => Limit::perMinute(60)->by($perVisitor($request)));
+        RateLimiter::for('hold', fn (Request $request) => Limit::perMinute(10)->by($perVisitor($request)));
+        RateLimiter::for('checkout', fn (Request $request) => Limit::perMinute(10)->by($perVisitor($request)));
+        RateLimiter::for('promo', fn (Request $request) => Limit::perMinute(10)->by($perVisitor($request))); // stops code guessing
+
+        // Files (listing photos, documents, complaint photos — Phases 6–7).
+        RateLimiter::for('uploads', fn (Request $request) => Limit::perMinute(30)->by($perVisitor($request)));
+
+        // Public forms (Phase 8): always per IP — these are the ones bots aim at.
+        RateLimiter::for('contact', fn (Request $request) => Limit::perHour(5)->by('ip:'.$request->ip()));
+        RateLimiter::for('newsletter', fn (Request $request) => Limit::perHour(5)->by('ip:'.$request->ip()));
+
+        // Security settings of a signed-in account (log out other devices, delete account).
+        RateLimiter::for('account-security', fn (Request $request) => Limit::perMinute(10)->by($perVisitor($request)));
     }
 }

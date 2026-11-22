@@ -47,7 +47,8 @@
             <x-logo size="sm" />
             <span class="rounded-md bg-brass-400 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-navy-950">Admin</span>
         </div>
-        <nav class="flex-1 overflow-y-auto px-3 py-4">
+        {{-- Scrolls on short screens (wheel / touch) without showing a scrollbar. --}}
+        <nav class="no-scrollbar flex-1 overflow-y-auto px-3 py-4">
             @foreach ($groups as $group => $items)
                 <p class="px-3 pb-1.5 pt-3.5 text-[10px] font-bold uppercase tracking-[0.25em] text-white/40 first:pt-0">{{ $group }}</p>
                 <ul class="space-y-0.5">

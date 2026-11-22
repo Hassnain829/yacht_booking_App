@@ -13,6 +13,7 @@
 
 const MESSAGES = {
     0: 'Network error. Please check your connection and try again.',
+    400: 'Something was wrong with that request. Please refresh the page and try again.',
     401: 'Please log in to continue.',
     403: 'You are not allowed to do that.',
     404: 'We could not find that.',

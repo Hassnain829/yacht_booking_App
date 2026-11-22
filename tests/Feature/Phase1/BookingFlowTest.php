@@ -332,7 +332,7 @@ class BookingFlowTest extends TestCase
     {
         $this->postJson('/checkout/promo', ['code' => 'welcome10'])
             ->assertOk()
-            ->assertExactJson(['code' => 'WELCOME10', 'type' => 'percent', 'value' => 10, 'label' => '10% off yacht charter']);
+            ->assertExactJson(['data' => ['code' => 'WELCOME10', 'type' => 'percent', 'value' => 10, 'label' => '10% off yacht charter']]); // an API Resource (Phase 2.6)
     }
 
     /** @return array<string, array{0: array<string, mixed>}> */
