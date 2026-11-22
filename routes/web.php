@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Account\ProfileController as AccountProfileController;
+use App\Http\Controllers\Account\SessionController as AccountSessionController;
 use App\Http\Controllers\Account\TripController as AccountTripController;
+use App\Http\Controllers\Account\TwoFactorController as AccountTwoFactorController;
 use App\Http\Controllers\Admin\BookingController as AdminBookingController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\FinanceController as AdminFinanceController;
@@ -68,9 +70,16 @@ Route::prefix('account')->name('account.')->middleware(['auth', 'active'])->grou
     Route::get('/', [AccountProfileController::class, 'show'])->name('profile');
     Route::get('/trips', [AccountTripController::class, 'index'])->name('trips.index');
     Route::get('/trips/{ulid}', [AccountTripController::class, 'show'])->where('ulid', '[0-9A-HJKMNP-TV-Z]{26}')->name('trips.show');
+
+    // Security (PLAN §8.1). The 2FA page shows the setup key and recovery codes, so it needs a recent
+    // password confirmation; its buttons post to Fortify's /user/two-factor-* routes.
+    Route::get('/two-factor', [AccountTwoFactorController::class, 'show'])->middleware('password.confirm')->name('two-factor');
+    Route::delete('/sessions', [AccountSessionController::class, 'destroyOthers'])
+        ->middleware(['password.confirm', 'throttle:account-security'])->name('sessions.destroy-others');
 });
 
-// Admin — signed-in, active, verified, admin role, 30-minute idle logout (PLAN §4.5). Phase 2.4 adds `2fa`.
+// Admin — signed-in, active, verified, admin role, 30-minute idle logout (PLAN §4.5). Two-factor login is the
+// admin's choice (Settings → Security; user decision 2026-11-22), so no `2fa` here.
 // Every sensitive action will sit behind `password.confirm`, need a reason and write the audit log.
 // Screens still show demo data until Phase 3+.
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'active', 'verified', 'can:access-admin', 'admin.idle'])->group(function () {
@@ -101,12 +110,11 @@ Route::view('/cancellation-policy', 'pages.legal.cancellation')->name('legal.can
 | Auth
 |--------------------------------------------------------------------------
 |
-| Login, register, password reset, email verification, password confirmation and
-| logout are registered by Fortify (config/fortify.php, FortifyServiceProvider).
-| PHASE 2.4 removes this last preview, when two-factor authentication is switched on.
+| Login, register, password reset, email verification, password confirmation,
+| two-factor login and logout are registered by Fortify (config/fortify.php,
+| FortifyServiceProvider).
 |
 */
-Route::view('/two-factor-challenge', 'auth.two-factor-challenge')->name('two-factor.login');
 
 /*
 |--------------------------------------------------------------------------

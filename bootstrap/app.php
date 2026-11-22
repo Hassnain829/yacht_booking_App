@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\AdminIdleTimeout;
 use App\Http\Middleware\EnsureAccountIsActive;
+use App\Http\Middleware\EnsureTwoFactorEnabled;
 use App\Http\Middleware\ForceHttps;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
@@ -33,6 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'active' => EnsureAccountIsActive::class,
             'admin.idle' => AdminIdleTimeout::class,
+            '2fa' => EnsureTwoFactorEnabled::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

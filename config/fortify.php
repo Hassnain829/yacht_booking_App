@@ -148,7 +148,9 @@ return [
         Features::registration(),
         Features::resetPasswords(),
         Features::emailVerification(),
-        // Phase 2.4: Features::twoFactorAuthentication(['confirm' => true, 'confirmPassword' => true])
+        // Phase 2.4: TOTP + recovery codes. "confirm": it is on only after a valid code from the app;
+        // "confirmPassword": managing it needs a recent password confirmation.
+        Features::twoFactorAuthentication(['confirm' => true, 'confirmPassword' => true]),
         // Phase 2.5: Features::updateProfileInformation(), Features::updatePasswords()
         // Passkeys are not part of the plan.
     ],

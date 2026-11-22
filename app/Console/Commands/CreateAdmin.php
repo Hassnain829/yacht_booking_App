@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Enums\Role;
 use App\Models\User;
+use App\Services\AuditService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -18,7 +19,7 @@ use function Laravel\Prompts\text;
  * Run on the server: php artisan app:create-admin
  *
  * The password is only ever typed into a hidden prompt — never passed as an option, so it can't end up
- * in shell history. The admin must set up two-factor login before using /admin (Phase 2.3–2.4).
+ * in shell history. Two-factor login is the admin's choice: Admin → Settings → Security (recommended live).
  */
 class CreateAdmin extends Command
 {
@@ -30,7 +31,7 @@ class CreateAdmin extends Command
 
     protected $description = 'Create the administrator account (the admin never signs up on the website)';
 
-    public function handle(): int
+    public function handle(AuditService $audit): int
     {
         if (User::withTrashed()->where('role', Role::Admin)->exists() && ! $this->option('force')) {
             $this->components->error('An admin account already exists. Run with --force to add another one.');
@@ -70,11 +71,12 @@ class CreateAdmin extends Command
         ]);
         // System-only fields: the role, and a verified email (the person running this command owns it).
         $admin->forceFill(['role' => Role::Admin, 'email_verified_at' => now()])->save();
+        $audit->record('user.admin_created', $admin, after: ['role' => Role::Admin->value, 'email' => $admin->email]);
 
         $this->components->info("Admin account created for {$admin->email}.");
         $this->components->bulletList([
             'Log in at '.route('login'),
-            'You will be asked to set up two-factor login before using the admin dashboard.',
+            'Recommended: turn on two-factor login in Admin → Settings → Security.',
         ]);
 
         return self::SUCCESS;

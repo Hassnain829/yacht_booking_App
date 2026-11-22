@@ -4,6 +4,7 @@ namespace Tests\Feature\Phase2;
 
 use App\Enums\Role;
 use App\Enums\UserStatus;
+use App\Models\AuditLog;
 use App\Models\User;
 use App\Providers\AuthServiceProvider;
 use App\Services\UserAccountService;
@@ -218,6 +219,11 @@ class RolesTest extends TestCase
         $this->assertSame(Role::Admin, $admin->role);
         $this->assertNotNull($admin->email_verified_at);
         $this->assertTrue(Hash::check(self::PASSWORD, $admin->password));
+
+        $entry = AuditLog::query()->where('action', 'user.admin_created')->sole(); // Phase 2.4
+        $this->assertNull($entry->user_id, 'created from the command line');
+        $this->assertTrue($entry->subject->is($admin));
+        $this->assertSame(['role' => 'admin', 'email' => 'admin@example.com'], $entry->after);
     }
 
     public function test_create_admin_rejects_weak_passwords_and_duplicates(): void

@@ -7,7 +7,9 @@ use App\Http\Middleware\EnsureAccountIsActive;
 use App\Models\User;
 use Illuminate\Auth\SessionGuard;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Vite;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -34,13 +36,15 @@ class AccessTest extends TestCase
             'guest' => null,
             'customer' => User::factory()->create(),
             'owner' => User::factory()->owner()->create(),
-            'admin' => User::factory()->admin()->create(),
+            'admin' => User::factory()->admin()->withTwoFactor()->create(),
+            'admin without 2FA' => User::factory()->admin()->create(),
             'unverified owner' => User::factory()->owner()->unverified()->create(),
         };
     }
 
     /**
-     * Expected result per area: 200, 403, 'login' (redirect to log in) or 'verify' (redirect to verify email).
+     * Expected result per area: 200, 403, 'login' (redirect to log in), 'verify' (redirect to verify email)
+     * or '2fa' (redirect to turn on two-factor login).
      *
      * @return array<string, array{0: string, 1: string, 2: int|string}>
      */
@@ -52,6 +56,7 @@ class AccessTest extends TestCase
             'customer' => [200, 200, 403, 403, 200, 403, 403],
             'owner' => [200, 200, 200, 200, 200, 403, 403],
             'admin' => [200, 200, 403, 403, 403, 200, 200],
+            'admin without 2FA' => [200, 200, 403, 403, 403, 200, 200], // 2FA is the admin's choice (user decision 2026-11-22)
             'unverified owner' => [200, 200, 'verify', 'verify', 'verify', 'verify', 'verify'], // verification is checked before the role
         ];
         $cases = [];
@@ -76,6 +81,7 @@ class AccessTest extends TestCase
         match ($expected) {
             'login' => $response->assertRedirect(route('login')),
             'verify' => $response->assertRedirect(route('verification.notice')),
+            '2fa' => $response->assertRedirect(route('account.two-factor')),
             default => $response->assertStatus($expected),
         };
     }
@@ -102,7 +108,7 @@ class AccessTest extends TestCase
 
     public function test_the_admin_is_logged_out_after_30_idle_minutes(): void
     {
-        $admin = User::factory()->admin()->create();
+        $admin = User::factory()->admin()->withTwoFactor()->create();
 
         $this->actingAs($admin)->withSession([AdminIdleTimeout::SESSION_KEY => time() - 29 * 60])->get('/admin')->assertOk();
         $this->assertGreaterThan(time() - 5, session(AdminIdleTimeout::SESSION_KEY), 'activity refreshes the timer');
@@ -198,6 +204,40 @@ class AccessTest extends TestCase
         // Behind a trusted proxy that terminates SSL (e.g. Cloudflare): its headers count, so no redirect loop.
         config(['trustedproxy.proxies' => '127.0.0.1']);
         $this->get('http://localhost/', $forwarded)->assertOk()->assertHeader('Strict-Transport-Security');
+    }
+
+    public function test_while_npm_run_dev_runs_the_csp_allows_the_vite_dev_server(): void
+    {
+        $hot = storage_path('framework/testing/vite-hot-test');
+        File::ensureDirectoryExists(dirname($hot));
+        Vite::useHotFile($hot);
+
+        try {
+            File::put($hot, 'http://127.0.0.1:5173');
+            $csp = $this->get('/')->assertOk()->headers->get('Content-Security-Policy');
+            foreach ([
+                "style-src 'self' 'unsafe-inline' http://127.0.0.1:5173",
+                "img-src 'self' data: blob: http://127.0.0.1:5173",
+                "font-src 'self' data: http://127.0.0.1:5173", // the dev server serves the fonts too
+                "connect-src 'self' http://127.0.0.1:5173 ws://127.0.0.1:5173",
+            ] as $directive) {
+                $this->assertStringContainsString($directive, $csp);
+            }
+            $this->assertMatchesRegularExpression("/script-src 'self' 'nonce-[A-Za-z0-9]{40}' http:\/\/127\.0\.0\.1:5173/", $csp);
+
+            // A CSP can't name an IPv6 address (browsers drop it and the CSS is blocked): only the scheme is used.
+            File::put($hot, 'http://[::1]:5173');
+            $csp = $this->get('/')->assertOk()->headers->get('Content-Security-Policy');
+            $this->assertStringNotContainsString('[::1]', $csp);
+            $this->assertStringContainsString("style-src 'self' 'unsafe-inline' http:;", $csp);
+            $this->assertStringContainsString("font-src 'self' data: http:;", $csp);
+            $this->assertStringContainsString("connect-src 'self' http: ws:;", $csp);
+        } finally {
+            File::delete($hot);
+        }
+
+        Vite::useHotFile(storage_path(TestCase::NO_HOT_FILE));
+        $this->assertStringNotContainsString("'unsafe-inline'", $this->get('/')->headers->get('Content-Security-Policy'), 'a build never allows inline styles');
     }
 
     public function test_the_private_disk_is_never_served_by_url(): void

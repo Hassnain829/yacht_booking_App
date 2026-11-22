@@ -22,6 +22,20 @@
 @section('content')
     <x-admin.page-header title="Settings" description="Business rules used across the site. Changes apply to new bookings only — existing bookings keep the price and policy they were booked with." />
 
+    {{-- Real since Phase 2.4: two-factor login is the admin's own choice (user decision 2026-11-22). --}}
+    <x-admin.card title="Security" id="security" class="mt-6">
+        <x-slot:actions>
+            <x-admin.pill :tone="$twoFactorOn ? 'success' : 'warning'">Two-factor login {{ $twoFactorOn ? 'on' : 'off' }}</x-admin.pill>
+        </x-slot:actions>
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div class="max-w-2xl">
+                <p class="text-sm font-bold text-navy-950">Two-factor login for your admin account</p>
+                <p class="mt-1 text-sm leading-relaxed text-navy-500">Your choice: turn it on or off at any time. When it is on, every login also asks for a 6-digit code from an authenticator app. Recommended on the live site — this account can approve payouts, refund payments and see every customer's details.</p>
+            </div>
+            <x-button :href="route('account.two-factor')" variant="outline" icon-left="shield-check" class="shrink-0">{{ $twoFactorOn ? 'Manage or turn off' : 'Turn on two-factor login' }}</x-button>
+        </div>
+    </x-admin.card>
+
     <form method="POST" action="#" class="mt-6 space-y-6" data-demo-form="Demo: settings are saved once the database is connected (Phase 3). Changes need your password and are logged.">
         @csrf
         @method('PUT')

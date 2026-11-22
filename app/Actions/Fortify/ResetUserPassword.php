@@ -3,9 +3,8 @@
 namespace App\Actions\Fortify;
 
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
+use App\Services\SessionService;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Contracts\ResetsUserPasswords;
 
@@ -18,6 +17,8 @@ class ResetUserPassword implements ResetsUserPasswords
 {
     use PasswordValidationRules;
 
+    public function __construct(private SessionService $sessions) {}
+
     /**
      * @param  array<string, mixed>  $input
      *
@@ -29,13 +30,8 @@ class ResetUserPassword implements ResetsUserPasswords
             'password' => $this->passwordRules(),
         ])->validate();
 
-        $user->forceFill([
-            'password' => $data['password'], // hashed by the model cast
-            'remember_token' => Str::random(60),
-        ])->save();
+        $user->forceFill(['password' => $data['password']])->save(); // hashed by the model cast
 
-        if (config('session.driver') === 'database') {
-            DB::connection(config('session.connection'))->table(config('session.table', 'sessions'))->where('user_id', $user->getKey())->delete();
-        }
+        $this->sessions->logOutEverywhere($user); // the "password changed" email + log entry: SecurityEventSubscriber
     }
 }

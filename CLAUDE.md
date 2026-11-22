@@ -118,6 +118,7 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
 | `vendor/bin/pint` | Code style (`--test` to check only) |
 | `npm run build` / `npm run dev` | Vite build / dev server |
 | `php artisan serve` | Local app at http://localhost:8000 (XAMPP MySQL must be running) |
+| `php artisan optimize:clear` | Clear cached config/routes/views. **Never run `php artisan optimize` locally** (production only): with a cached config, `.env` changes are ignored, and tests can't switch to their in-memory SQLite database. |
 
 ## QA gate (definition of done, PLAN §15)
 

@@ -70,6 +70,7 @@ A secure, role-based yacht charter marketplace for Chicago:
 | R7 | Commission %? | ✅ 20% for now (stored as a setting). |
 | R8 | Emails during development? | ✅ `MAIL_MAILER=log` locally (emails go to `storage/logs/laravel.log`). Real SMTP (Namecheap business mailbox) in Phase 9/11. (2026-11-22) |
 | R9 | Must customers verify their email? | ✅ Yes, **before paying** (checkout requires `verified`, Phase 4). Owners verify before listing a boat (Phase 2.3). (2026-11-22) |
+| R10 | Is 2FA mandatory for the admin? | ✅ **No — the admin's choice** (user decision 2026-11-22, replaces "mandatory"): on / off in Admin → Settings → Security. Recommended on the live site. Owner withdrawals still need 2FA (Phase 7). |
 
 ---
 
@@ -103,7 +104,7 @@ A secure, role-based yacht charter marketplace for Chicago:
 - **One `users` table and one login page** for everyone.
 - Signing up makes you a **customer**. Clicking **List Your Boat** makes you an **owner**: same email, same password. An owner can still book trips.
 - When an owner logs in, the header account menu also shows **"Owner dashboard"**.
-- **The admin never signs up publicly.** The account is created with `php artisan app:create-admin`. 2FA is mandatory, and after login the admin goes to `/admin`.
+- **The admin never signs up publicly.** The account is created with `php artisan app:create-admin`. 2FA is the admin's choice (R10: Settings → Security, recommended), and after login the admin goes to `/admin`.
 - **The admin dashboard shows everyone:**
   - A Users screen with tabs for Customers and Owners.
   - Each user's page shows their bookings, payments, boats, earnings, withdrawals, complaints, login history and admin notes.
@@ -138,7 +139,7 @@ A secure, role-based yacht charter marketplace for Chicago:
 |---|---|---|
 | `customer` | Anyone who registers | Default. |
 | `owner` | Users who list a boat | Set by the system when the first listing starts. Includes all customer abilities. |
-| `admin` | The client / you (one account) | Full rights. Only created with the artisan command. 2FA is mandatory. |
+| `admin` | The client / you (one account) | Full rights. Only created with the artisan command. 2FA optional (R10), recommended. |
 | *(later)* `manager`, `support` | Staff | Added later. |
 
 How it works in code:
@@ -157,7 +158,7 @@ How it works in code:
 | My trips, complaints (own only) | – | ✅ | ✅ | – |
 | List Your Boat, My boats (own only) | login | ✅ (becomes owner) | ✅ | – |
 | Earnings / withdrawals (own only) | – | – | ✅ + 2FA | – |
-| `/admin` dashboard | – | – | – | ✅ + 2FA |
+| `/admin` dashboard | – | – | – | ✅ (2FA optional, R10) |
 | Refunds, payouts, deductions, settings | – | – | – | ✅ + password re-confirmation |
 
 If someone opens another user's record, the app returns **404, not 403**, so attackers can't even learn that the record exists.
@@ -172,7 +173,7 @@ If someone opens another user's record, the app returns **404, not 403**, so att
 | Checkout / hold | `/checkout/*` | `auth`, `active`, throttle |
 | Owner | `/list-your-boat`, `/owner/*` | `auth`, `active`, `verified` (+ `role:owner` after the first listing) |
 | Owner money | `/owner/payouts/*` | + `2fa`, `password.confirm` |
-| Admin | `/admin/*` | `auth`, `active`, `role:admin`, `2fa`, `admin.idle` (30 min); money actions also need `password.confirm` |
+| Admin | `/admin/*` | `auth`, `active`, `verified`, `can:access-admin`, `admin.idle` (30 min); money actions also need `password.confirm`. No `2fa` (R10). |
 | Stripe webhooks | `/webhooks/stripe` | **No** session or CSRF; Stripe signature check; throttle |
 
 - **All JSON endpoints live in `routes/web.php`** (session cookie + CSRF), not in stateless `api.php` (§8.2).
@@ -226,8 +227,8 @@ If someone opens another user's record, the app returns **404, not 403**, so att
   - two_factor_secret, two_factor_recovery_codes, two_factor_confirmed_at.
   - stripe_customer_id, marketing_opt_in, last_login_at, last_login_ip, timestamps, deleted_at.
 - **sessions, password_reset_tokens, cache, jobs, failed_jobs:** already exist.
-- **login_events:** user_id?, email, event (login|failed|logout|lockout|2fa_failed|password_changed), ip, user_agent, created_at.
-- **audit_logs:** id, user_id?, action (e.g. `payout.approved`, `boat.price_changed`), subject_type, subject_id, before (json), after (json), reason, ip, user_agent, created_at.
+- **login_events:** user_id?, email, event (login|failed|logout|lockout|2fa_failed|password_changed|2fa_enabled|2fa_disabled|recovery_code_used|other_devices_logged_out), ip, user_agent, device_id (SHA-256 of the device cookie), created_at. Kept 1 year (pruned daily). *(Built in 2.4; the last four events and `device_id` were added then.)*
+- **audit_logs:** id, user_id?, action (e.g. `payout.approved`, `boat.price_changed`), subject_type (short morph name, e.g. `user`), subject_id, before (json), after (json), reason, ip, user_agent, created_at. Never changed or deleted; kept for good. *(Built in 2.4.)*
 - **owner_profiles:**
   - user_id (unique), business_type (individual|company), company_name, address fields, years_operating.
   - stripe_account_id, connect_status (none|pending|active|restricted), payouts_enabled.
@@ -500,7 +501,7 @@ draft → pending_review → approved → published ⇄ paused (owner)
 ### 8.1 Authentication, sessions, authorization
 
 - **Fortify:** register, login, logout, email verification, password reset, password confirmation, **2FA (TOTP + recovery codes)**.
-  - 2FA is mandatory for the admin and required for owner money actions.
+  - 2FA is optional for the admin (their choice, R10 — recommended live) and required for owner money actions.
 - **Passwords:** `Password::min(12)->mixedCase()->numbers()->uncompromised()`, hashed with bcrypt (12 rounds).
 - **Throttling:**
   - Login: 5/min per email + IP, with lockout.
@@ -812,7 +813,20 @@ There are also in-app notifications (bell icon) for customers, owners and the ad
 2.1 Fortify + our screens: register, login, logout, verify, reset, throttling, password rules. ✅ done 2026-11-22. `laravel/fortify ^1.43` (features: registration, reset passwords, email verification; 2FA in 2.4, profile/password update in 2.5; passkeys not used — their migration removed). Users migration: `ulid` (route key, numeric id hidden), `first_name`/`last_name` (old `name` split, rollback restores it), `phone`, `marketing_opt_in`. `CreateNewUser` uses validated fields only (role/status/ids can never come from the request). Password rules: 12–128 chars, mixed case, a number, Have I Been Pwned check (skipped in tests). Throttles: login 5/min per email + IP, every auth route 30/min per IP (`auth-forms`), verification resend 6/min. No enumeration: one login error for wrong password and unknown email; "forgot password" always gives the same answer. A password reset logs the account out everywhere (sessions deleted, remember token rotated). After sign-up → "Check your inbox". Signed-in users opening /login go to My trips. The header account menu shows the real user. Accepted exception: Fortify's email-verification link contains the numeric user id (signed, expiring, and only works for the signed-in owner of that account). QA: 223 PHP + 39 JS tests (27 auth tests); real-browser flow register → verify → logout → wrong/right login → forgot → reset → only the new password works; migrations roll back with data intact; 52 page loads clean.
 2.2 User columns (`role`, `status`, …), the Role enum, Gates, Policies skeleton, `app:create-admin`. ✅ done 2026-11-22. Migration: `role` (default customer), `status` (default active), `status_reason`, `last_login_at`, `last_login_ip`, soft deletes. Enums `Role`, `UserStatus`; `User::isAdmin/isOwner/isCustomer/isActive`; role/status never fillable. `UserAccountService` (makeOwner, setStatus with reason — suspending logs out everywhere, admins can't change their own status). Gates in `AuthServiceProvider::ABILITIES` (access-admin, access-owner-area, list-boats, request-withdrawal, manage-bookings, assign-captains, review-listings, manage-catalog, approve-payouts, issue-refunds, resolve-complaints, manage-users, manage-settings, view-audit-log); inactive accounts get none. `UserPolicy` (view / update / changeStatus / delete); model policies (Boat, Booking, Payout, Complaint) arrive with their models. Login: suspended / banned / deleted accounts refused (message only after the correct password; unknown emails run a dummy hash check for even timing); last login time + IP recorded. `php artisan app:create-admin` (hidden password prompt, same password rules, one admin unless --force, email pre-verified). Local seeder: test@example.com (customer) + owner@example.com (owner), password `Local-Test-2026`, never in production, never an admin. Header menu links follow the role. QA: 254 PHP tests (31 new); migrate / seed / rollback / re-migrate on a temporary database. The user runs the migrations and seeder on their own MySQL.
 2.3 Middleware: active account, role, 2FA required, admin idle timeout, `SecurityHeaders` + CSP with nonces, HTTPS / proxies. Also set `'serve' => false` on the private `local` disk (`config/filesystems.php`). That removes Laravel's built-in signed `GET`/`PUT /storage/{path}` routes (found in Phase 0), because private files are served only by our own Policy-checked controller. (The `.js` class is already done in Phase 1.1: it is rendered server-side, with `public/css/noscript.css` for visitors without JS, so no inline script is needed.) ✅ done 2026-11-22. Routes: account → `auth` + `active`; owner area, List your boat and admin → also `verified`; the role check is a Gate (`can:access-owner-area`, `can:list-boats`, `can:access-admin`). `active` (`EnsureAccountIsActive`) logs a suspended / banned account out on its next request (JSON: 403). `admin.idle` (`AdminIdleTimeout`): the admin is logged out after 30 idle minutes (`ADMIN_IDLE_MINUTES`); the admin login ignores "remember me". `SecurityHeaders` on every response, error pages and redirects included: CSP with a fresh nonce per request (Vite adds it to its tags; no `'unsafe-inline'` / `'unsafe-eval'`; Google Maps frames allowed; the Vite dev server only while `npm run dev` runs), nosniff, `X-Frame-Options: DENY`, Referrer-Policy, Permissions-Policy, COOP, HSTS (production over HTTPS), `X-Powered-By` removed. HTTPS: `ForceHttps` (production: HTTP → HTTPS, 301 / 308, always to our own host), `URL::forceHttps` in production, session cookie secure by default in production, session encrypted by default (`SESSION_ENCRYPT=true`). Proxies: none trusted by default (`config/trustedproxy.php`, `TRUSTED_PROXIES` only behind Cloudflare or similar), so `X-Forwarded-*` can't fake a visitor's IP or HTTPS. The header account menu and the admin top bar show the real signed-in user (admin pages are still demo data until Phase 3). The "2FA required" middleware moves to 2.4, together with the setup screen it sends the admin to. QA: 298 PHP + 39 JS tests (44 access tests: route × role matrix incl. an unverified owner, return to the intended page, suspended logout, idle timeout, remember me, headers, nonce on every script / style tag, HTTPS redirect, trusted proxies); real-browser scan as guest / customer / owner / admin, 96 page loads at 390 + 1280 px: zero CSP violations, zero console errors, no overflow; account menu links checked per role. No new migrations.
-2.4 2FA + recovery codes, and the "2FA required" middleware for the admin area (from 2.3); password confirmation; active sessions + logout other devices; `login_events`; `audit_logs` + `AuditService`; security emails.
+2.4 2FA + recovery codes, and the "2FA required" middleware for the admin area (from 2.3); password confirmation; active sessions + logout other devices; `login_events`; `audit_logs` + `AuditService`; security emails. ✅ done 2026-11-22.
+  - **2FA:** Fortify `twoFactorAuthentication(confirm, confirmPassword)` — TOTP + 8 recovery codes; it is on only after a valid code from the app; a code works once. Login → `/two-factor-challenge` (code or recovery code, 5 tries a minute; a used recovery code is replaced). Managed on **`/account/two-factor`** (behind `password.confirm`, `Cache-Control: no-store`): turn on (QR code as an image + setup key) → confirm with a code → recovery codes (shown once open, can be replaced) → turn off. Linked from the "Two-factor login" card on Profile & security. The admin never gets "remember me", also through the challenge.
+  - **`2fa` middleware** (`EnsureTwoFactorEnabled`): without 2FA → `/account/two-factor` (JSON: 403); the reason survives the password confirmation. Owner money actions get it in Phase 7. **Not on the admin area (R10, user decision 2026-11-22):** 2FA is the admin's choice — **Admin → Settings → Security** shows On / Off and links to turn it on, manage it or turn it off (the page recommends keeping it on live). Lost phone + codes: **`php artisan app:reset-two-factor --email=…`** (reason, confirmation, logs out everywhere, emails the person, audit entry) — the only way back in for the single admin. The owner payouts checklist shows the real 2FA status.
+  - **Password confirmation:** Fortify's "Confirm it's you" screen (3 hours, `auth.password_timeout`), used by the 2FA page, Fortify's 2FA routes and "log out other devices".
+  - **Devices** (Profile & security): this device + the account's other database sessions (browser + OS from a small `UserAgent` helper, IP, last active). **"Log out other devices"** (`DELETE /account/sessions`: `password.confirm`, `throttle:account-security` 10/min): ends the other sessions and rotates the remember-me token. Session ending now lives in one place, `SessionService` (password reset, suspension, 2FA reset use it too).
+  - **`login_events`** (`LoginEventService`, `SecurityEventSubscriber`): logins (also "remember me" and after the challenge), failed logins (linked to the account when the email exists; passwords never stored), lockouts (the `login` limiter fires `Lockout`, the visitor still gets our 429 page), logouts, 2FA failures / on / off, recovery code used, password changed, other devices logged out. `last_login_at` / `_ip` updated there.
+  - **New-device detection:** a random `cyb_device` cookie (encrypted, httpOnly, 400 days); the log keeps only its SHA-256. A login from a browser without a known device id → email, **for owners and the admin only, never on the very first login**.
+  - **Security emails** (queued; `SecurityContext` = device · IP · Chicago time): password changed (after a reset; also after a password change in 2.5), new-device login, 2FA turned on / off (incl. "turned off by our team").
+  - **`audit_logs`** (`AuditService`, `AuditLog` refuses updates and deletes, morph map `user`): role change (first listing), status change (with the reason), 2FA reset, admin created by the command. The admin Audit log screen still shows demo data until Phase 3.
+  - **Scheduler** (`routes/console.php`): `queue:work --stop-when-empty` every minute (the emails), `model:prune` daily.
+  - **Fix (found by the user, 2026-11-22): no CSS with `npm run dev`.** The 2.3 CSP allowed the Vite dev server by its origin, but on Windows Vite wrote `http://[::1]:5173`, and a CSP can't name an IPv6 address (Chrome drops it) → the dev stylesheet and the dev-served fonts were blocked (2.3 QA had only run against `public/build`). Now: `vite.config.js` pins the dev server to `127.0.0.1`; in dev mode the origin is also in `font-src` / `img-src`; an IPv6 origin falls back to the bare scheme (dev only); tests never use the dev server (`tests/TestCase.php`) and the dev-mode CSP has its own test. Checked in Chrome with the dev server running.
+  - **Fix (found by the user, 2026-11-22): the setup QR code could not be scanned** ("Unrecognized QR code" from the Chrome Authenticator extension). Fortify's QR has no quiet zone (margin 0), is grey and was shown at 176 px (≈3.9 px per module, blurred). Now our own render: black on white, the standard 4-module quiet zone inside the frame, exactly 5 screen pixels per module (265–285 px), shown at its real size. Checked by decoding the real page's QR with two decoders (jsQR + the stricter qrcode-reader): both read it at 100% zoom; the setup key always works as a fallback.
+  - Open: "alerts on repeated failures" (§8.5) — the data is in `login_events`; the alert/admin view comes with the admin Users screen (Phase 3). The privacy policy should mention the device cookie when the legal text is written.
+  - QA: 342 PHP (1,788 assertions) + 39 JS tests (16 2FA, 13 security-log, 9 user-agent, access matrix incl. "admin without 2FA"); migrations roll back; real-browser flows on an isolated SQLite server — admin at 390 px (forced to 2FA → confirm password → QR → wrong / right code → recovery codes → /admin opens → devices → log out others → challenge with a wrong / real recovery code → fresh TOTP at 1280) and owner at 1280 px (turn on, wrong code, payouts checklist, turn off); zero console errors / CSP violations, no overflow; the 5 queued emails delivered with device, IP and Chicago time.
 2.5 Role-based redirects, header account menu (UI built in Phase 1: `partials/account-menu`, `HeaderComposer` — switch it to `$request->user()`), account pages (profile, email change, password, delete account).
 2.6 JSON endpoint foundation: error format, named rate limiters, API Resource base, idempotency-key middleware.
 **QA:** route × role access-matrix test; throttle tests; no-enumeration tests; session regeneration and cookie-flag tests; CSP check (no console violations).
@@ -957,7 +971,7 @@ The static mockup can stay on Vercel for client demos until Phase 1 is done.
 
 - **Accounts and access:**
   - One account model with simple roles.
-  - 2FA for the admin and for owner money actions.
+  - 2FA for everyone (the admin's choice, R10) and required for owner money actions.
   - Policies + 404-on-foreign-record.
   - ULIDs in URLs.
   - An access-matrix test suite.

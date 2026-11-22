@@ -21,7 +21,6 @@ return [
         'phone' => '(312) 555-0100',
         'member_since_days' => -200,
         'marketing' => true,
-        'two_factor' => false,
         'password_changed_days' => -95,
     ],
 
@@ -29,11 +28,6 @@ return [
     'cards' => [
         ['id' => 'pm_demo_visa', 'brand' => 'Visa', 'last4' => '4242', 'exp_month' => 12, 'exp_year' => 2028, 'default' => true],
         ['id' => 'pm_demo_mc', 'brand' => 'Mastercard', 'last4' => '4444', 'exp_month' => 8, 'exp_year' => 2027, 'default' => false],
-    ],
-
-    'sessions' => [
-        ['device' => 'Chrome on Windows', 'icon' => 'monitor', 'location' => 'Chicago, IL', 'current' => true, 'minutes_ago' => 0],
-        ['device' => 'Safari on iPhone', 'icon' => 'smartphone', 'location' => 'Chicago, IL', 'current' => false, 'minutes_ago' => 2880],
     ],
 
     'captains' => [

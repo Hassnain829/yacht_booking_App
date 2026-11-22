@@ -47,24 +47,28 @@ class SecurityHeaders
     {
         $scripts = ["'self'", "'nonce-{$nonce}'"];
         $styles = ["'self'", "'nonce-{$nonce}'"];
+        $images = ["'self'", 'data:', 'blob:'];
+        $fonts = ["'self'", 'data:'];
         $connect = ["'self'"];
 
-        // Local development with `npm run dev`: allow the Vite dev server (it injects <style> tags without
-        // a nonce, so styles need 'unsafe-inline' there — never in a build).
+        // Local development with `npm run dev`: allow the Vite dev server — its scripts, the CSS and fonts it
+        // serves, and the hot-reload websocket. Vite injects <style> tags without a nonce, so styles need
+        // 'unsafe-inline' there — never in a build.
         if (Vite::isRunningHot()) {
-            $origin = rtrim((string) file_get_contents(public_path('hot')));
-            $scripts[] = $origin;
-            $styles = ["'self'", "'unsafe-inline'", $origin];
-            $connect[] = $origin;
-            $connect[] = preg_replace('#^http#', 'ws', $origin);
+            [$server, $socket] = $this->devServerSources();
+            $scripts[] = $server;
+            $styles = ["'self'", "'unsafe-inline'", $server];
+            $images[] = $server;
+            $fonts[] = $server;
+            array_push($connect, $server, $socket);
         }
 
         $directives = [
             'default-src' => ["'self'"],
             'script-src' => $scripts,
             'style-src' => $styles,
-            'img-src' => ["'self'", 'data:', 'blob:'],
-            'font-src' => ["'self'", 'data:'],
+            'img-src' => $images,
+            'font-src' => $fonts,
             'connect-src' => $connect,
             'media-src' => ["'self'"],
             'frame-src' => self::FRAME_SOURCES,
@@ -77,5 +81,25 @@ class SecurityHeaders
         $policy = collect($directives)->map(fn (array $values, string $name) => $name.' '.implode(' ', $values))->implode('; ');
 
         return app()->isProduction() ? $policy.'; upgrade-insecure-requests' : $policy;
+    }
+
+    /**
+     * The Vite dev server (from the hot file) as CSP sources: [page assets, websocket].
+     * CSP has no way to write an IPv6 address such as http://[::1]:5173 (browsers drop it, and the CSS
+     * is blocked), so then only the scheme is allowed — local development only. vite.config.js pins the
+     * dev server to 127.0.0.1, so normally the exact origin is used.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function devServerSources(): array
+    {
+        $origin = rtrim(trim((string) file_get_contents(Vite::hotFile())), '/');
+        $secure = str_starts_with($origin, 'https:');
+
+        if ($origin === '' || str_contains($origin, '[')) {
+            return $secure ? ['https:', 'wss:'] : ['http:', 'ws:'];
+        }
+
+        return [$origin, ($secure ? 'wss' : 'ws').substr($origin, $secure ? 5 : 4)];
     }
 }

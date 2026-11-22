@@ -10,7 +10,7 @@ use Tests\TestCase;
 
 /**
  * Phase 1.7 — admin UI kit, shell and static screens (demo data, no login yet).
- * Phase 2 adds: guest → login, customer/owner → 403, admin without 2FA → 2FA setup,
+ * Phase 2 adds: guest → login, customer/owner → 403 (2FA is the admin's choice: Settings → Security),
  * sensitive actions → password.confirm.
  */
 class AdminPagesTest extends TestCase

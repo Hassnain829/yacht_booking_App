@@ -138,7 +138,7 @@ class AccountPagesTest extends TestCase
             'register' => ['/register', 'Create your account', '/register'],
             'forgot' => ['/forgot-password', 'Forgot your password?', '/forgot-password'],
             'reset' => ['/reset-password/abc123', 'Choose a new password', '/reset-password'],
-            'two factor' => ['/two-factor-challenge', 'Enter your code', '/two-factor-challenge'],
+            // The 2FA challenge only opens after a correct password: tests/Feature/Phase2/TwoFactorTest.
         ];
     }
 

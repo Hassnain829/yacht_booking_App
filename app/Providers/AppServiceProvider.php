@@ -2,13 +2,13 @@
 
 namespace App\Providers;
 
+use App\Listeners\SecurityEventSubscriber;
 use App\Models\User;
 use App\View\Composers\FooterComposer;
 use App\View\Composers\HeaderComposer;
-use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
@@ -40,15 +40,13 @@ class AppServiceProvider extends ServiceProvider
         // Production links, redirects and signed URLs are always https:// (PLAN §8.3; HTTP requests are redirected by ForceHttps).
         URL::forceHttps($this->app->environment('production'));
 
-        // Remember the last successful login (shown to the admin). Phase 2.4 adds the full login_events log.
-        Event::listen(Login::class, function (Login $event) {
-            if ($event->user instanceof User) {
-                DB::table('users')->where('id', $event->user->getKey())->update([
-                    'last_login_at' => now(),
-                    'last_login_ip' => request()->ip(),
-                ]);
-            }
-        });
+        // Logins, failures, 2FA and password events → login_events + security emails (PLAN §8.1, §8.5).
+        Event::subscribe(SecurityEventSubscriber::class);
+
+        // Polymorphic columns (audit_logs.subject_type) store these short names, never class names.
+        Relation::enforceMorphMap([
+            'user' => User::class,
+        ]);
     }
 
     /**
@@ -73,5 +71,7 @@ class AppServiceProvider extends ServiceProvider
     {
         RateLimiter::for('checkout', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
         RateLimiter::for('promo', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
+        // Security settings of a signed-in account (log out other devices, …).
+        RateLimiter::for('account-security', fn (Request $request) => Limit::perMinute(10)->by('user:'.$request->user()?->getKey()));
     }
 }

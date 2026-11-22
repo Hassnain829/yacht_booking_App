@@ -27,6 +27,9 @@ export default defineConfig({
         tailwindcss(),
     ],
     server: {
+        // An IPv4 address on purpose: on Windows, Vite's default "localhost" can become http://[::1]:5173, which a
+        // Content-Security-Policy cannot name — the dev CSS and fonts were blocked (app/Http/Middleware/SecurityHeaders.php).
+        host: '127.0.0.1',
         watch: {
             ignored: ['**/storage/framework/views/**'],
         },

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Owner;
 
 use App\Http\Controllers\Controller;
 use App\Support\Demo\DemoOwner;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
@@ -13,9 +14,10 @@ use Illuminate\View\View;
  */
 class PayoutController extends Controller
 {
-    public function index(DemoOwner $owner): View
+    public function index(Request $request, DemoOwner $owner): View
     {
         $profile = $owner->profile();
+        $profile->two_factor = $request->user()->hasEnabledTwoFactorAuthentication(); // real since Phase 2.4; the rest is demo until Phase 7
         $balances = $owner->balances();
         $money = $owner->money();
 

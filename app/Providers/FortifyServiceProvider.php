@@ -10,7 +10,9 @@ use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Responses\Auth\PasswordResetLinkResponse;
 use App\Http\Responses\Auth\RegisterResponse;
 use App\Models\User;
+use Illuminate\Auth\Events\Lockout;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
@@ -59,6 +61,7 @@ class FortifyServiceProvider extends ServiceProvider
         ]));
         Fortify::verifyEmailView(fn () => view('auth.verify-email'));
         Fortify::confirmPasswordView(fn () => view('auth.confirm-password'));
+        Fortify::twoFactorChallengeView(fn () => view('auth.two-factor-challenge'));
 
         $this->configureRateLimiting();
     }
@@ -95,11 +98,16 @@ class FortifyServiceProvider extends ServiceProvider
 
     private function configureRateLimiting(): void
     {
-        // Login: 5 tries a minute per email + IP (PLAN §8.1).
+        // Login: 5 tries a minute per email + IP (PLAN §8.1). A blocked try is a "lockout" in the security log
+        // (the route throttle doesn't fire Laravel's Lockout event itself); the visitor still gets our 429 page.
         RateLimiter::for('login', function (Request $request) {
             $throttleKey = Str::transliterate(Str::lower((string) $request->input(Fortify::username())).'|'.$request->ip());
 
-            return Limit::perMinute(5)->by($throttleKey);
+            return Limit::perMinute(5)->by($throttleKey)->response(function (Request $request, array $headers) {
+                event(new Lockout($request));
+
+                throw new ThrottleRequestsException('Too Many Attempts.', null, $headers);
+            });
         });
 
         RateLimiter::for('two-factor', fn (Request $request) => Limit::perMinute(5)->by($request->session()->get('login.id')));

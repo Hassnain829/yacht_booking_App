@@ -53,27 +53,30 @@
                     </form>
                 </section>
 
-                {{-- Two-factor (Phase 2: Fortify two-factor authentication) --}}
+                {{-- Two-factor (Phase 2.4: Fortify two-factor authentication, managed on its own page) --}}
                 <section id="two-factor" class="{{ $card }} scroll-mt-28" aria-labelledby="tfa-title">
                     <div class="flex flex-wrap items-center justify-between gap-3">
                         <h2 id="tfa-title" class="text-lg font-extrabold text-navy-950">Two-factor login</h2>
-                        <span @class(['rounded-full px-2.5 py-1 text-[11px] font-bold', 'bg-emerald-100 text-emerald-800' => $profile->two_factor, 'bg-navy-100 text-navy-600' => ! $profile->two_factor])>{{ $profile->two_factor ? 'On' : 'Off' }}</span>
+                        <span @class(['rounded-full px-2.5 py-1 text-[11px] font-bold', 'bg-emerald-100 text-emerald-800' => $twoFactorOn, 'bg-navy-100 text-navy-600' => ! $twoFactorOn])>{{ $twoFactorOn ? 'On' : 'Off' }}</span>
                     </div>
-                    <p class="mt-2 text-sm leading-relaxed text-navy-500">Add a second step when you log in: a 6-digit code from an authenticator app such as Google Authenticator or 1Password. Boat owners need it before their first withdrawal.</p>
-                    <x-button variant="outline" class="mt-5" data-soon icon-left="shield-check">{{ $profile->two_factor ? 'Manage two-factor login' : 'Turn on two-factor login' }}</x-button>
+                    <p class="mt-2 text-sm leading-relaxed text-navy-500">Add a second step when you log in: a 6-digit code from an authenticator app such as Google Authenticator or 1Password. {{ $isAdmin ? 'Recommended for the admin account.' : 'Boat owners need it before their first withdrawal.' }}</p>
+                    <x-button :href="route('account.two-factor')" variant="outline" class="mt-5" icon-left="shield-check">{{ $twoFactorOn ? 'Manage two-factor login' : 'Turn on two-factor login' }}</x-button>
                 </section>
 
-                {{-- Sessions (Phase 2: database sessions + "log out other devices" with password) --}}
+                {{-- Devices (Phase 2.4: database sessions; "log out other devices" needs a recent password confirmation) --}}
                 <section id="sessions" class="{{ $card }} scroll-mt-28" aria-labelledby="sessions-title">
                     <h2 id="sessions-title" class="text-lg font-extrabold text-navy-950">Devices</h2>
                     <p class="mt-2 text-sm text-navy-500">Where you're logged in. Don't recognise one? Log out of other devices and change your password.</p>
+                    @if (session('sessions_status'))
+                        <p class="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200" role="status">{{ session('sessions_status') }}</p>
+                    @endif
                     <ul class="mt-5 divide-y divide-navy-100">
                         @foreach ($sessions as $session)
                             <li class="flex items-center gap-4 py-4">
                                 <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-navy-50 text-navy-500"><i data-lucide="{{ $session->icon }}" class="h-5 w-5"></i></span>
                                 <div class="min-w-0 flex-1">
                                     <p class="text-sm font-bold text-navy-950">{{ $session->device }}</p>
-                                    <p class="text-xs text-navy-500">{{ $session->location }} · {{ $session->current ? 'This device' : 'Last active '.$session->last_active->diffForHumans() }}</p>
+                                    <p class="text-xs text-navy-500">IP {{ $session->ip }} · {{ $session->current ? 'This device' : 'Last active '.$session->last_active->diffForHumans() }}</p>
                                 </div>
                                 @if ($session->current)
                                     <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-800">Current</span>
@@ -81,7 +84,11 @@
                             </li>
                         @endforeach
                     </ul>
-                    <x-button variant="outline" class="mt-2" data-soon>Log out other devices</x-button>
+                    <form method="POST" action="{{ route('account.sessions.destroy-others') }}" class="mt-2">
+                        @csrf
+                        @method('DELETE')
+                        <x-button type="submit" variant="outline">Log out other devices</x-button>
+                    </form>
                 </section>
 
                 {{-- Saved cards (Phase 5: Stripe payment methods; we only store brand + last 4) --}}

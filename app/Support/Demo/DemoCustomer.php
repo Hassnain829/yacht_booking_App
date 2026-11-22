@@ -57,12 +57,6 @@ class DemoCustomer
         ]));
     }
 
-    /** @return Collection<int, Fluent> */
-    public function sessions(): Collection
-    {
-        return collect($this->config['sessions'])->map(fn (array $s) => new Fluent([...$s, 'last_active' => $this->now->subMinutes($s['minutes_ago'])]));
-    }
-
     /** @return Collection<int, Fluent> upcoming first (soonest), then past (newest) */
     public function trips(): Collection
     {

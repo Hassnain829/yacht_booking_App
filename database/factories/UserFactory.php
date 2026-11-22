@@ -6,8 +6,12 @@ use App\Enums\Role;
 use App\Enums\UserStatus;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Laravel\Fortify\Contracts\TwoFactorAuthenticationProvider;
+use Laravel\Fortify\Fortify;
+use Laravel\Fortify\RecoveryCode;
 
 /**
  * @extends Factory<User>
@@ -56,6 +60,16 @@ class UserFactory extends Factory
     public function banned(): static
     {
         return $this->afterMaking(fn (User $user) => $user->forceFill(['status' => UserStatus::Banned]));
+    }
+
+    /** Two-factor login turned on and confirmed. Tests read the secret back with Fortify::currentEncrypter(). */
+    public function withTwoFactor(): static
+    {
+        return $this->afterMaking(fn (User $user) => $user->forceFill([
+            'two_factor_secret' => Fortify::currentEncrypter()->encrypt(app(TwoFactorAuthenticationProvider::class)->generateSecretKey()),
+            'two_factor_recovery_codes' => Fortify::currentEncrypter()->encrypt(json_encode(Collection::times(8, fn () => RecoveryCode::generate())->all())),
+            'two_factor_confirmed_at' => now(),
+        ]));
     }
 
     /**
