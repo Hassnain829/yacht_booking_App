@@ -1,7 +1,7 @@
 @extends('layouts.admin', ['title' => 'Dashboard', 'active' => 'dashboard'])
 
 @section('content')
-    <x-admin.page-header title="Good {{ $now->hour < 12 ? 'morning' : ($now->hour < 18 ? 'afternoon' : 'evening') }}, {{ strtok(config('demo_admin.admin.name'), ' ') }}" description="{{ $now->format('l, F j') }} · Chicago time. Here's what needs your attention.">
+    <x-admin.page-header title="Good {{ $now->hour < 12 ? 'morning' : ($now->hour < 18 ? 'afternoon' : 'evening') }}, {{ auth()->user()->first_name }}" description="{{ $now->format('l, F j') }} · Chicago time. Here's what needs your attention.">
         <x-slot:actions>
             <x-button :href="route('admin.bookings.index')" variant="dark" icon-left="calendar-check">All bookings</x-button>
         </x-slot:actions>

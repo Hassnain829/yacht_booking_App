@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Phase1;
 
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Fluent;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -12,6 +14,8 @@ use Tests\TestCase;
  */
 class LayoutTest extends TestCase
 {
+    use RefreshDatabase;
+
     private const NAV_LABELS = ['Home', 'Yachts', 'Experiences', 'Pricing', 'About Us', 'Contact Us', 'List Your Boat'];
 
     /** @return array<string, array{0: string, 1: string}> [url, nav label that must be active] */
@@ -33,6 +37,9 @@ class LayoutTest extends TestCase
     #[DataProvider('publicPages')]
     public function test_public_page_renders_layout_and_marks_active_link(string $url, string $activeLabel): void
     {
+        if (str_starts_with($url, '/owner')) {
+            $this->actingAs(User::factory()->owner()->create()); // the owner area needs a login (Phase 2.3)
+        }
         $response = $this->get($url);
 
         $response->assertOk()
@@ -65,7 +72,9 @@ class LayoutTest extends TestCase
 
         $this->assertGreaterThan(10, $paths->count());
         foreach ($paths as $path) {
-            $this->get($path)->assertOk();
+            // Pages behind a login (owner area, list your boat) send guests to the login page.
+            $response = $this->get($path);
+            $this->assertTrue($response->isOk() || $response->isRedirect(route('login')), "{$path} → {$response->getStatusCode()}");
         }
     }
 
@@ -164,16 +173,17 @@ class LayoutTest extends TestCase
         $this->assertStringNotContainsString('Log out', $html);
     }
 
-    public function test_header_account_menu_for_signed_in_previews(): void
+    public function test_header_account_menu_for_signed_in_users(): void
     {
-        // Phase 1 preview: owner pages show the demo owner, account pages the demo customer.
-        $this->get('/owner')->assertOk()
+        $owner = User::factory()->owner()->create(['first_name' => 'Marcus', 'last_name' => 'Reed']);
+        $this->actingAs($owner)->get('/owner')->assertOk()
             ->assertSee('Account menu — Marcus Reed')
             ->assertSee('href="'.route('owner.dashboard').'"', false)
             ->assertSee('Earnings &amp; payouts', false)
             ->assertSee('action="'.url('/logout').'"', false);
 
-        $this->get('/account/trips')->assertOk()
+        $customer = User::factory()->create(['first_name' => 'Alex', 'last_name' => 'Morgan']);
+        $this->actingAs($customer)->get('/account/trips')->assertOk()
             ->assertSee('Account menu — Alex Morgan')
             ->assertSee('List your boat')
             ->assertDontSee('Earnings &amp; payouts', false);

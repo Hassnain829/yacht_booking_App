@@ -1,0 +1,81 @@
+<?php
+
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Vite;
+use Symfony\Component\HttpFoundation\Response;
+
+/**
+ * Security headers on every response (PLAN §8.3), including a strict Content Security Policy:
+ * only our own scripts run — no inline scripts, no inline event handlers, no third-party code.
+ *
+ * Each request gets a fresh nonce; Vite adds it to the tags it renders (@vite, @fonts). Our own
+ * markup never needs it (no inline <script>/<style> — checked by the tests).
+ * Phase 5 adds Stripe (js.stripe.com, api.stripe.com, hooks.stripe.com) to the lists below.
+ */
+class SecurityHeaders
+{
+    /** Google Maps embeds on the contact, yacht and confirmation pages. */
+    private const FRAME_SOURCES = ['https://www.google.com', 'https://maps.google.com'];
+
+    public function handle(Request $request, Closure $next): Response
+    {
+        $nonce = Vite::useCspNonce();
+
+        $response = $next($request);
+
+        $response->headers->set('Content-Security-Policy', $this->policy($nonce));
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        $response->headers->set('X-Frame-Options', 'DENY');
+        $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
+        $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), usb=(), payment=(self)');
+        $response->headers->set('Cross-Origin-Opener-Policy', 'same-origin');
+        if (app()->isProduction() && $request->isSecure()) {
+            $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+        }
+        $response->headers->remove('X-Powered-By');
+        if (! headers_sent()) {
+            header_remove('X-Powered-By');
+        }
+
+        return $response;
+    }
+
+    private function policy(string $nonce): string
+    {
+        $scripts = ["'self'", "'nonce-{$nonce}'"];
+        $styles = ["'self'", "'nonce-{$nonce}'"];
+        $connect = ["'self'"];
+
+        // Local development with `npm run dev`: allow the Vite dev server (it injects <style> tags without
+        // a nonce, so styles need 'unsafe-inline' there — never in a build).
+        if (Vite::isRunningHot()) {
+            $origin = rtrim((string) file_get_contents(public_path('hot')));
+            $scripts[] = $origin;
+            $styles = ["'self'", "'unsafe-inline'", $origin];
+            $connect[] = $origin;
+            $connect[] = preg_replace('#^http#', 'ws', $origin);
+        }
+
+        $directives = [
+            'default-src' => ["'self'"],
+            'script-src' => $scripts,
+            'style-src' => $styles,
+            'img-src' => ["'self'", 'data:', 'blob:'],
+            'font-src' => ["'self'", 'data:'],
+            'connect-src' => $connect,
+            'media-src' => ["'self'"],
+            'frame-src' => self::FRAME_SOURCES,
+            'object-src' => ["'none'"],
+            'base-uri' => ["'self'"],
+            'form-action' => ["'self'"],
+            'frame-ancestors' => ["'none'"],
+        ];
+
+        $policy = collect($directives)->map(fn (array $values, string $name) => $name.' '.implode(' ', $values))->implode('; ');
+
+        return app()->isProduction() ? $policy.'; upgrade-insecure-requests' : $policy;
+    }
+}

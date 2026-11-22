@@ -5,7 +5,7 @@
 --}}
 @php
     $admin = app(\App\Support\Demo\DemoAdmin::class);
-    $me = $admin->admin();
+    $me = auth()->user(); // the signed-in admin (the admin area requires login)
     $counts = collect($admin->stats()['actions'])->mapWithKeys(fn ($a) => [$a[1] => $a[2]]);
     $groups = [
         'Overview' => [

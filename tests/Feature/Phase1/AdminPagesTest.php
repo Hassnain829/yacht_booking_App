@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Phase1;
 
+use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -13,10 +15,13 @@ use Tests\TestCase;
  */
 class AdminPagesTest extends TestCase
 {
+    use RefreshDatabase;
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->travelTo(CarbonImmutable::parse('2026-07-14 10:00:00', 'America/Chicago'));
+        $this->actingAs(User::factory()->admin()->create()); // the admin area needs an admin login (Phase 2.3)
     }
 
     /** @return array<string, array{0: string, 1: string, 2: string}> */

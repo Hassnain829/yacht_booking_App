@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Phase1;
 
+use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -12,6 +14,8 @@ use Tests\TestCase;
  */
 class OwnerPagesTest extends TestCase
 {
+    use RefreshDatabase;
+
     private const APPROVED = '01JDQ7M3K8R2V5X9C4B6N0P1TA';
 
     private const DRAFT = '01JDQ7M3K8R2V5X9C4B6N0P1TC';
@@ -20,6 +24,7 @@ class OwnerPagesTest extends TestCase
     {
         parent::setUp();
         $this->travelTo(CarbonImmutable::parse('2026-07-14 10:00:00', 'America/Chicago'));
+        $this->actingAs(User::factory()->owner()->create()); // the owner area needs an owner login (Phase 2.3)
     }
 
     /** @return array<string, mixed> */

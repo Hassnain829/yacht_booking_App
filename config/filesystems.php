@@ -33,7 +33,9 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
+            // Never served by URL: private files (insurance documents, complaint photos) go through a controller
+            // that checks a Policy (PLAN §9, Phase 2.3).
+            'serve' => false,
             'throw' => false,
             'report' => false,
         ],

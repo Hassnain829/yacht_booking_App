@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -35,6 +36,9 @@ class AppServiceProvider extends ServiceProvider
 
         $this->configureRateLimiting();
         $this->configurePasswords();
+
+        // Production links, redirects and signed URLs are always https:// (PLAN §8.3; HTTP requests are redirected by ForceHttps).
+        URL::forceHttps($this->app->environment('production'));
 
         // Remember the last successful login (shown to the admin). Phase 2.4 adds the full login_events log.
         Event::listen(Login::class, function (Login $event) {

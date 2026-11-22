@@ -50,9 +50,10 @@ Route::post('/checkout', [CheckoutController::class, 'store'])->middleware('thro
 Route::post('/checkout/promo', [CheckoutController::class, 'promo'])->middleware('throttle:promo')->name('checkout.promo');
 Route::get('/booking/confirmation', [CheckoutController::class, 'confirmation'])->name('booking.confirmation');
 
-// Owner screens (Phase 1: one demo owner, no login). Phase 2: auth + owner role; Phase 3/7: the database.
-Route::get('/list-your-boat', [ListingController::class, 'create'])->name('list-your-boat');
-Route::prefix('owner')->name('owner.')->group(function () {
+// Owner screens — signed-in, active, verified (PLAN §4.5). Page content is still demo data until Phase 6/7.
+Route::get('/list-your-boat', [ListingController::class, 'create'])
+    ->middleware(['auth', 'active', 'verified', 'can:list-boats'])->name('list-your-boat');
+Route::prefix('owner')->name('owner.')->middleware(['auth', 'active', 'verified', 'can:access-owner-area'])->group(function () {
     Route::get('/', OwnerDashboardController::class)->name('dashboard');
     Route::get('/boats', [OwnerBoatController::class, 'index'])->name('boats.index');
     Route::get('/bookings', [OwnerBookingController::class, 'index'])->name('bookings.index');
@@ -62,16 +63,17 @@ Route::prefix('owner')->name('owner.')->group(function () {
     Route::get('/complaints', [OwnerComplaintController::class, 'index'])->name('complaints.index');
 });
 
-// Customer account (Phase 1: one demo customer). Phase 2: auth + verified; Phase 4: BookingPolicy (other people's trips → 404).
-Route::prefix('account')->name('account.')->group(function () {
+// Customer account — signed-in and active. Content is demo data until Phase 4 (BookingPolicy: other people's trips → 404).
+Route::prefix('account')->name('account.')->middleware(['auth', 'active'])->group(function () {
     Route::get('/', [AccountProfileController::class, 'show'])->name('profile');
     Route::get('/trips', [AccountTripController::class, 'index'])->name('trips.index');
     Route::get('/trips/{ulid}', [AccountTripController::class, 'show'])->where('ulid', '[0-9A-HJKMNP-TV-Z]{26}')->name('trips.show');
 });
 
-// Admin (Phase 1: static screens on demo data). Phase 2: auth + verified + 2FA + admin role;
-// every sensitive action sits behind `password.confirm`, needs a reason and writes the audit log.
-Route::prefix('admin')->name('admin.')->group(function () {
+// Admin — signed-in, active, verified, admin role, 30-minute idle logout (PLAN §4.5). Phase 2.4 adds `2fa`.
+// Every sensitive action will sit behind `password.confirm`, need a reason and write the audit log.
+// Screens still show demo data until Phase 3+.
+Route::prefix('admin')->name('admin.')->middleware(['auth', 'active', 'verified', 'can:access-admin', 'admin.idle'])->group(function () {
     Route::get('/', AdminDashboardController::class)->name('dashboard');
     Route::get('/bookings', [AdminBookingController::class, 'index'])->name('bookings.index');
     Route::get('/bookings/{ref}', [AdminBookingController::class, 'show'])->where('ref', 'CYB-[A-Z0-9]{6}')->name('bookings.show');

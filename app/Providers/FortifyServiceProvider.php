@@ -6,6 +6,7 @@ use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Actions\Fortify\UpdateUserPassword;
 use App\Actions\Fortify\UpdateUserProfileInformation;
+use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Responses\Auth\PasswordResetLinkResponse;
 use App\Http\Responses\Auth\RegisterResponse;
 use App\Models\User;
@@ -83,9 +84,10 @@ class FortifyServiceProvider extends ServiceProvider
             return null;
         }
         if (! $user->isActive()) {
-            throw ValidationException::withMessages([
-                Fortify::username() => 'This account is not active. Please contact us if you think this is a mistake.',
-            ]);
+            throw ValidationException::withMessages([Fortify::username() => EnsureAccountIsActive::MESSAGE]);
+        }
+        if ($user->isAdmin()) {
+            $request->merge(['remember' => false]); // no "remember me" for the admin (PLAN §8.1)
         }
 
         return $user;

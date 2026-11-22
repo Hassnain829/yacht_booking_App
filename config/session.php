@@ -36,6 +36,9 @@ return [
 
     'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
 
+    // The admin is logged out after this many minutes without using /admin (App\Http\Middleware\AdminIdleTimeout).
+    'admin_idle_minutes' => (int) env('ADMIN_IDLE_MINUTES', 30),
+
     /*
     |--------------------------------------------------------------------------
     | Session Encryption
@@ -47,7 +50,7 @@ return [
     |
     */
 
-    'encrypt' => env('SESSION_ENCRYPT', false),
+    'encrypt' => env('SESSION_ENCRYPT', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -169,7 +172,8 @@ return [
     |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    // Secure by default in production (PLAN §8.3), even if SESSION_SECURE_COOKIE is forgotten.
+    'secure' => env('SESSION_SECURE_COOKIE', env('APP_ENV') === 'production'),
 
     /*
     |--------------------------------------------------------------------------

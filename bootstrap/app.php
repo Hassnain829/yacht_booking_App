@@ -1,5 +1,9 @@
 <?php
 
+use App\Http\Middleware\AdminIdleTimeout;
+use App\Http\Middleware\EnsureAccountIsActive;
+use App\Http\Middleware\ForceHttps;
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -18,6 +22,18 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Signed-in users who open /login or /register. Phase 2.5: by role (admin → /admin, owner → /owner).
         $middleware->redirectUsersTo('/account/trips');
+
+        // Security headers + CSP on every response, error pages included (PLAN §8.3).
+        $middleware->append(SecurityHeaders::class);
+
+        // Production: HTTP → HTTPS. After TrustProxies (config/trustedproxy.php), inside SecurityHeaders
+        // so the redirect carries the headers too.
+        $middleware->append(ForceHttps::class);
+
+        $middleware->alias([
+            'active' => EnsureAccountIsActive::class,
+            'admin.idle' => AdminIdleTimeout::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
