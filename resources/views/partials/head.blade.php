@@ -16,12 +16,14 @@
     <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
 
     <meta property="og:type" content="website">
+    <meta property="og:locale" content="en_US">
     <meta property="og:site_name" content="{{ $siteName }}">
     <meta property="og:title" content="{{ $fullTitle }}">
     <meta property="og:description" content="{{ $metaDescription }}">
     <meta property="og:url" content="{{ url()->current() }}">
     <meta property="og:image" content="{{ asset($ogImage ?? 'images/hero-poster.jpg') }}">
     <meta name="twitter:card" content="summary_large_image">
+    <link rel="sitemap" type="application/xml" href="{{ route('sitemap') }}">
 
     @fonts
     @vite(['resources/css/app.css', 'resources/js/app.js'])

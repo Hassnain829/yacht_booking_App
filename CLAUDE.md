@@ -47,6 +47,7 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
   - Use `app/Enums` for statuses, one FormRequest per form/endpoint, one Policy per model, and API Resources for every JSON response.
 - **Public catalog (since 3.5):** the public site reads `App\Services\PublicCatalog`, the database catalog in the Fluent shape the views and the booking JS use. It returns only published / shown records, never the Trash, and image paths for `asset()`.
   - Never look up an experience, boat or add-on by a fixed slug without handling "not there": the admin can hide or trash any of them.
+  - It is cached (3.6) and cleared by the model events of the catalog models. A change made **without model events** (a query-builder `update()` / `delete()`, a pivot `sync()` / `attach()`) must call `PublicCatalog::flushAfterCommit()`, or the site shows stale data for up to a day.
   - Page tests seed it with `Tests\Concerns\SeedsPublicCatalog` (+ RefreshDatabase).
 - **Phase 1 demo code** (delete when the real data arrives):
   - Demo data lives in `config/demo*.php`, read through `App\Support\Demo\*` (shaped like the future models, dates relative to "now"). Since 3.5 only the still-demo screens use it (My trips, owner area, admin bookings / finance, promo codes, page content).

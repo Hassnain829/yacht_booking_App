@@ -34,6 +34,7 @@ use App\Http\Controllers\Owner\DashboardController as OwnerDashboardController;
 use App\Http\Controllers\Owner\EarningsController as OwnerEarningsController;
 use App\Http\Controllers\Owner\PayoutController as OwnerPayoutController;
 use App\Http\Controllers\PageController;
+use App\Http\Controllers\SeoController;
 use App\Http\Controllers\YachtController;
 use App\Support\Demo\DemoCatalog;
 use Illuminate\Support\Facades\Route;
@@ -55,6 +56,10 @@ Route::get('/experiences', [ExperienceController::class, 'index'])->name('experi
 Route::get('/pricing', [PageController::class, 'pricing'])->name('pricing');
 Route::get('/about', [PageController::class, 'about'])->name('about');
 Route::get('/contact', [PageController::class, 'contact'])->name('contact');
+
+// Search engines (3.6): the sitemap follows the live catalog; robots.txt blocks everything outside production.
+Route::get('/sitemap.xml', [SeoController::class, 'sitemap'])->name('sitemap');
+Route::get('/robots.txt', [SeoController::class, 'robots'])->name('robots');
 
 // Booking flow (Phase 1: demo data, no payment). Phase 4/5: holds, Stripe, /checkout/{booking:ulid}.
 Route::get('/book', [BookingController::class, 'create'])->name('booking.create');

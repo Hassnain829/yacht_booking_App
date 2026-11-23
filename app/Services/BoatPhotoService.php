@@ -88,6 +88,7 @@ class BoatPhotoService
         foreach ($ids ?? $boat->photos()->pluck('id')->all() as $sort => $id) {
             Media::query()->whereKey($id)->update(['sort' => $sort]);
         }
+        PublicCatalog::flushAfterCommit(); // a new cover / order: these updates fire no model events
     }
 
     private function position(Boat $boat, Media $photo): int

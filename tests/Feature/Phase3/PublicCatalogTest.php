@@ -8,6 +8,7 @@ use App\Models\Boat;
 use App\Models\Experience;
 use App\Models\Harbor;
 use App\Models\User;
+use App\Services\PublicCatalog;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\SeedsPublicCatalog;
@@ -88,7 +89,8 @@ class PublicCatalogTest extends TestCase
         $this->get('/yachts')->assertSee('src="'.$host.'/storage/'.$cover->variants['card'].'"', false)->assertDontSee('images/yacht-azure.jpg', false);
         $this->get('/yachts/azure')->assertSee($host.'/storage/'.$cover->path, false);
 
-        $azure->photos()->delete();
+        $azure->photos()->delete(); // a mass delete: no model events
+        PublicCatalog::flush();
         $this->get('/yachts')->assertSee('images/placeholder-boat.svg', false);
     }
 
@@ -105,7 +107,8 @@ class PublicCatalogTest extends TestCase
         Experience::factory()->create(['slug' => 'whale-watching', 'name' => 'Whale Watching', 'is_active' => true]);
         $this->get('/experiences')->assertOk()->assertSee('Whale Watching')->assertSee('On request');
 
-        Boat::query()->update(['status' => BoatStatus::Paused]);
+        Boat::query()->update(['status' => BoatStatus::Paused]); // a mass update: no model events
+        PublicCatalog::flush();
         foreach (['/', '/yachts', '/experiences', '/pricing', '/about', '/contact', '/book'] as $url) {
             $this->get($url)->assertOk();
         }

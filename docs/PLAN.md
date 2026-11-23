@@ -1134,7 +1134,24 @@ There are also in-app notifications (bell icon) for customers, owners, captains 
     - Isolated server with the real demo seed (27 WebP photos; `APP_URL` on another host name): 14 public pages (home, fleet + filter, two boat pages, experiences + filter, pricing, about, contact, wizard + deep link, checkout, confirmation) at 390 / 768 / 1280 / 1440 px with no overflow, broken images, console errors or CSP reports. Every page loads its images from `/storage` on the page's own host.
     - Flow: the admin switched The Azure off → its fleet card showed Unavailable → the wizard no longer preselected it from a deep link.
   - **Fixed during QA:** the fleet hero said "Six hand-picked yachts" whatever the fleet was; it now follows the live count (and still reads "Six…" with the 6 demo boats).
-3.6 Cache the public catalog; SEO meta + sitemap.
+3.6 Cache the public catalog; SEO meta + sitemap. ✅ done 2026-11-23.
+  - **Cache:**
+    - `PublicCatalog` keeps the whole catalog as one cache entry of plain arrays (`catalog.public`, at most a day), built on the first visit. Settings are cached on their own.
+    - It is cleared **after the transaction commits** by:
+      - the `saved` / `deleted` events of Boat, Harbor, Experience, Addon, Amenity and Media (restore saves; a permanent delete fires `deleted`);
+      - `PublicCatalog::flushAfterCommit()` where nothing fires an event (the boat form's pivot syncs and hours, the photo order).
+    - Once cached, a page runs no catalog queries.
+    - Checked with the production store (database cache) on the isolated server: the row is created, cleared by the admin's switch and rebuilt; the cached /yachts was ~40% faster on the dev server.
+  - **SEO:**
+    - **`/sitemap.xml`** (`SeoController`, from the cached catalog): the public pages + every live boat with `lastmod`; valid XML. Hidden, draft and trashed boats and all private areas are left out.
+    - **`/robots.txt`** (the static file was deleted): production blocks the private areas (`SeoController::PRIVATE_PATHS`) and names the sitemap; **any other environment blocks everything**, so a staging copy never gets indexed.
+    - Checkout and confirmation are `noindex`. The head adds `og:locale` and `<link rel="sitemap">`; canonical URLs already drop the query string.
+    - Structured data (schema.org) stays in 10.2.
+  - **Tests:**
+    - CatalogCacheSeoTest (6): no catalog queries once cached; the switch, the photo order, the Trash, an amenity delete and publish / hide all clear it; the boat form's relation-only change clears it; the sitemap; robots off / on production; noindex + canonical + head tags.
+    - Tests that change catalog rows with mass updates call `PublicCatalog::flush()` (no model events).
+    - 484 PHP tests (3,139 assertions) + 39 JS tests; Pint clean.
+  - **Browser QA (isolated server):** sitemap and robots headers / content checked; the admin's switch → cache cleared → tag on the site; public pages at 390 / 1440 clean. One run logged a dropped connection to the Google Maps embed (external); two reruns were clean.
 **QA:** admin CRUD + policy tests; public pages show admin changes; upload security tests (wrong mime type, oversized file, PHP disguised as an image); sort/filter whitelist tests.
 
 ### Phase 4 — Booking engine (payment stubbed)

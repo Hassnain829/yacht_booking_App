@@ -1,6 +1,7 @@
 @extends('layouts.app', [
     'title' => 'Secure checkout',
     'page' => 'checkout',
+    'robots' => 'noindex', // one visitor's booking (3.6)
     'headerSolid' => true,
     'mainClass' => 'pb-24 pt-28',
 ])

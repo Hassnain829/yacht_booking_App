@@ -95,6 +95,7 @@ class PublicPagesTest extends TestCase
     public function test_unavailable_yacht_shows_the_tag_and_cannot_be_booked(): void
     {
         Boat::query()->where('slug', 'azure')->update(['booking_enabled' => false]); // the admin's Unavailable switch
+        PublicCatalog::flush(); // a mass update fires no model events, so clear the cached catalog by hand
         $this->app->forgetInstance(PublicCatalog::class);
 
         $this->get('/yachts/azure')

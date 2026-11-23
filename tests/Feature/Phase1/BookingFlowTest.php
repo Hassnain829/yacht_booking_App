@@ -101,6 +101,7 @@ class BookingFlowTest extends TestCase
         $this->assertNull($this->selection(['yacht' => 'no-such-boat'])->yacht);
 
         Boat::query()->where('slug', 'azure')->update(['booking_enabled' => false]); // the admin's Unavailable switch
+        PublicCatalog::flush(); // a mass update fires no model events, so clear the cached catalog by hand
         $this->app->forgetInstance(PublicCatalog::class);
         $this->assertNull($this->selection(['experience' => 'sunset', 'yacht' => 'azure'])->yacht);
 
@@ -300,6 +301,7 @@ class BookingFlowTest extends TestCase
     public function test_a_boat_that_stops_taking_bookings_is_rejected_at_checkout(): void
     {
         Boat::query()->where('slug', 'azure')->update(['booking_enabled' => false]); // the admin's Unavailable switch
+        PublicCatalog::flush(); // a mass update fires no model events, so clear the cached catalog by hand
         $this->app->forgetInstance(PublicCatalog::class);
 
         $this->postJson('/checkout', $this->payload())->assertStatus(422)->assertJsonValidationErrors('booking');

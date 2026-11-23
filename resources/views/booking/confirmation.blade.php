@@ -1,6 +1,7 @@
 @extends('layouts.app', [
     'title' => 'Booking confirmed',
     'page' => 'confirmation',
+    'robots' => 'noindex', // one visitor's booking (3.6)
     'mainClass' => 'pb-24',
 ])
 

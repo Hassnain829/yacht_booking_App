@@ -10,6 +10,7 @@ use App\Models\CancellationPolicy;
 use App\Models\Captain;
 use App\Models\Experience;
 use App\Models\Harbor;
+use App\Models\Media;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\PublicCatalog;
@@ -44,6 +45,14 @@ class AppServiceProvider extends ServiceProvider
     {
         // …and forgotten after every request, so a long-lived process (tests, workers) never serves stale data.
         Event::listen(RequestHandled::class, fn () => $this->app->forgetInstance(PublicCatalog::class));
+
+        // The cached public catalog (3.6) is cleared after any catalog change commits. Restoring saves, and a
+        // permanent delete fires `deleted`, so these two events cover the Trash too. Changes without model events
+        // (pivot syncs, photo order) call PublicCatalog::flushAfterCommit() themselves.
+        foreach ([Boat::class, Harbor::class, Experience::class, Addon::class, Amenity::class, Media::class] as $model) {
+            $model::saved(fn () => PublicCatalog::flushAfterCommit());
+            $model::deleted(fn () => PublicCatalog::flushAfterCommit());
+        }
 
         View::composer('partials.footer', FooterComposer::class);
         View::composer(['partials.header', 'partials.mobile-menu'], HeaderComposer::class);

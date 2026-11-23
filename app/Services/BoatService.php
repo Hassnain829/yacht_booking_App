@@ -42,7 +42,10 @@ class BoatService
             }
         }
 
-        return $this->writer->save($boat, $data, $actor, relations: fn (Boat $saved) => $this->syncRelations($saved, $relations));
+        $saved = $this->writer->save($boat, $data, $actor, relations: fn (Boat $saved) => $this->syncRelations($saved, $relations));
+        PublicCatalog::flushAfterCommit(); // pivot syncs and opening hours fire no model events
+
+        return $saved;
     }
 
     public function setStatus(Boat $boat, string $action, User $actor, ?string $note = null): void
