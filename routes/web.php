@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\BookingController as AdminBookingController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\FinanceController as AdminFinanceController;
 use App\Http\Controllers\Admin\FleetController as AdminFleetController;
+use App\Http\Controllers\Admin\HarborController as AdminHarborController;
 use App\Http\Controllers\Admin\PeopleController as AdminPeopleController;
 use App\Http\Controllers\Admin\SystemController as AdminSystemController;
 use App\Http\Controllers\BookingController;
@@ -93,6 +94,18 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'active', 'verified'
     Route::get('/bookings', [AdminBookingController::class, 'index'])->name('bookings.index');
     Route::get('/bookings/{ref}', [AdminBookingController::class, 'show'])->where('ref', 'CYB-[A-Z0-9]{6}')->name('bookings.show');
     Route::get('/boats', [AdminFleetController::class, 'boats'])->name('boats.index');
+
+    // Harbors (3.4.1). Trash / restore / delete permanently: a reason + the password (TrashService).
+    Route::controller(AdminHarborController::class)->prefix('harbors')->name('harbors.')->where(['harbor' => '[a-z0-9-]+'])->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/create', 'create')->name('create');
+        Route::post('/', 'store')->middleware('throttle:admin')->name('store');
+        Route::get('/{harbor}/edit', 'edit')->withTrashed()->name('edit');
+        Route::put('/{harbor}', 'update')->middleware('throttle:admin')->name('update');
+        Route::delete('/{harbor}', 'trash')->middleware('throttle:admin-sensitive')->name('trash');
+        Route::post('/{harbor}/restore', 'restore')->withTrashed()->middleware('throttle:admin-sensitive')->name('restore');
+        Route::delete('/{harbor}/permanent', 'destroy')->withTrashed()->middleware('throttle:admin-sensitive')->name('destroy');
+    });
     Route::get('/listings', [AdminFleetController::class, 'listings'])->name('listings.index');
     Route::get('/listings/{ulid}', [AdminFleetController::class, 'listing'])->where('ulid', '[0-9A-HJKMNP-TV-Z]{26}')->name('listings.show');
     Route::get('/captains', [AdminPeopleController::class, 'captains'])->name('captains.index');

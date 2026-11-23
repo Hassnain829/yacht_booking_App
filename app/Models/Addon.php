@@ -9,14 +9,15 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
-/** An extra on a booking, e.g. champagne (PLAN §6.3). Deactivate instead of deleting: old bookings keep a snapshot. */
+/** An extra on a booking, e.g. champagne (PLAN §6.3). Deleting moves it to the Trash (3.4); old bookings keep a snapshot. */
 #[Fillable(['slug', 'name', 'description', 'icon', 'price_cents', 'unit', 'max_quantity', 'is_active', 'sort'])]
 #[Hidden(['id'])]
 class Addon extends Model
 {
     /** @use HasFactory<AddonFactory> */
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     public function getRouteKeyName(): string
     {

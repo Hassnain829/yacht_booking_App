@@ -51,6 +51,7 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
 - **Components with built-in classes take props, never a second conflicting class:** `x-button` → `size`/`variant`, `x-admin.pill` → `tone`, `x-admin.table` → `min`.
 - **Files:**
   - Uploads go through `MediaService` (WebP re-encode, sizes, random names — PLAN §9). The DB stores **only the relative path**.
+  - Upload URLs are root-relative (`/storage/…`, public disk `url`). Never build them from `APP_URL`: an image from another host is blocked by the CSP. Wrap them in `url()` only where an absolute URL is needed (emails, og:image).
   - FormRequests validate every file with `App\Rules\SafeUpload::image()` / `::document()`, never with bare `mimes:`.
   - Tests that run the seeders use `Storage::fake('public')` + `Tests\Concerns\FakesDesignImages` (tiny stand-ins; real WebP encoding of the design images takes ~45 s).
   - Private documents go on the `local` (private) disk and are served only through a controller that checks a Policy.
@@ -78,7 +79,11 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
    - A named rate limiter on every endpoint.
    - An idempotency key + DB transaction for holds, payments, refunds and payouts.
    - Admin table sort and filter parameters are checked against a whitelist. Never put raw SQL together with user input.
-6. **Sensitive admin actions:** `password.confirm`, a written reason and an audit-log entry.
+6. **Sensitive admin actions:** password re-confirmation, a written reason and an audit-log entry.
+   - In the admin, use `<x-admin.sensitive-form>` + a FormRequest extending `App\Http\Requests\Admin\SensitiveActionRequest`. The password is typed in the dialog and skipped within 3 hours of the last confirmation (the same window and session key as `password.confirm`).
+   - Trash / Restore / Delete permanently: the model implements `App\Models\Contracts\Trashable` (SoftDeletes + blockers + own files), the controller calls `TrashService`, the page shows `<x-admin.lifecycle>`, and the routes use `RecordLifecycleRequest` with the `admin-sensitive` limiter. Delete permanently works only from the Trash.
+   - Every admin create or edit writes the audit log with `AuditService::changes()` (only the fields that changed). Other admin writes use the `admin` limiter.
+   - Admin lists read their query string through `App\Support\Admin\ListQuery`. Plain-text fields use `App\Rules\PlainText` (HTML is refused).
 7. **Tests for every endpoint:** guest, wrong user (404), wrong role, invalid input (422), valid input, rate limit (429), duplicate request.
 
 ## Porting mockup classes from Tailwind v3 to v4

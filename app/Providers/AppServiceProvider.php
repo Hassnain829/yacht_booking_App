@@ -104,5 +104,10 @@ class AppServiceProvider extends ServiceProvider
 
         // Security settings of a signed-in account (log out other devices, delete account).
         RateLimiter::for('account-security', fn (Request $request) => Limit::perMinute(10)->by($perVisitor($request)));
+
+        // Admin screens (3.4): saving forms, and the sensitive actions that take a reason + the password
+        // (Trash / restore / delete permanently, settings) — a low limit also stops password guessing there.
+        RateLimiter::for('admin', fn (Request $request) => Limit::perMinute(60)->by($perVisitor($request)));
+        RateLimiter::for('admin-sensitive', fn (Request $request) => Limit::perMinute(10)->by($perVisitor($request)));
     }
 }

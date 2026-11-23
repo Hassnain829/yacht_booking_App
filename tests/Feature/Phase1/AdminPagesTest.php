@@ -32,6 +32,8 @@ class AdminPagesTest extends TestCase
             'bookings' => ['/admin/bookings', 'Bookings', 'House + owner boats'],
             'booking' => ['/admin/bookings/CYB-K8D2PZ', 'Bookings', 'Notes for captain'],
             'boats' => ['/admin/boats', 'Boats', 'House boats'],
+            'harbors' => ['/admin/harbors', 'Harbors', 'Add a harbor'],
+            'add harbor' => ['/admin/harbors/create', 'Harbors', 'Boarding notes for guests'],
             'listings' => ['/admin/listings', 'Listing reviews', 'Blue Horizon'],
             'listing' => ['/admin/listings/01JDQ7M3K8R2V5X9C4B6N0P1TB', 'Listing reviews', 'Review checklist'],
             'captains' => ['/admin/captains', 'Captains', 'MML-4471902'],

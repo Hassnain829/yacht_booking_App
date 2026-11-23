@@ -36,4 +36,25 @@ class AuditService
             'user_agent' => $console || ! $request->userAgent() ? null : mb_substr($request->userAgent(), 0, 500),
         ]);
     }
+
+    /**
+     * The unsaved changes of a model as [before, after], ready for record(). Call it after fill(), before save().
+     * Keys in `$mask` (secrets such as an encrypted license number) are logged only as "changed".
+     *
+     * @param  list<string>  $mask
+     * @return array{0: array<string, mixed>, 1: array<string, mixed>}
+     */
+    public function changes(Model $model, array $mask = []): array
+    {
+        $before = [];
+        $after = [];
+
+        foreach (array_keys($model->getDirty()) as $key) {
+            $masked = in_array($key, $mask, true);
+            $before[$key] = $masked ? '(hidden)' : ($model->exists ? $model->getOriginal($key) : null);
+            $after[$key] = $masked ? '(changed)' : $model->getAttribute($key);
+        }
+
+        return [$model->exists ? $before : [], $after];
+    }
 }

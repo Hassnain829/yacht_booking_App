@@ -27,7 +27,9 @@ class AuthServiceProvider extends ServiceProvider
         'manage-bookings' => ['admin'],
         'assign-captains' => ['admin'],
         'review-listings' => ['admin'],
-        'manage-catalog' => ['admin'],
+        'manage-catalog' => ['admin'],   // experiences, add-ons, cancellation policies
+        'manage-fleet' => ['admin'],     // boats, harbors, amenities
+        'manage-captains' => ['admin'],  // captain profiles (accounts and offers: Phase 8)
         'approve-payouts' => ['admin'],
         'issue-refunds' => ['admin'],
         'resolve-complaints' => ['admin'],

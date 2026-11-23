@@ -18,7 +18,6 @@ class SystemController extends Controller
             'experiences' => $catalog->experiences(),
             'addons' => $catalog->addons(),
             'promos' => $catalog->pricing()['promos'],
-            'harbors' => $catalog->harbors(),
         ]);
     }
 

@@ -39,6 +39,10 @@ export function initAdmin() {
         if (target instanceof HTMLDialogElement) target.close(); // click on the backdrop
     });
 
+    // A dialog whose form came back with errors opens again, so the admin sees them (x-admin.modal :open).
+    const reopen = document.querySelector('dialog[data-open-on-load]');
+    if (reopen instanceof HTMLDialogElement) reopen.showModal();
+
     // A demo form inside a modal closes the modal once it is valid (ui/demo-forms.js shows the toast).
     document.addEventListener('submit', (event) => {
         const form = event.target;

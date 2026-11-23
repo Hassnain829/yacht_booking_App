@@ -20,6 +20,7 @@
         'Fleet' => [
             ['boats', 'sailboat', 'Boats', route('admin.boats.index'), null],
             ['listings', 'clipboard-check', 'Listing reviews', route('admin.listings.index'), $counts['Listings to review'] ?: null],
+            ['harbors', 'anchor', 'Harbors', route('admin.harbors.index'), null],
             ['catalog', 'sparkles', 'Experiences & add-ons', route('admin.catalog'), null],
         ],
         'Finance' => [
@@ -94,6 +95,7 @@
         </header>
 
         <main id="main" tabindex="-1" class="mx-auto max-w-[90rem] p-4 outline-hidden md:p-8">
+            <x-admin.flash />
             @yield('content')
         </main>
     </div>

@@ -30,7 +30,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'type', 'category', 'make', 'model', 'year', 'length_ft', 'registration_no', 'uscg_inspected', 'max_guests',
     'staterooms', 'sleeps', 'beds', 'heads', 'engine_count', 'engine_type', 'horsepower', 'engine_year',
     'harbor_id', 'location_type', 'street', 'city', 'state', 'zip', 'country', 'lat', 'lng',
-    'cancellation_policy_id', 'rules', 'advance_notice_minutes', 'allow_multiple_bookings', 'buffer_minutes',
+    'cancellation_policy_id', 'rules', 'advance_notice_minutes', 'allow_multiple_bookings', 'buffer_minutes', 'extensions_enabled',
     'renter_operated_allowed', 'captain_source', 'fishing_charter', 'fuel_policy',
     'hourly_rate_cents', 'weekend_multiplier_bp', 'min_hours', 'durations', 'duration_prices',
     'cleaning_fee_cents', 'captain_rate_cents', 'crew_count',
@@ -49,6 +49,7 @@ class Boat extends Model
         'status' => 'draft',
         'captain_source' => 'platform',
         'booking_enabled' => true,
+        'extensions_enabled' => true,
     ];
 
     public function uniqueIds(): array
@@ -142,6 +143,7 @@ class Boat extends Model
             'type' => BoatType::class,
             'captain_source' => CaptainSource::class,
             'booking_enabled' => 'boolean',
+            'extensions_enabled' => 'boolean', // the admin's "Allow trip extensions" switch (PLAN R17)
             'uscg_inspected' => 'boolean',
             'allow_multiple_bookings' => 'boolean',
             'renter_operated_allowed' => 'boolean',

@@ -43,7 +43,10 @@ return [
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
-            'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
+            // Root-relative on purpose: the browser loads uploads from the host the page came from, so
+            // localhost vs 127.0.0.1 or www vs bare domain never turns into a cross-origin image that the
+            // CSP (img-src 'self') blocks. Emails and og:image need an absolute URL: wrap it in url().
+            'url' => '/storage',
             'visibility' => 'public',
             'throw' => false,
             'report' => false,

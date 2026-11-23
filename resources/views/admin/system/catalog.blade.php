@@ -1,7 +1,7 @@
 @extends('layouts.admin', ['title' => 'Experiences & add-ons', 'active' => 'catalog'])
 
 @section('content')
-    <x-admin.page-header title="Experiences & add-ons" description="What guests can book, the extras they can add, promo codes and departure harbors.">
+    <x-admin.page-header title="Experiences & add-ons" description="What guests can book, the extras they can add and promo codes. Departure harbors have their own screen (Fleet → Harbors).">
         <x-slot:actions><x-button variant="dark" data-soon icon-left="plus">New experience</x-button></x-slot:actions>
     </x-admin.page-header>
 
@@ -40,13 +40,6 @@
                         <tr><td class="font-mono font-bold text-navy-950">{{ $promo['code'] }}</td><td>{{ $promo['label'] }}</td><td>{{ ucfirst($promo['applies_to']) }}</td></tr>
                     @endforeach
                 </x-admin.table>
-            </x-admin.card>
-            <x-admin.card title="Harbors">
-                <ul class="space-y-3">
-                    @foreach ($harbors as $h)
-                        <li class="flex items-start gap-3"><i data-lucide="map-pin" class="mt-0.5 h-4 w-4 shrink-0 text-brass-500"></i><span class="text-sm"><span class="font-bold text-navy-950">{{ $h->name }}</span><span class="block text-xs text-navy-500">{{ $h->area }} · {{ $h->notes }}</span></span></li>
-                    @endforeach
-                </ul>
             </x-admin.card>
         </div>
     </div>

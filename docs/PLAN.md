@@ -723,7 +723,7 @@ These rules apply to every Blade form, every JSON endpoint called from our JS, a
 14. **Uploads:**
     - Separate endpoints with mime, size and dimension validation, re-encoding, and UUID filenames (§9).
     - PHP `upload_max_filesize` / `post_max_size` set to match.
-15. **Sensitive actions** (refunds, payouts, deductions, settings, payout account changes, role changes) need **password re-confirmation** and a written reason, and are written to the audit log.
+15. **Sensitive actions** (refunds, payouts, deductions, settings, payout account changes, role changes, Trash / restore / delete permanently) need **password re-confirmation** and a written reason, and are written to the audit log. In the admin the password is typed in the action's own dialog (`SensitiveActionRequest`, 3.4.1). It is skipped when it was confirmed in the last 3 hours, the same window and session key as `password.confirm`, so the reason the admin wrote is never lost on a redirect.
 
 **Proof that it works**
 
@@ -1007,6 +1007,64 @@ There are also in-app notifications (bell icon) for customers, owners, captains 
   - **Seeders now store the design images through MediaService** (WebP; boat photos with card / thumb sizes): about 45 s for the 39 images. The design files stay untouched. A boat whose photos fail is rolled back (so re-running doesn't skip it). Without GD, seeding stops with a clear message before any harbor or boat is created. A local database seeded in 3.2 keeps its JPEG copies (they still work: no variants, so the main file is used); `php artisan migrate:fresh --seed` (+ `app:create-admin`) gives the WebP versions — optional.
   - QA: 403 PHP (2,343 assertions) + 39 JS tests (25 new: WebP + sizes + random names, no enlarging, EXIF / GPS / comment / appended PHP dropped, upright photos, 10 refused files — PHP as .jpg, image as .php / .phtml, PHP behind a GIF header, SVG, HTML as .webp, PDF as photo, empty, broken — nothing saved for any of them, decompression bomb, failed DB write leaves no files, collections / ULID folders, the SafeUpload rule, private documents, delete after commit + rollback, the file route: guest / other customer / other owner / suspended / uploader / admin / public photo / unknown / missing file / JSON 404 / 429, the `.htaccess`). Tests that seed use tiny stand-ins of the design images (`Tests\Concerns\FakesDesignImages`), so the suite stays fast. Real seeding twice on a temporary SQLite database + storage folder (45 s, then nothing added); an isolated server: `/storage` link serves files, `/files/{uuid}`: guest → login / 401, other owner → 404, admin → the PDF byte for byte with `attachment`, `no-store`, `nosniff`; zero PHP warnings. Fixed during QA: a PHP 8.5 deprecation in `Media::url()` (null array key) and `MediaService::delete()` deleting files for a stale model whose row still existed.
 3.4 Admin screens: Boats, Experiences, Add-ons, Harbors, Amenities, Captains, Users, Settings, Cancellation policies; dashboard skeleton.
+  - **Sub-steps (each with its own QA gate and go-ahead, planned 2026-11-23):**
+    - **3.4.1 Admin foundations + Harbors.**
+      - Shared pieces:
+        - The **Trash pattern** (`TrashService`): Trash / Restore / Delete permanently, each with its blockers listed before you try.
+        - The real `x-admin.sensitive-form`: a reason + the password typed in the same dialog. The password is skipped if it was confirmed in the last 3 hours, the same window as `password.confirm`, and on success the session counts as confirmed.
+        - Audit entries with before / after for every change.
+        - Whitelisted list queries (`ListQuery`), flash messages, the Active / Trash tabs and pagination.
+        - The `manage-fleet` and `manage-captains` gates, and the `admin` (60/min) and `admin-sensitive` (10/min) limiters.
+      - One migration: soft deletes on harbors and add-ons, plus `boats.extensions_enabled`.
+      - Then the **Harbors** screen: list, add, edit, image, show / hide, and Trash. Moving a harbor to the Trash is blocked while boats depart from it; deleting it permanently is blocked while any boat, even one in the Trash, uses it.
+      - ✅ **Done 2026-11-23.**
+        - **Built:**
+          - `App\Models\Contracts\Trashable` (label, title, blockers, own files) and `TrashService` (trash / restore / forceDelete). Delete permanently works only from the Trash and removes the `media` rows and own files after commit. Audit actions are `<morph>.trashed / .restored / .deleted_permanently`.
+          - `SensitiveActionRequest` (reason 10–500 characters, password in the dialog unless confirmed in the last 3 hours, a correct password refreshes the confirmation, error bag `sensitive`, hidden `dialog`) and `RecordLifecycleRequest` (Policy ability picked from the controller method).
+          - `AuditService::changes()` (before / after of dirty fields, masked keys), `App\Support\Admin\ListQuery`, `App\Rules\PlainText` (HTML refused in plain-text fields).
+          - Components: `x-admin.lifecycle`, `x-admin.flash`, `x-admin.list-tabs`, `x-admin.pagination`, `x-form.file`; `x-admin.modal :open` (reopens with errors).
+          - Gates `manage-fleet` and `manage-captains`; limiters `admin` (60/min) and `admin-sensitive` (10/min).
+          - Migration `add_trash_and_extension_columns`.
+          - `HarborPolicy`, `HarborRequest` (the slug is made from the name, unique including the Trash, so a double submit can't create two), `HarborService` (WebP image via MediaService, the old file deleted after the save, a new file removed again if the save fails), `Admin\HarborController` + routes `admin.harbors.*`, and Fleet → Harbors in the sidebar.
+          - The demo harbors card was removed from "Experiences & add-ons".
+        - **QA:**
+          - 424 PHP tests (2,512 assertions) + 39 JS tests; 17 new harbor tests covering guest / customer / owner, 404s, list search / sort whitelist (`%` is searched literally), add with a photo + audit, invalid input incl. HTML and a fake image, double submit, a slug taken by the Trash, an edit diff (no change → no entry), photo replace / remove, a refused photo leaving everything as it was, reason + password / wrong password / the 3-hour window, the boat blocker, the Trash read-only page + restore, permanent delete only from the Trash with its photo gone, a blocker from a trashed boat, and 429.
+          - Migrations roll back.
+          - Isolated server (temp SQLite + temp storage, `/storage` served from the temp disk): the screens at 390 / 768 / 1280 / 1440 had no overflow, console errors or CSP reports. The full flow ran in Chrome: HTML in the name refused → added with a photo made in the page → wrong password (the dialog reopens with the error) → Trash → restore (password not asked again) → Trash → delete permanently. The photo's delete job ran on the queue, and the audit trail was complete with reasons.
+        - **Fixed during QA:** on phones the Trash card came before Save; it now sits under the Save buttons on every width.
+        - **Fix (found by the user, 2026-11-23): harbor photos didn't show.**
+          - Cause: the user opened the site on `127.0.0.1:8000` while `APP_URL` is `localhost:8000`. Upload URLs were absolute (built from `APP_URL`), so they pointed at another origin, and the CSP (`img-src 'self'`) blocked every photo.
+          - Fix: the public disk URL is now root-relative (`'url' => '/storage'` in `config/filesystems.php`), so uploads always load from the host the page came from. This also covers www vs the bare domain in production.
+          - Where an absolute URL is needed (emails, og:image, the sitemap), wrap it in `url()`.
+          - Reproduced in Chrome and checked after the fix; a regression test was added (425 tests).
+    - **3.4.2 Experiences + Add-ons:**
+      - Experiences: image, durations, start times, weekdays, season, includes, package fee, SEO.
+      - Add-ons: price, flat or per guest, maximum quantity.
+      - Both get the Trash pattern.
+      - The old combined "Experiences & add-ons" page is split. Promo codes keep their demo screen until 4.7.
+    - **3.4.3 Boats (1):**
+      - A list of house and owner boats with filters.
+      - The house boat form: details, specs, location, pricing, booking rules, operation, display.
+      - Publish / unpublish, the **Unavailable** switch (with a reason) and the **Allow trip extensions** switch.
+      - The admin edits owner boats too.
+      - The Trash pattern.
+    - **3.4.4 Boats (2):**
+      - Photos: upload several, reorder, choose the cover, alt text, delete.
+      - Amenities and highlights.
+      - The experiences the boat offers, with the package-fee override.
+      - Weekly opening hours, and blocks / blackouts.
+    - **3.4.5 Amenities + cancellation policies + Settings:**
+      - Amenities: add, edit, delete when unused.
+      - Cancellation policies: edit the hours / % rules and the text guests read.
+      - Settings: a cached `SettingsService` covering every group, including the captain and extension keys of §6.7. Saving needs a reason + password, and the change is audited.
+    - **3.4.6 Captains (profiles):**
+      - Photo, bio, contact details, license (the number encrypted, the document on the private disk), passengers allowed, pay rate, active / public.
+      - The Trash pattern.
+      - Accounts and invites come in 8.1.
+    - **3.4.7 Users + Audit log + dashboard skeleton:**
+      - Users: real list and filters; detail with login history, repeated failed logins, suspend / ban / reactivate and reset 2FA (existing services); reason + password + audit.
+      - Audit log: real, with filters.
+      - Dashboard: the numbers that exist now (boats, listings, captains with expiring licenses); the booking and money cards stay demo until Phases 4–7.
   - **Added 2026-11-23 (R17):** the boat form gets an **"Allow trip extensions"** switch (new column `boats.extensions_enabled`, default on; admin-only, owners can't change it). The Captains screen manages captain profiles only; captain accounts, applications and invites come in Phase 8.1.
   - **User requirements (2026-11-22):** the admin can edit / unpublish / mark Unavailable **any** boat (house or owner); the Unavailable tag is admin-only (owners block dates in their calendar). Owner boats appear on the site only after the admin approves them (status `published`); an owner's edits to a live boat wait for re-approval (`pending_changes`, Phase 6). **Delete = soft delete (Trash) with Restore; Delete permanently = removes the database row** (and its files and pivot rows) — blocked when the record has bookings / payments (financial records are kept, PLAN §8.5); then it can only stay archived. Every delete / restore / permanent delete needs a password confirmation, a reason and an audit entry. Applies to boats, captains, experiences, add-ons and harbors (add soft deletes to harbors and add-ons); cancellation policies and settings are edit-only.
 3.5 Public pages read from the DB. **Unavailable** tag from `booking_enabled`. Set up the **client's own boat** (once its details arrive) and mark the other boats unavailable.
