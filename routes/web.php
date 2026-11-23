@@ -4,13 +4,22 @@ use App\Http\Controllers\Account\ProfileController as AccountProfileController;
 use App\Http\Controllers\Account\SessionController as AccountSessionController;
 use App\Http\Controllers\Account\TripController as AccountTripController;
 use App\Http\Controllers\Account\TwoFactorController as AccountTwoFactorController;
+use App\Http\Controllers\Admin\AddonController as AdminAddonController;
+use App\Http\Controllers\Admin\AmenityController as AdminAmenityController;
+use App\Http\Controllers\Admin\AuditLogController as AdminAuditLogController;
+use App\Http\Controllers\Admin\BoatController as AdminBoatController;
 use App\Http\Controllers\Admin\BookingController as AdminBookingController;
+use App\Http\Controllers\Admin\CancellationPolicyController as AdminPolicyController;
+use App\Http\Controllers\Admin\CaptainController as AdminCaptainController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\ExperienceController as AdminExperienceController;
 use App\Http\Controllers\Admin\FinanceController as AdminFinanceController;
 use App\Http\Controllers\Admin\FleetController as AdminFleetController;
 use App\Http\Controllers\Admin\HarborController as AdminHarborController;
 use App\Http\Controllers\Admin\PeopleController as AdminPeopleController;
+use App\Http\Controllers\Admin\SettingsController as AdminSettingsController;
 use App\Http\Controllers\Admin\SystemController as AdminSystemController;
+use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\ExperienceController;
@@ -87,36 +96,86 @@ Route::get('/files/{media:uuid}', FileController::class)->whereUuid('media')
 
 // Admin — signed-in, active, verified, admin role, 30-minute idle logout (PLAN §4.5). Two-factor login is the
 // admin's choice (Settings → Security; user decision 2026-11-22), so no `2fa` here.
-// Every sensitive action will sit behind `password.confirm`, need a reason and write the audit log.
-// Screens still show demo data until Phase 3+.
+// Saving forms: `throttle:admin`. Sensitive actions (Trash / restore / delete permanently, settings, account
+// status): a reason + the password in the dialog (SensitiveActionRequest), `throttle:admin-sensitive`, audit log.
+// Bookings, listings, inbox and finance screens still show demo data until Phases 4–9.
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'active', 'verified', 'can:access-admin', 'admin.idle'])->group(function () {
+    /**
+     * The standard admin record routes (PLAN 3.4): list, add, edit, Trash, restore, delete permanently.
+     * `{param}` is bound by its route key (slug or ulid); the Trash routes also find records in the Trash.
+     */
+    $records = function (string $prefix, string $param, string $controller, string $pattern) {
+        Route::controller($controller)->prefix($prefix)->name($prefix.'.')->where([$param => $pattern])->group(function () use ($param) {
+            Route::get('/', 'index')->name('index');
+            Route::get('/create', 'create')->name('create');
+            Route::post('/', 'store')->middleware('throttle:admin')->name('store');
+            Route::get("/{{$param}}/edit", 'edit')->withTrashed()->name('edit');
+            Route::put("/{{$param}}", 'update')->middleware('throttle:admin')->name('update');
+            Route::delete("/{{$param}}", 'trash')->middleware('throttle:admin-sensitive')->name('trash');
+            Route::post("/{{$param}}/restore", 'restore')->withTrashed()->middleware('throttle:admin-sensitive')->name('restore');
+            Route::delete("/{{$param}}/permanent", 'destroy')->withTrashed()->middleware('throttle:admin-sensitive')->name('destroy');
+        });
+    };
+    $slug = '[a-z0-9]+(?:-[a-z0-9]+)*';
+    $ulid = '[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}';
+
     Route::get('/', AdminDashboardController::class)->name('dashboard');
     Route::get('/bookings', [AdminBookingController::class, 'index'])->name('bookings.index');
     Route::get('/bookings/{ref}', [AdminBookingController::class, 'show'])->where('ref', 'CYB-[A-Z0-9]{6}')->name('bookings.show');
-    Route::get('/boats', [AdminFleetController::class, 'boats'])->name('boats.index');
 
-    // Harbors (3.4.1). Trash / restore / delete permanently: a reason + the password (TrashService).
-    Route::controller(AdminHarborController::class)->prefix('harbors')->name('harbors.')->where(['harbor' => '[a-z0-9-]+'])->group(function () {
+    // Fleet (3.4.1, 3.4.3–3.4.5)
+    $records('boats', 'boat', AdminBoatController::class, $ulid);
+    Route::controller(AdminBoatController::class)->prefix('boats/{boat}')->name('boats.')->where(['boat' => $ulid])->scopeBindings()->group(function () use ($ulid) {
+        Route::post('/status', 'status')->middleware('throttle:admin')->name('status');
+        Route::patch('/bookable', 'bookable')->middleware('throttle:admin')->name('bookable');
+        Route::post('/photos', 'storePhotos')->middleware('throttle:uploads')->name('photos.store');
+        Route::patch('/photos/{photo}', 'updatePhoto')->whereUuid('photo')->middleware('throttle:admin')->name('photos.update');
+        Route::delete('/photos/{photo}', 'destroyPhoto')->whereUuid('photo')->middleware('throttle:admin')->name('photos.destroy');
+        Route::post('/blocks', 'storeBlock')->middleware('throttle:admin')->name('blocks.store');
+        Route::delete('/blocks/{block}', 'destroyBlock')->where('block', $ulid)->middleware('throttle:admin')->name('blocks.destroy');
+    });
+    $records('harbors', 'harbor', AdminHarborController::class, $slug);
+    Route::controller(AdminAmenityController::class)->prefix('amenities')->name('amenities.')->where(['amenity' => $ulid])->group(function () {
         Route::get('/', 'index')->name('index');
         Route::get('/create', 'create')->name('create');
         Route::post('/', 'store')->middleware('throttle:admin')->name('store');
-        Route::get('/{harbor}/edit', 'edit')->withTrashed()->name('edit');
-        Route::put('/{harbor}', 'update')->middleware('throttle:admin')->name('update');
-        Route::delete('/{harbor}', 'trash')->middleware('throttle:admin-sensitive')->name('trash');
-        Route::post('/{harbor}/restore', 'restore')->withTrashed()->middleware('throttle:admin-sensitive')->name('restore');
-        Route::delete('/{harbor}/permanent', 'destroy')->withTrashed()->middleware('throttle:admin-sensitive')->name('destroy');
+        Route::get('/{amenity}/edit', 'edit')->name('edit');
+        Route::put('/{amenity}', 'update')->middleware('throttle:admin')->name('update');
+        Route::delete('/{amenity}', 'destroy')->middleware('throttle:admin-sensitive')->name('destroy');
     });
     Route::get('/listings', [AdminFleetController::class, 'listings'])->name('listings.index');
     Route::get('/listings/{ulid}', [AdminFleetController::class, 'listing'])->where('ulid', '[0-9A-HJKMNP-TV-Z]{26}')->name('listings.show');
-    Route::get('/captains', [AdminPeopleController::class, 'captains'])->name('captains.index');
-    Route::get('/users', [AdminPeopleController::class, 'users'])->name('users.index');
+
+    // Catalog (3.4.2, 3.4.5). Promo codes: demo screen until 4.7.
+    $records('experiences', 'experience', AdminExperienceController::class, $slug);
+    $records('addons', 'addon', AdminAddonController::class, $slug);
+    Route::get('/promo-codes', [AdminSystemController::class, 'promos'])->name('promos.index');
+    Route::controller(AdminPolicyController::class)->prefix('cancellation-policies')->name('policies.')->where(['policy' => $slug])->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/{policy}/edit', 'edit')->name('edit');
+        Route::put('/{policy}', 'update')->middleware('throttle:admin-sensitive')->name('update');
+    });
+
+    // Captains (3.4.6): profiles. Accounts, applications and trip offers: Phase 8.
+    $records('captains', 'captain', AdminCaptainController::class, $ulid);
+    Route::controller(AdminCaptainController::class)->prefix('captains/{captain}/documents')->name('captains.documents.')->where(['captain' => $ulid])->group(function () {
+        Route::post('/', 'storeDocument')->middleware('throttle:uploads')->name('store');
+        Route::delete('/{document}', 'destroyDocument')->whereUuid('document')->middleware('throttle:admin')->name('destroy');
+    });
+    // Users (3.4.7): status and two-factor reset take a reason + the password.
+    Route::controller(AdminUserController::class)->prefix('users')->name('users.')->where(['user' => $ulid])->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/{user}', 'show')->name('show');
+        Route::post('/{user}/status', 'status')->middleware('throttle:admin-sensitive')->name('status');
+        Route::post('/{user}/two-factor-reset', 'resetTwoFactor')->middleware('throttle:admin-sensitive')->name('two-factor');
+    });
     Route::get('/inbox', [AdminPeopleController::class, 'inbox'])->name('inbox.index');
     Route::get('/payouts', [AdminFinanceController::class, 'payouts'])->name('payouts.index');
     Route::get('/payments', [AdminFinanceController::class, 'payments'])->name('payments.index');
     Route::get('/complaints', [AdminFinanceController::class, 'complaints'])->name('complaints.index');
-    Route::get('/catalog', [AdminSystemController::class, 'catalog'])->name('catalog');
-    Route::get('/settings', [AdminSystemController::class, 'settings'])->name('settings');
-    Route::get('/audit-log', [AdminSystemController::class, 'audit'])->name('audit.index');
+    Route::get('/settings', [AdminSettingsController::class, 'show'])->name('settings');
+    Route::put('/settings', [AdminSettingsController::class, 'update'])->middleware('throttle:admin-sensitive')->name('settings.update');
+    Route::get('/audit-log', [AdminAuditLogController::class, 'index'])->name('audit.index');
 });
 
 // Legal pages (Phase 10: editable in the admin CMS).

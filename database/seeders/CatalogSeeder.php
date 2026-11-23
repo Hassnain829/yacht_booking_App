@@ -10,6 +10,7 @@ use App\Models\CancellationPolicy;
 use App\Models\Experience;
 use App\Models\Harbor;
 use App\Models\Setting;
+use App\Services\SettingsService;
 use Illuminate\Database\Seeder;
 
 /**
@@ -101,6 +102,9 @@ class CatalogSeeder extends Seeder
                 'business_tagline' => $business['tagline'],
                 'social_links' => config('site.social'),
             ],
+            // Phase 8 rules (PLAN R12, R15): placeholders the admin can change in Settings.
+            'captains' => SettingsService::DEFAULTS['captains'],
+            'extensions' => SettingsService::DEFAULTS['extensions'],
         ];
 
         foreach ($defaults as $group => $values) {

@@ -9,4 +9,14 @@ enum BlockType: string
     case Maintenance = 'maintenance';
     case Blackout = 'blackout';
     case Weather = 'weather';
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::OwnerBlock => 'Owner block',
+            self::Maintenance => 'Maintenance',
+            self::Blackout => 'Blackout',
+            self::Weather => 'Weather',
+        };
+    }
 }

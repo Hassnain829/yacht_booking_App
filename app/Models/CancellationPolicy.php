@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Flexible / Moderate / Strict (PLAN §6.3, §7.4). `points` are the sentences guests read; `rules` are what the
@@ -18,6 +19,17 @@ class CancellationPolicy extends Model
 {
     /** @use HasFactory<CancellationPolicyFactory> */
     use HasFactory;
+
+    public function getRouteKeyName(): string
+    {
+        return 'slug';
+    }
+
+    /** @return HasMany<Boat, $this> */
+    public function boats(): HasMany
+    {
+        return $this->hasMany(Boat::class);
+    }
 
     /** Refund % for a cancellation this many hours before the trip starts (the first rule it reaches). */
     public function refundPercent(float $hoursBefore): int

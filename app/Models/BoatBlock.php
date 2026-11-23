@@ -7,6 +7,7 @@ use Database\Factories\BoatBlockFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,13 +15,24 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * A time a boat can't be booked (PLAN §6.2); no boat = every boat (e.g. a city blackout). Times in UTC.
  * boat_id and created_by are set by the code (`$boat->blocks()->create()`, forceFill), never from a request.
+ * URLs use the `ulid` (3.4.4).
  */
 #[Fillable(['starts_at', 'ends_at', 'type', 'reason'])]
 #[Hidden(['id'])]
 class BoatBlock extends Model
 {
     /** @use HasFactory<BoatBlockFactory> */
-    use HasFactory;
+    use HasFactory, HasUlids;
+
+    public function uniqueIds(): array
+    {
+        return ['ulid'];
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'ulid';
+    }
 
     /** @return BelongsTo<Boat, $this> */
     public function boat(): BelongsTo

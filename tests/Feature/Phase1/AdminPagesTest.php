@@ -9,7 +9,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Phase 1.7 — admin UI kit, shell and static screens (demo data, no login yet).
+ * Phase 1.7 — admin UI kit, shell and screens. Since 3.4 the fleet, catalog, captains, users, settings and
+ * audit screens are real (their own tests in Phase3/); bookings, listings, inbox and finance stay demo.
  * Phase 2 adds: guest → login, customer/owner → 403 (2FA is the admin's choice: Settings → Security),
  * sensitive actions → password.confirm.
  */
@@ -31,20 +32,29 @@ class AdminPagesTest extends TestCase
             'dashboard' => ['/admin', 'Dashboard', 'Needs attention'],
             'bookings' => ['/admin/bookings', 'Bookings', 'House + owner boats'],
             'booking' => ['/admin/bookings/CYB-K8D2PZ', 'Bookings', 'Notes for captain'],
-            'boats' => ['/admin/boats', 'Boats', 'House boats'],
+            'boats' => ['/admin/boats', 'Boats', 'Add a house boat'],
+            'add boat' => ['/admin/boats/create', 'Boats', 'Weekly opening hours'],
+            'amenities' => ['/admin/amenities', 'Amenities', 'Water toys'],
+            'add amenity' => ['/admin/amenities/create', 'Amenities', 'Add an amenity'],
+            'cancellation policies' => ['/admin/cancellation-policies', 'Cancellation policies', 'How much guests get back'],
             'harbors' => ['/admin/harbors', 'Harbors', 'Add a harbor'],
             'add harbor' => ['/admin/harbors/create', 'Harbors', 'Boarding notes for guests'],
             'listings' => ['/admin/listings', 'Listing reviews', 'Blue Horizon'],
             'listing' => ['/admin/listings/01JDQ7M3K8R2V5X9C4B6N0P1TB', 'Listing reviews', 'Review checklist'],
-            'captains' => ['/admin/captains', 'Captains', 'MML-4471902'],
-            'users' => ['/admin/users', 'Users', 'marcus.reed@example.com'],
+            'captains' => ['/admin/captains', 'Captains', 'Add a captain'],
+            'add captain' => ['/admin/captains/create', 'Captains', 'Passengers allowed'],
+            'users' => ['/admin/users', 'Users', 'Everyone'],
             'inbox' => ['/admin/inbox', 'Inbox', 'Company outing for 35 people'],
             'payouts' => ['/admin/payouts', 'Payouts', 'PO-9C4T2X'],
             'payments' => ['/admin/payments', 'Payments', 'Card declined'],
             'complaints' => ['/admin/complaints', 'Complaints', 'Cleanliness'],
-            'catalog' => ['/admin/catalog', 'Experiences &amp; add-ons', 'WELCOME10'],
+            'promo codes' => ['/admin/promo-codes', 'Promo codes', 'WELCOME10'],
+            'experiences' => ['/admin/experiences', 'Experiences', 'Add an experience'],
+            'add experience' => ['/admin/experiences/create', 'Experiences', 'Start times'],
+            'add-ons' => ['/admin/addons', 'Add-ons', 'Add an add-on'],
+            'add add-on' => ['/admin/addons/create', 'Add-ons', 'Price'],
             'settings' => ['/admin/settings', 'Settings', 'Commission'],
-            'audit' => ['/admin/audit-log', 'Audit log', 'Approved withdrawal'],
+            'audit' => ['/admin/audit-log', 'Audit log', 'Every admin action'],
         ];
     }
 
@@ -110,11 +120,5 @@ class AdminPagesTest extends TestCase
         $this->assertSame(substr_count($html, 'data-demo-form'), substr_count($html, 'name="reason"'), 'Every payout action has a reason field');
         $this->assertStringContainsString('minlength="10"', $html);
         $this->assertStringContainsString('recorded in the audit log', $html);
-    }
-
-    public function test_users_role_filter_is_whitelisted(): void
-    {
-        $this->get('/admin/users?role=owner')->assertOk()->assertSee('marcus.reed@example.com')->assertDontSee('alex@example.com');
-        $this->get('/admin/users?role=superuser')->assertOk()->assertSee('alex@example.com');
     }
 }

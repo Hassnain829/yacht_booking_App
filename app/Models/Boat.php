@@ -6,6 +6,7 @@ use App\Enums\BoatOwnership;
 use App\Enums\BoatStatus;
 use App\Enums\BoatType;
 use App\Enums\CaptainSource;
+use App\Models\Contracts\Trashable;
 use Database\Factories\BoatFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -38,7 +39,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'booking_enabled', 'unavailable_reason', 'wizard_step',
 ])]
 #[Hidden(['id'])]
-class Boat extends Model
+class Boat extends Model implements Trashable
 {
     /** @use HasFactory<BoatFactory> */
     use HasFactory, HasUlids, SoftDeletes;
@@ -107,7 +108,7 @@ class Boat extends Model
     /** Gallery, in order (the first one is the cover). @return MorphMany<Media, $this> */
     public function photos(): MorphMany
     {
-        return $this->morphMany(Media::class, 'model')->where('collection', 'photos')->orderBy('sort');
+        return $this->morphMany(Media::class, 'model')->where('collection', 'photos')->orderBy('sort')->orderBy('id');
     }
 
     /** Shown on the public site. @param Builder<self> $query */
@@ -130,6 +131,40 @@ class Boat extends Model
     public function isBookable(): bool
     {
         return $this->status === BoatStatus::Published && $this->booking_enabled;
+    }
+
+    /** The first photo (load `photos` first to avoid a query per boat in lists). */
+    public function cover(): ?Media
+    {
+        return $this->photos->first();
+    }
+
+    public function trashLabel(): string
+    {
+        return 'boat';
+    }
+
+    public function trashTitle(): string
+    {
+        return $this->title;
+    }
+
+    /** Phase 4 adds: upcoming confirmed trips (cancel or move them first). */
+    public function trashBlockers(): array
+    {
+        return [];
+    }
+
+    /** Phase 4 adds: any booking or payment of this boat (financial records are kept, PLAN §8.5). */
+    public function permanentDeleteBlockers(): array
+    {
+        return [];
+    }
+
+    /** Photos are `media` rows (TrashService deletes them); opening hours, blocks and pivots cascade in the database. */
+    public function ownFiles(): array
+    {
+        return [];
     }
 
     /**

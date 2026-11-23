@@ -84,6 +84,14 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
    - Trash / Restore / Delete permanently: the model implements `App\Models\Contracts\Trashable` (SoftDeletes + blockers + own files), the controller calls `TrashService`, the page shows `<x-admin.lifecycle>`, and the routes use `RecordLifecycleRequest` with the `admin-sensitive` limiter. Delete permanently works only from the Trash.
    - Every admin create or edit writes the audit log with `AuditService::changes()` (only the fields that changed). Other admin writes use the `admin` limiter.
    - Admin lists read their query string through `App\Support\Admin\ListQuery`. Plain-text fields use `App\Rules\PlainText` (HTML is refused).
+   - A new admin record screen reuses the 3.4 building blocks:
+     - the `$records()` route helper in `routes/web.php`;
+     - a policy extending `ManagedRecordPolicy`;
+     - `RecordWriter::save()` (fills, saves, logs the changes, handles the image column and relation syncs);
+     - `PreparesSlug` (slugs, one-per-line lists);
+     - `IconNames::PICKER` for icon choices;
+     - `Money::toCents()` / `input()` for dollar fields.
+   - Full-page sensitive forms (Settings, cancellation policies) put `<x-admin.confirm-fields>` at the bottom and use the default error bag.
 7. **Tests for every endpoint:** guest, wrong user (404), wrong role, invalid input (422), valid input, rate limit (429), duplicate request.
 
 ## Porting mockup classes from Tailwind v3 to v4

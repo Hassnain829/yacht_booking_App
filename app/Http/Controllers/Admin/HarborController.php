@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\HarborRequest;
 use App\Http\Requests\Admin\RecordLifecycleRequest;
 use App\Models\Harbor;
-use App\Services\HarborService;
+use App\Services\RecordWriter;
 use App\Services\TrashService;
 use App\Support\Admin\ListQuery;
 use Illuminate\Http\RedirectResponse;
@@ -56,9 +56,10 @@ class HarborController extends Controller
         return view('admin.harbors.form', ['harbor' => new Harbor(['is_active' => true, 'sort' => Harbor::withTrashed()->max('sort') + 1])]);
     }
 
-    public function store(HarborRequest $request, HarborService $harbors): RedirectResponse
+    public function store(HarborRequest $request, RecordWriter $writer): RedirectResponse
     {
-        $harbor = $harbors->create($request->harborData(), $request->file('image'), $request->user());
+        $harbor = new Harbor;
+        $writer->save($harbor, $request->harborData(), $request->user(), ['file' => $request->file('image'), 'directory' => 'harbors']);
 
         return redirect()->route('admin.harbors.edit', $harbor)->with('status', "{$harbor->name} was added.");
     }
@@ -75,9 +76,9 @@ class HarborController extends Controller
         ]);
     }
 
-    public function update(HarborRequest $request, Harbor $harbor, HarborService $harbors): RedirectResponse
+    public function update(HarborRequest $request, Harbor $harbor, RecordWriter $writer): RedirectResponse
     {
-        $harbors->update($harbor, $request->harborData(), $request->file('image'), $request->boolean('remove_image'), $request->user());
+        $writer->save($harbor, $request->harborData(), $request->user(), ['file' => $request->file('image'), 'remove' => $request->boolean('remove_image'), 'directory' => 'harbors']);
 
         return redirect()->route('admin.harbors.edit', $harbor)->with('status', 'Changes saved.');
     }

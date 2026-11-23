@@ -4,21 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Support\Demo\DemoAdmin;
-use App\Support\Demo\DemoCatalog;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
-/** Boats (house + owner), the listing review queue and one listing's review page. Phase 3/6: Eloquent + BoatPolicy. */
+/** The listing review queue and one listing's review page (demo data until Phase 6). Boats: Admin\BoatController. */
 class FleetController extends Controller
 {
-    public function boats(DemoCatalog $catalog, DemoAdmin $admin): View
-    {
-        return view('admin.fleet.boats', [
-            'house' => $catalog->yachts(),
-            'owned' => $admin->listings()->where('status', 'approved')->values(),
-        ]);
-    }
-
     public function listings(Request $request, DemoAdmin $admin): View
     {
         $status = $request->query('status');

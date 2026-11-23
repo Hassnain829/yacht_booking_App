@@ -18,7 +18,7 @@ class ExperienceFactory extends Factory
         return [
             'slug' => Str::slug($name),
             'name' => $name,
-            'category' => 'Cruise',
+            'category' => 'sightseeing',
             'icon' => 'sunset',
             'tagline' => fake()->sentence(),
             'description' => fake()->paragraph(),

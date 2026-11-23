@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\LicenseType;
+use App\Models\Contracts\Trashable;
 use Carbon\CarbonInterface;
 use Database\Factories\CaptainFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -11,7 +12,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * A captain (PLAN §6.4). The license number is encrypted in the database; it and the internal pay rate are
@@ -23,7 +26,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'years_experience', 'languages', 'pay_rate_cents', 'is_active', 'is_public', 'sort',
 ])]
 #[Hidden(['id', 'license_number', 'pay_rate_cents'])]
-class Captain extends Model
+class Captain extends Model implements Trashable
 {
     /** @use HasFactory<CaptainFactory> */
     use HasFactory, HasUlids, SoftDeletes;
@@ -42,6 +45,66 @@ class Captain extends Model
     public function scopeActive(Builder $query): void
     {
         $query->where('is_active', true)->orderBy('sort')->orderBy('name');
+    }
+
+    /** License documents on the private disk (opened through /files/{uuid}). @return MorphMany<Media, $this> */
+    public function documents(): MorphMany
+    {
+        return $this->morphMany(Media::class, 'model')->where('collection', 'license')->orderBy('sort')->orderBy('id');
+    }
+
+    public function photoUrl(): ?string
+    {
+        return $this->photo_path === null ? null : Storage::disk('public')->url($this->photo_path);
+    }
+
+    public function initials(): string
+    {
+        return collect(preg_split('/\s+/', trim($this->name)) ?: [])->filter()->take(2)->map(fn (string $part) => mb_strtoupper(mb_substr($part, 0, 1)))->implode('');
+    }
+
+    /** "•••• 1902" — the admin screens never show the whole license number. */
+    public function maskedLicense(): ?string
+    {
+        return blank($this->license_number) ? null : '•••• '.mb_substr((string) $this->license_number, -4);
+    }
+
+    public function licenseExpired(): bool
+    {
+        return $this->license_expires_on !== null && $this->license_expires_on->endOfDay()->isPast();
+    }
+
+    public function licenseExpiresSoon(int $days = 30): bool
+    {
+        return $this->license_expires_on !== null && ! $this->licenseExpired() && $this->license_expires_on->lte(now()->addDays($days));
+    }
+
+    public function trashLabel(): string
+    {
+        return 'captain';
+    }
+
+    public function trashTitle(): string
+    {
+        return $this->name;
+    }
+
+    /** Phase 8 adds: upcoming trips assigned to this captain (reassign them first). */
+    public function trashBlockers(): array
+    {
+        return [];
+    }
+
+    /** Phase 8 adds: trips and pay records of this captain (kept for the books). */
+    public function permanentDeleteBlockers(): array
+    {
+        return [];
+    }
+
+    /** The photo (public disk); license documents are `media` rows, deleted by TrashService. */
+    public function ownFiles(): array
+    {
+        return $this->photo_path === null ? [] : ['public' => [$this->photo_path]];
     }
 
     /** Licensed for this many guests, with a license valid on the trip day (PLAN §7.8). */

@@ -21,7 +21,13 @@
             ['boats', 'sailboat', 'Boats', route('admin.boats.index'), null],
             ['listings', 'clipboard-check', 'Listing reviews', route('admin.listings.index'), $counts['Listings to review'] ?: null],
             ['harbors', 'anchor', 'Harbors', route('admin.harbors.index'), null],
-            ['catalog', 'sparkles', 'Experiences & add-ons', route('admin.catalog'), null],
+            ['amenities', 'list-checks', 'Amenities', route('admin.amenities.index'), null],
+        ],
+        'Catalog' => [
+            ['experiences', 'sparkles', 'Experiences', route('admin.experiences.index'), null],
+            ['addons', 'gift', 'Add-ons', route('admin.addons.index'), null],
+            ['policies', 'shield-check', 'Cancellation policies', route('admin.policies.index'), null],
+            ['promos', 'tag', 'Promo codes', route('admin.promos.index'), null],
         ],
         'Finance' => [
             ['payouts', 'landmark', 'Payouts', route('admin.payouts.index'), $counts['Withdrawals to approve'] ?: null],
