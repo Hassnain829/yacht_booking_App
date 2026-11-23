@@ -96,6 +96,16 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
      - `IconNames::PICKER` for icon choices;
      - `Money::toCents()` / `input()` for dollar fields.
    - Full-page sensitive forms (Settings, cancellation policies) put `<x-admin.confirm-fields>` at the bottom and use the default error bag.
+   - Admin record forms:
+     - Put the right-hand column in `<x-admin.form-aside>` (it follows the page on lg+).
+     - Put Save / Cancel as `<x-admin.form-actions>` inside it, under the cards ("On the site") and before the lifecycle card. On desktop never use a bottom-of-screen bar (the user's decision).
+     - Add `<x-admin.form-bar>` as the **last element of the form**: the phone / tablet Save bar. Below lg the sidebar buttons are hidden.
+     - Error messages carry `data-field-error` (the x-form components already do), so `ui/admin.js` can jump to the first one after a failed save. `ui/admin.js` also asks before leaving a record form with unsaved edits.
+   - Boat form:
+     - One Save for everything: the Photos card is inside the boat form, and the chosen photos go up with Save changes / Add boat.
+     - The Blocked times card is inside the boat form area too, above Save.
+     - A per-photo or per-block action posts its own small form through `form="…"`, because forms can't be nested. Such controls never count toward the boat form's validation or its unsaved state.
+     - The Listing checklist is live: a new checklist item needs a key in `BoatController::checklist()` **and** the same rule in `resources/js/pages/admin-boat-form.js` (`RULES`).
    - Boats (3.7): their selling points are `boats.highlights` lines, never shared "highlight" amenities. Feature lists come from `AmenityGroup::forms()`. Remember that an empty text input arrives as `null` (ConvertEmptyStringsToNull).
    - Never use photos found online for a real listing: only the owner's / client's own photos (copyright, and they must show the actual boat).
 7. **Tests for every endpoint:** guest, wrong user (404), wrong role, invalid input (422), valid input, rate limit (429), duplicate request.

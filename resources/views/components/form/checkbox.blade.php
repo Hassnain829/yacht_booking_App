@@ -25,6 +25,6 @@
         <span>{{ $slot }}</span>
     </label>
     @if ($message)
-        <p id="{{ $id }}-error" class="mt-1.5 text-xs font-semibold text-red-600">{{ $message }}</p>
+        <p data-field-error id="{{ $id }}-error" class="mt-1.5 text-xs font-semibold text-red-600">{{ $message }}</p>
     @endif
 </div>

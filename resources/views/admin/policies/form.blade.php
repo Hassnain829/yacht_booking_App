@@ -19,7 +19,7 @@
             <x-admin.card title="Refund rules">
                 <p class="text-sm text-navy-600">For each row: if the guest cancels at least this many hours before the start, they get this much back. Add a 0-hour row for the last part. Empty rows are ignored.</p>
                 @if ($errors->first('rules') ?: collect($errors->getMessages())->filter(fn ($m, $k) => str_starts_with($k, 'rules.'))->flatten()->first())
-                    <p class="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700 ring-1 ring-red-200" role="alert">{{ $errors->first('rules') ?: collect($errors->getMessages())->filter(fn ($m, $k) => str_starts_with($k, 'rules.'))->flatten()->first() }}</p>
+                    <p data-field-error class="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700 ring-1 ring-red-200" role="alert">{{ $errors->first('rules') ?: collect($errors->getMessages())->filter(fn ($m, $k) => str_starts_with($k, 'rules.'))->flatten()->first() }}</p>
                 @endif
                 <div class="mt-4 space-y-2">
                     @foreach ($rows as $i => $row)
@@ -47,11 +47,10 @@
                 <x-admin.confirm-fields placeholder="Why are you changing the refund rules?" />
             </x-admin.card>
         </div>
-        <div class="min-w-0">
-            <div class="flex flex-col gap-2 sm:flex-row lg:flex-col">
-                <x-button type="submit" variant="dark" size="lg">Save policy</x-button>
-                <x-button :href="route('admin.policies.index')" variant="outline" size="lg">Cancel</x-button>
-            </div>
-        </div>
+        <x-admin.form-aside class="hidden lg:block">
+            <x-admin.form-actions submit="Save policy" :cancel="route('admin.policies.index')" />
+        </x-admin.form-aside>
+
+        <x-admin.form-bar submit="Save policy" :cancel="route('admin.policies.index')" />
     </form>
 @endsection

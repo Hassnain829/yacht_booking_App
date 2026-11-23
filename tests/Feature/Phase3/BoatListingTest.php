@@ -13,6 +13,8 @@ use App\Models\User;
 use App\Services\PublicCatalog;
 use Database\Seeders\ClientBoatSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Tests\Concerns\InstantMediaService;
 use Tests\Concerns\SeedsPublicCatalog;
 use Tests\TestCase;
 
@@ -97,21 +99,101 @@ class BoatListingTest extends TestCase
         $this->assertSame(0, Amenity::query()->where('name', 'Warp drive')->count());
     }
 
+    public function test_a_failed_save_comes_back_with_tagged_errors_and_save_in_the_sidebar_and_the_phone_bar(): void
+    {
+        $azure = Boat::query()->where('slug', 'azure')->sole();
+        $photo = $azure->photos()->firstOrFail();
+        $this->actingAs($this->admin);
+        $edit = "/admin/boats/{$azure->ulid}/edit";
+
+        // admin.js jumps to the first [data-field-error] on load. Photos and Blocked times are cards of the boat
+        // form, above Save — in the sticky right-hand column (lg+) and in the bar at the bottom of the form (phones /
+        // tablets). A photo's or a block's own controls post small forms outside the boat form (form="…"), so the
+        // block fields' `required` never stops Save.
+        $this->followingRedirects()->from($edit)->put("/admin/boats/{$azure->ulid}", $this->azureForm(['hourly_rate' => '']))
+            ->assertOk()
+            ->assertSeeInOrder(['action="'.route('admin.boats.update', $azure).'" enctype="multipart/form-data" id="boat-form"', 'aria-describedby="f-hourly_rate-error"',
+                'data-field-error id="f-hourly_rate-error"', 'id="photos"', 'name="photos[]"', 'form="photo-'.$photo->uuid.'-delete"',
+                'id="blocks"', 'id="block-starts" name="starts_at" type="datetime-local"', 'form="block-add"', 'Block this time',
+                'data-form-aside', 'data-checklist', 'On the site', 'data-form-actions', 'Save changes', 'data-form-bar', 'Save changes', '</form>',
+                '<form id="photo-'.$photo->uuid.'-delete" method="POST" action="'.route('admin.boats.photos.destroy', [$azure, $photo->uuid]).'">',
+                '<form id="block-add" method="POST" action="'.route('admin.boats.blocks.store', $azure).'">'], false);
+    }
+
+    public function test_save_changes_and_add_boat_upload_the_chosen_photos_too(): void
+    {
+        $azure = Boat::query()->where('slug', 'azure')->sole();
+        $before = $azure->photos()->count();
+        $this->actingAs($this->admin);
+
+        $this->put("/admin/boats/{$azure->ulid}", $this->azureForm(['photos' => [UploadedFile::fake()->image('deck.jpg', 1200, 800), UploadedFile::fake()->image('cabin.png', 1200, 800)]]))
+            ->assertRedirect("/admin/boats/{$azure->ulid}/edit")
+            ->assertSessionHas('status', 'Changes saved. 2 photos added.');
+        $this->assertSame($before + 2, $azure->photos()->count());
+
+        // A new boat and its photos in one go; the first chosen photo is the cover.
+        $this->post('/admin/boats', $this->azureForm(['title' => 'Lake Breeze', 'slug' => 'lake-breeze', 'category' => 'Express cruiser', 'photos' => [UploadedFile::fake()->image('cover.jpg', 1200, 800)]]))
+            ->assertSessionHas('status', 'Lake Breeze was added with 1 photo.');
+        $breeze = Boat::query()->where('slug', 'lake-breeze')->sole();
+        $this->assertSame([0], $breeze->photos()->pluck('sort')->all());
+        $this->assertSame('boat.photos_added', AuditLog::query()->latest('id')->value('action'));
+
+        $this->put("/admin/boats/{$azure->ulid}", $this->azureForm())->assertSessionHas('status', 'Changes saved.');
+    }
+
+    public function test_photos_sent_with_the_save_keep_the_limits_and_a_failed_save_asks_for_them_again(): void
+    {
+        $azure = Boat::query()->where('slug', 'azure')->sole();
+        $this->actingAs($this->admin);
+        $update = "/admin/boats/{$azure->ulid}";
+
+        $this->putJson($update, $this->azureForm(['photos' => [UploadedFile::fake()->createWithContent('boat.jpg', '<?php echo "owned"; ?>')]]))
+            ->assertUnprocessable()->assertJsonValidationErrors(['photos.0']);
+        $this->putJson($update, $this->azureForm(['photos' => array_fill(0, 11, UploadedFile::fake()->image('x.jpg', 900, 600))]))
+            ->assertUnprocessable()->assertJsonValidationErrors(['photos']);
+
+        // At most 30 per boat: over that, nothing is saved — not even the other fields.
+        $media = app(InstantMediaService::class);
+        foreach (range($azure->photos()->count() + 1, 29) as $i) {
+            $media->addImage($azure, 'photos', UploadedFile::fake()->image("p{$i}.jpg", 700, 500));
+        }
+        $this->putJson($update, $this->azureForm(['title' => 'Renamed', 'photos' => [UploadedFile::fake()->image('a.jpg', 900, 600), UploadedFile::fake()->image('b.jpg', 900, 600)]]))
+            ->assertUnprocessable()->assertJsonValidationErrors(['photos' => 'at most 30 photos']);
+        $this->assertSame(['The Azure', 29], [$azure->fresh()->title, $azure->photos()->count()]);
+
+        // A failed save drops the chosen files (a file input can't be filled in again): the Photos card says so.
+        $this->followingRedirects()->from("/admin/boats/{$azure->ulid}/edit")
+            ->put($update, $this->azureForm(['hourly_rate' => '', 'photos' => [UploadedFile::fake()->image('a.jpg', 900, 600)]]))
+            ->assertOk()->assertSee('The photo you chose was not uploaded because of the errors on this page.');
+        $this->assertSame(29, $azure->photos()->count());
+    }
+
     public function test_the_checklist_shows_what_is_missing_and_the_coast_guard_warning(): void
     {
         $this->seed(ClientBoatSeeder::class);
         $boat = Boat::query()->where('slug', ClientBoatSeeder::SLUG)->sole();
         $this->actingAs($this->admin);
 
+        // Each item carries its key and state for the live re-check (pages/admin-boat-form.js).
         $this->get("/admin/boats/{$boat->ulid}/edit")->assertOk()
             ->assertSee('Listing checklist')
-            ->assertSee('The rate guests pay per hour.')
-            ->assertSee('Where guests board.')
-            ->assertDontSee('no Coast Guard inspection (COI) is ticked');
+            ->assertSee('data-check="description" data-ok="1"', false)
+            ->assertSee('data-check="price" data-ok="0"', false)
+            ->assertSee('<p class="text-xs text-navy-500" data-check-hint>The rate guests pay per hour.</p>', false)
+            ->assertSee('<p class="text-xs text-navy-500" data-check-hint>Where guests board.</p>', false)
+            ->assertSee('<div data-coi-warning class="hidden">', false);
 
         $boat->forceFill(['max_guests' => 10])->save();
-        $this->get("/admin/boats/{$boat->ulid}/edit")->assertSee('Up to 10 guests, but no Coast Guard inspection (COI) is ticked.');
-        $this->get('/admin/boats/create')->assertOk()->assertSee('How to add a boat')->assertSee('Features &amp; amenities', false);
+        $this->get("/admin/boats/{$boat->ulid}/edit")
+            ->assertSee('<div data-coi-warning class="">', false)
+            ->assertSeeText('Up to 10 guests, but no Coast Guard inspection (COI) is ticked.');
+
+        // Adding a boat shows the same checklist (everything still to do) and takes photos right away.
+        $this->get('/admin/boats/create')->assertOk()
+            ->assertSee('<span data-checklist-done>0</span> / 9', false)
+            ->assertSee('They upload when you press Add boat.')
+            ->assertSee('Features &amp; amenities', false)
+            ->assertDontSee('id="blocks"', false);
     }
 
     public function test_the_clients_boat_is_added_as_a_featured_draft_and_shows_first_once_published(): void

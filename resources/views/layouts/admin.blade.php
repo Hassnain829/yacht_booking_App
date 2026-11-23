@@ -44,7 +44,7 @@
     $title = ($title ?? 'Admin').' · Admin';
 @endphp
 <!DOCTYPE html>
-<html lang="en" class="js">
+<html lang="en" class="js scroll-pb-24 lg:scroll-pb-0">
 @include('partials.head', ['title' => $title, 'robots' => 'noindex, nofollow'])
 <body class="bg-shell font-sans text-navy-900 antialiased" data-page="{{ $page ?? 'admin' }}">
     <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:rounded-full focus:bg-brass-400 focus:px-5 focus:py-3 focus:text-sm focus:font-bold focus:text-navy-950">Skip to content</a>

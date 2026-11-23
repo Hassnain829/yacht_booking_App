@@ -54,7 +54,7 @@
                 </x-admin.card>
             </div>
 
-            <div class="min-w-0 space-y-6">
+            <x-admin.form-aside>
                 <x-admin.card title="On the site">
                     <div class="space-y-5">
                         <x-form.checkbox name="is_active" hidden-zero :checked="$addon->is_active">Offer this add-on<span class="block text-xs text-navy-500">Hidden add-ons can't be added to new bookings.</span></x-form.checkbox>
@@ -62,15 +62,14 @@
                     </div>
                 </x-admin.card>
 
-                <div class="flex flex-col gap-2 sm:flex-row lg:flex-col">
-                    <x-button type="submit" variant="dark" size="lg">{{ $editing ? 'Save changes' : 'Add add-on' }}</x-button>
-                    <x-button :href="route('admin.addons.index')" variant="outline" size="lg">Cancel</x-button>
-                </div>
+                <x-admin.form-actions :submit="$editing ? 'Save changes' : 'Add add-on'" :cancel="route('admin.addons.index')" />
 
                 @if ($editing)
                     <x-admin.lifecycle :record="$addon" label="add-on" :trash-blockers="$trashBlockers" :routes="['trash' => route('admin.addons.trash', $addon)]" />
                 @endif
-            </div>
+            </x-admin.form-aside>
+
+            <x-admin.form-bar :submit="$editing ? 'Save changes' : 'Add add-on'" :cancel="route('admin.addons.index')" />
         </form>
     @endif
 @endsection

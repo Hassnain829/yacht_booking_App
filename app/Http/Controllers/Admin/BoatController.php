@@ -100,12 +100,15 @@ class BoatController extends Controller
         ]));
     }
 
-    public function store(BoatRequest $request, BoatService $boats): RedirectResponse
+    public function store(BoatRequest $request, BoatService $boats, BoatPhotoService $photos): RedirectResponse
     {
         $boat = new Boat;
         $boats->save($boat, $request->boatData(), $request->relationData(), $request->user(), $request->boolean('publish'));
+        $added = $this->addChosenPhotos($request, $boat, $photos);
 
-        return redirect()->route('admin.boats.edit', $boat)->with('status', "{$boat->title} was added. Now add its photos.");
+        return redirect()->route('admin.boats.edit', $boat)->with('status', $added > 0
+            ? "{$boat->title} was added with ".trans_choice('{1} 1 photo.|[2,*] :count photos.', $added)
+            : "{$boat->title} was added. Now add its photos.");
     }
 
     /** Also opens a boat in the Trash (read-only, with Restore / Delete permanently). */
@@ -116,11 +119,22 @@ class BoatController extends Controller
         return $this->form($boat->load(['photos', 'owner', 'amenities', 'experiences', 'availabilityRules']));
     }
 
-    public function update(BoatRequest $request, Boat $boat, BoatService $boats): RedirectResponse
+    public function update(BoatRequest $request, Boat $boat, BoatService $boats, BoatPhotoService $photos): RedirectResponse
     {
         $boats->save($boat, $request->boatData(), $request->relationData(), $request->user());
+        $added = $this->addChosenPhotos($request, $boat, $photos);
 
-        return redirect()->route('admin.boats.edit', $boat)->with('status', 'Changes saved.');
+        return redirect()->route('admin.boats.edit', $boat)->with('status', 'Changes saved.'.($added > 0
+            ? ' '.trans_choice('{1} 1 photo added.|[2,*] :count photos added.', $added)
+            : ''));
+    }
+
+    /** The photos chosen in the form's Photos card go up with the save (one Save for everything). */
+    private function addChosenPhotos(BoatRequest $request, Boat $boat, BoatPhotoService $photos): int
+    {
+        $files = $request->photoFiles();
+
+        return $files === [] ? 0 : $photos->add($boat, $files, $request->user());
     }
 
     public function status(BoatStatusRequest $request, Boat $boat, BoatService $boats): RedirectResponse
@@ -219,7 +233,7 @@ class BoatController extends Controller
             'amenityGroups' => Amenity::query()->orderBy('sort')->orderBy('name')->get()->groupBy(fn (Amenity $a) => $a->group->value),
             'groupLabels' => collect(AmenityGroup::forms())->mapWithKeys(fn (AmenityGroup $g) => [$g->value => $g->label()])->all(),
             'experiences' => Experience::query()->orderBy('sort')->orderBy('name')->get(),
-            'checklist' => $boat->exists ? $this->checklist($boat) : null,
+            'checklist' => $this->checklist($boat),
             'blocks' => $boat->exists ? $boat->blocks()->where('ends_at', '>', now()->subDay())->orderBy('starts_at')->get() : collect(),
             'blockTypes' => collect([BlockType::Maintenance, BlockType::Blackout, BlockType::Weather])->mapWithKeys(fn (BlockType $t) => [$t->value => $t->label()])->all(),
             'trashBlockers' => $boat->exists && ! $boat->trashed() ? $boat->trashBlockers() : [],
@@ -228,10 +242,12 @@ class BoatController extends Controller
     }
 
     /**
-     * What a boat still needs to look right on the site (shown beside the form, 3.7). Nothing here blocks saving;
-     * the client sees at a glance what to fill in before publishing.
+     * What a boat still needs to look right on the site (shown beside the form, on Add too; 3.7). Nothing here
+     * blocks saving; the client sees at a glance what to fill in before publishing. The keys name the rules that
+     * resources/js/pages/admin-boat-form.js runs on the form as it is filled in, so the list turns green live
+     * (`photos` counts the saved photos + the ones chosen in the form). Keep both in step.
      *
-     * @return array{items: list<array{0: bool, 1: string, 2: string}>, warnings: list<string>}
+     * @return array{items: array<string, array{0: bool, 1: string, 2: string}>, coi_warning: bool}
      */
     private function checklist(Boat $boat): array
     {
@@ -239,21 +255,18 @@ class BoatController extends Controller
 
         return [
             'items' => [
-                [filled($boat->description) && filled($boat->short), 'Description', 'A one-line summary and a full description.'],
-                [count($boat->highlights ?? []) >= 3, 'Highlights', 'At least 3 short selling points for the boat page.'],
-                [$boat->category && $boat->length_ft && $boat->max_guests, 'Type, size and guests', 'Category, length and the guest limit.'],
-                [$boat->harbor_id !== null, 'Departure harbor', 'Where guests board.'],
-                [(int) $boat->hourly_rate_cents > 0, 'Hourly price', 'The rate guests pay per hour.'],
-                [$boat->cancellation_policy_id !== null, 'Cancellation policy', 'Flexible, moderate or strict.'],
-                [$boat->photos->count() >= $minPhotos, "{$minPhotos}+ photos", 'Clear, bright photos of this boat: outside, deck and cabin.'],
-                [$boat->experiences->isNotEmpty(), 'Experiences offered', 'At least one, e.g. Sunset Cruise.'],
-                [$boat->availabilityRules->where('is_open', true)->isNotEmpty(), 'Opening hours', 'The days and hours trips can run.'],
+                'description' => [filled($boat->description) && filled($boat->short), 'Description', 'A one-line summary and a full description.'],
+                'highlights' => [count($boat->highlights ?? []) >= 3, 'Highlights', 'At least 3 short selling points for the boat page.'],
+                'specs' => [$boat->category && $boat->length_ft && $boat->max_guests, 'Type, size and guests', 'Category, length and the guest limit.'],
+                'harbor' => [$boat->harbor_id !== null, 'Departure harbor', 'Where guests board.'],
+                'price' => [(int) $boat->hourly_rate_cents > 0, 'Hourly price', 'The rate guests pay per hour.'],
+                'policy' => [$boat->cancellation_policy_id !== null, 'Cancellation policy', 'Flexible, moderate or strict.'],
+                'photos' => [$boat->photos->count() >= $minPhotos, "{$minPhotos}+ photos", 'Clear, bright photos of this boat: outside, deck and cabin.'],
+                'experiences' => [$boat->experiences->isNotEmpty(), 'Experiences offered', 'At least one, e.g. Sunset Cruise.'],
+                'hours' => [$boat->availabilityRules->where('is_open', true)->isNotEmpty(), 'Opening hours', 'The days and hours trips can run.'],
             ],
-            'warnings' => array_values(array_filter([
-                ! $boat->uscg_inspected && $boat->max_guests > 6
-                    ? "Up to {$boat->max_guests} guests, but no Coast Guard inspection (COI) is ticked. A captained charter without a COI may carry at most 6 passengers."
-                    : null,
-            ])),
+            // A captained charter without a Coast Guard COI may carry at most 6 passengers.
+            'coi_warning' => ! $boat->uscg_inspected && $boat->max_guests > 6,
         ];
     }
 }

@@ -12,9 +12,13 @@ use App\Models\CancellationPolicy;
 use App\Models\Experience;
 use App\Models\Harbor;
 use App\Rules\PlainText;
+use App\Rules\SafeUpload;
+use App\Services\BoatPhotoService;
 use App\Support\Admin\BoatOptions;
 use App\Support\Money;
+use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -25,6 +29,9 @@ use Illuminate\Validation\Validator;
  * status (published only through the status buttons) — PLAN §8.2.
  *
  * Wizard rules kept (PLAN §7.7): boats over 32 ft can't be operated by the renter.
+ *
+ * Photos chosen in the form's Photos card come with the save (one Save for everything, also on Add); the controller
+ * adds them after the boat is saved, up to BoatPhotoService::MAX_PHOTOS per boat.
  */
 class BoatRequest extends FormRequest
 {
@@ -152,6 +159,9 @@ class BoatRequest extends FormRequest
             'hours.*.open' => ['nullable', 'boolean'],
             'hours.*.opens' => ['nullable', 'date_format:H:i'],
             'hours.*.closes' => ['nullable', 'date_format:H:i'],
+            // Photos, added after the save (same limits as the photo upload — config/listing.php)
+            'photos' => ['nullable', 'array', 'max:10'],
+            'photos.*' => ['required', SafeUpload::image(maxKb: (int) config('listing.rules_engine.max_photo_mb') * 1024)],
         ];
     }
 
@@ -165,6 +175,12 @@ class BoatRequest extends FormRequest
         return [function (Validator $validator): void {
             if ($validator->errors()->isNotEmpty()) {
                 return;
+            }
+
+            $boat = $this->route('boat');
+            $existing = $boat instanceof Boat ? $boat->photos()->count() : 0;
+            if ($existing + count($this->photoFiles()) > BoatPhotoService::MAX_PHOTOS) {
+                $validator->errors()->add('photos', 'A boat can have at most '.BoatPhotoService::MAX_PHOTOS.' photos. Delete some first.');
             }
 
             $known = Experience::query()->pluck('slug')->all();
@@ -205,7 +221,32 @@ class BoatRequest extends FormRequest
             'highlights.*.max' => 'Each highlight can be at most 80 characters.',
             'new_amenity_names.*.max' => 'Add at most 10 new items to one list at a time.',
             'new_amenity_names.*.*.max' => 'Each new item can be at most 80 characters.',
+            'photos.max' => 'Upload at most 10 photos at a time.',
         ];
+    }
+
+    /**
+     * A file input can't be filled in again after a failed save, so the Photos card tells the admin how many
+     * chosen photos to pick again (session `photos_dropped`).
+     */
+    protected function failedValidation(ValidatorContract $validator): void
+    {
+        $count = count($this->photoFiles());
+        if ($count > 0 && ! $this->expectsJson()) {
+            $this->session()->flash('photos_dropped', $count);
+        }
+
+        parent::failedValidation($validator);
+    }
+
+    /**
+     * The photos chosen in the form (none when the input was left empty).
+     *
+     * @return list<UploadedFile>
+     */
+    public function photoFiles(): array
+    {
+        return array_values(array_filter((array) $this->file('photos', []), fn ($file) => $file instanceof UploadedFile));
     }
 
     /**

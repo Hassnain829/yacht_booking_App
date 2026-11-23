@@ -1,4 +1,4 @@
-@extends('layouts.admin', ['title' => $boat->exists ? $boat->title : 'Add a house boat', 'active' => 'boats'])
+@extends('layouts.admin', ['title' => $boat->exists ? $boat->title : 'Add a house boat', 'active' => 'boats', 'page' => 'admin-boat-form'])
 
 @use('App\Enums\BoatStatus')
 @use('App\Support\Admin\BoatOptions')
@@ -46,7 +46,7 @@
     </x-admin.page-header>
 
     @if ($errors->has('action') || $errors->has('note'))
-        <div class="mt-6 rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700 ring-1 ring-red-200" role="alert">{{ $errors->first('action') ?: $errors->first('note') }}</div>
+        <div data-field-error class="mt-6 rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700 ring-1 ring-red-200" role="alert">{{ $errors->first('action') ?: $errors->first('note') }}</div>
     @endif
 
     @if ($trashed)
@@ -68,12 +68,13 @@
     @else
         {{-- Jump to a section (3.7): the form is long, so each card has an anchor. --}}
         <nav class="sticky top-16 z-20 -mx-4 mt-6 flex gap-2 overflow-x-auto border-b border-navy-100 bg-shell/95 px-4 py-3 backdrop-blur md:-mx-8 md:px-8" aria-label="Boat form sections">
-            @foreach (['details' => 'Details', 'specs' => 'Specs', 'location' => 'Location', 'pricing' => 'Pricing', 'rules' => 'Rules', 'features' => 'Features', 'experiences' => 'Experiences', 'hours' => 'Hours'] + ($editing ? ['photos' => 'Photos', 'blocks' => 'Blocked times'] : []) as $anchor => $label)
+            @foreach (['details' => 'Details', 'specs' => 'Specs', 'location' => 'Location', 'pricing' => 'Pricing', 'rules' => 'Rules', 'features' => 'Features', 'experiences' => 'Experiences', 'hours' => 'Hours', 'photos' => 'Photos'] + ($editing ? ['blocks' => 'Blocked times'] : []) as $anchor => $label)
                 <a href="#{{ $anchor }}" class="shrink-0 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-navy-600 ring-1 ring-navy-100 hover:text-navy-950 hover:ring-navy-300">{{ $label }}</a>
             @endforeach
         </nav>
 
-        <form method="POST" action="{{ $editing ? route('admin.boats.update', $boat) : route('admin.boats.store') }}" class="mt-6 grid gap-6 lg:grid-cols-3">
+        {{-- One Save for everything: the photos chosen in the Photos card go up with the form. --}}
+        <form method="POST" action="{{ $editing ? route('admin.boats.update', $boat) : route('admin.boats.store') }}" enctype="multipart/form-data" id="boat-form" class="mt-6 grid gap-6 lg:grid-cols-3">
             @csrf
             @if ($editing)
                 @method('PUT')
@@ -152,7 +153,7 @@
                                 @endforeach
                             </div>
                             @foreach (['durations', 'durations.*', 'duration_prices.*'] as $key)
-                                @if ($errors->first($key))<p class="mt-1.5 text-xs font-semibold text-red-600">{{ $errors->first($key) }}</p>@break @endif
+                                @if ($errors->first($key))<p data-field-error class="mt-1.5 text-xs font-semibold text-red-600">{{ $errors->first($key) }}</p>@break @endif
                             @endforeach
                         </fieldset>
                     </div>
@@ -210,7 +211,7 @@
                                 </div>
                             @endforeach
                         </div>
-                        @if ($errors->first('experiences') ?: $errors->first('experiences.*'))<p class="mt-2 text-xs font-semibold text-red-600">{{ $errors->first('experiences') ?: collect($errors->getMessages())->filter(fn ($m, $k) => str_starts_with($k, 'experiences.'))->flatten()->first() }}</p>@endif
+                        @if ($errors->first('experiences') ?: $errors->first('experiences.*'))<p data-field-error class="mt-2 text-xs font-semibold text-red-600">{{ $errors->first('experiences') ?: collect($errors->getMessages())->filter(fn ($m, $k) => str_starts_with($k, 'experiences.'))->flatten()->first() }}</p>@endif
                     @endif
                 </x-admin.card>
 
@@ -229,7 +230,7 @@
                                 <input id="new-{{ $group }}" name="new_amenities[{{ $group }}]" value="{{ old('new_amenities.'.$group) }}" maxlength="300" placeholder="+ Add a missing item to {{ strtolower($label) }}"
                                        class="mt-2 w-full rounded-xl border border-dashed border-navy-200 bg-white px-3.5 py-2 text-sm text-navy-900 placeholder:text-navy-400 focus:border-navy-950 focus:outline-hidden sm:max-w-md">
                                 @if ($errors->first('new_amenity_names.'.$group) ?: $errors->first('new_amenity_names.'.$group.'.*'))
-                                    <p class="mt-1.5 text-xs font-semibold text-red-600">{{ $errors->first('new_amenity_names.'.$group) ?: $errors->first('new_amenity_names.'.$group.'.*') }}</p>
+                                    <p data-field-error class="mt-1.5 text-xs font-semibold text-red-600">{{ $errors->first('new_amenity_names.'.$group) ?: $errors->first('new_amenity_names.'.$group.'.*') }}</p>
                                 @endif
                             </fieldset>
                         @endforeach
@@ -258,42 +259,105 @@
                                 <span class="text-navy-400">–</span>
                                 <label for="closes-{{ $number }}" class="sr-only">{{ $day }} closes</label>
                                 <input id="closes-{{ $number }}" type="time" name="hours[{{ $number }}][closes]" value="{{ $closes }}" class="rounded-lg border border-navy-200 px-2 py-1.5 text-sm focus:border-navy-950 focus:outline-hidden">
-                                @if ($dayError)<p class="w-full text-xs font-semibold text-red-600">{{ $dayError }}</p>@endif
+                                @if ($dayError)<p data-field-error class="w-full text-xs font-semibold text-red-600">{{ $dayError }}</p>@endif
                             </div>
                         @endforeach
                     </div>
                 </x-admin.card>
-            </div>
 
-            <div class="min-w-0 space-y-6">
-                @if ($checklist)
-                    @php($done = collect($checklist['items'])->where(0, true)->count())
-                    <x-admin.card title="Listing checklist">
-                        <x-slot:actions><span class="text-xs font-bold text-navy-500">{{ $done }} / {{ count($checklist['items']) }}</span></x-slot:actions>
-                        <ul class="space-y-2.5">
-                            @foreach ($checklist['items'] as [$ok, $label, $hint])
-                                <li class="flex items-start gap-2.5 text-sm">
-                                    <i data-lucide="{{ $ok ? 'circle-check' : 'circle-alert' }}" @class(['mt-0.5 h-4 w-4 shrink-0', 'text-emerald-600' => $ok, 'text-amber-500' => ! $ok])></i>
-                                    <span><span @class(['font-semibold', 'text-navy-950' => ! $ok, 'text-navy-500' => $ok])>{{ $label }}</span>@unless ($ok)<span class="block text-xs text-navy-500">{{ $hint }}</span>@endunless</span>
+                <x-admin.card title="Photos" id="photos" class="scroll-mt-32">
+                    <x-slot:actions><span class="text-xs font-semibold text-navy-400">{{ $boat->photos->count() }} / {{ \App\Services\BoatPhotoService::MAX_PHOTOS }} · the first is the cover</span></x-slot:actions>
+                    <div class="rounded-xl bg-navy-50 p-4">
+                        <x-form.file name="photos[]" id="f-photos" label="Add photos (up to 10 at a time)" multiple :error="$errors->first('photos') ?: collect($errors->getMessages())->filter(fn ($m, $k) => str_starts_with($k, 'photos.'))->flatten()->first()"
+                            hint="JPG, PNG, WEBP or GIF up to {{ config('listing.rules_engine.max_photo_mb') }} MB each, at least {{ config('media.image.min_width') }} × {{ config('media.image.min_height') }} px. They upload when you press {{ $editing ? 'Save changes' : 'Add boat' }}." />
+                        @if (session('photos_dropped'))
+                            <p class="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs font-semibold leading-relaxed text-amber-900 ring-1 ring-amber-200"><i data-lucide="triangle-alert" class="h-4 w-4 shrink-0"></i>{{ trans_choice('{1} The photo you chose was|[2,*] The :count photos you chose were', session('photos_dropped')) }} not uploaded because of the errors on this page. Choose {{ session('photos_dropped') > 1 ? 'them' : 'it' }} again, then save.</p>
+                        @endif
+                    </div>
+                    @if ($boat->photos->isEmpty())
+                        <p class="mt-5 text-sm text-navy-500">No photos yet. Boats need at least {{ config('listing.rules_engine.min_photos') }} good photos to look right on the site.</p>
+                    @else
+                        <ul class="mt-5 grid gap-4 sm:grid-cols-2">
+                            @foreach ($boat->photos as $index => $photo)
+                                <li class="overflow-hidden rounded-xl ring-1 ring-navy-100">
+                                    <div class="relative">
+                                        <img src="{{ $photo->url('card') }}" alt="{{ $photo->alt }}" loading="lazy" class="aspect-[3/2] w-full object-cover">
+                                        @if ($index === 0)<span class="absolute left-2 top-2 rounded-full bg-brass-400 px-2.5 py-0.5 text-[11px] font-extrabold text-navy-950">Cover</span>@endif
+                                    </div>
+                                    <div class="space-y-2 p-3">
+                                        <div class="flex gap-2">
+                                            <label for="alt-{{ $photo->uuid }}" class="sr-only">Description of photo {{ $index + 1 }}</label>
+                                            <input id="alt-{{ $photo->uuid }}" form="photo-{{ $photo->uuid }}-alt" name="alt" value="{{ $photo->alt }}" maxlength="160" placeholder="What's in the photo" class="min-w-0 flex-1 rounded-lg border border-navy-200 px-2.5 py-1.5 text-sm focus:border-navy-950 focus:outline-hidden">
+                                            <button type="submit" form="photo-{{ $photo->uuid }}-alt" class="rounded-lg px-3 py-1.5 text-xs font-bold text-navy-700 ring-1 ring-navy-200 hover:bg-navy-50">Save</button>
+                                        </div>
+                                        <div class="flex flex-wrap items-center gap-1.5">
+                                            @foreach ([['first', 'Make cover', 'star', $index === 0], ['up', 'Move up', 'arrow-up', $index === 0], ['down', 'Move down', 'arrow-down', $loop->last]] as [$move, $moveLabel, $icon, $off])
+                                                <button type="submit" form="photo-{{ $photo->uuid }}-{{ $move }}" @disabled($off) class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-navy-700 ring-1 ring-navy-200 hover:bg-navy-50 disabled:pointer-events-none disabled:opacity-40" aria-label="{{ $moveLabel }}: photo {{ $index + 1 }}"><i data-lucide="{{ $icon }}" class="h-3.5 w-3.5"></i>{{ $move === 'first' ? 'Cover' : '' }}</button>
+                                            @endforeach
+                                            <button type="submit" form="photo-{{ $photo->uuid }}-delete" class="ml-auto inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-red-700 ring-1 ring-red-200 hover:bg-red-50" aria-label="Delete photo {{ $index + 1 }}"><i data-lucide="trash-2" class="h-3.5 w-3.5"></i>Delete</button>
+                                        </div>
+                                    </div>
                                 </li>
                             @endforeach
                         </ul>
-                        @foreach ($checklist['warnings'] as $warning)
-                            <p class="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-900 ring-1 ring-amber-200"><i data-lucide="triangle-alert" class="h-4 w-4 shrink-0"></i>{{ $warning }}</p>
-                        @endforeach
-                        @if ($done === count($checklist['items']) && $boat->status !== BoatStatus::Published)
-                            <p class="mt-4 text-xs font-semibold text-emerald-700">Everything is in place — publish it with the button at the top.</p>
+                    @endif
+                </x-admin.card>
+
+                @if ($editing)
+                    {{-- Blocks act at once: their controls post the block forms rendered after the boat form (form="…"). --}}
+                    <x-admin.card title="Blocked times" id="blocks" class="scroll-mt-32">
+                        <p class="text-xs text-navy-500">The boat can't be booked during these times (Chicago time).</p>
+                        @if ($blocks->isEmpty())
+                            <p class="mt-4 text-sm text-navy-500">No upcoming blocks.</p>
+                        @else
+                            <ul class="mt-4 divide-y divide-navy-100">
+                                @foreach ($blocks as $block)
+                                    <li class="flex items-start gap-3 py-3">
+                                        <div class="min-w-0 flex-1 text-sm">
+                                            <p class="font-bold text-navy-950">{{ $block->type->label() }}</p>
+                                            <p class="text-xs text-navy-500">{{ $block->starts_at->timezone($tz)->format('M j, g:i A') }} – {{ $block->ends_at->timezone($tz)->format('M j, g:i A') }}</p>
+                                            @if ($block->reason)<p class="text-xs text-navy-400">{{ $block->reason }}</p>@endif
+                                        </div>
+                                        <button type="submit" form="block-{{ $block->getRouteKey() }}-delete" class="rounded-lg p-1.5 text-red-700 hover:bg-red-50" aria-label="Remove this block"><i data-lucide="x" class="h-4 w-4"></i></button>
+                                    </li>
+                                @endforeach
+                            </ul>
                         @endif
-                    </x-admin.card>
-                @else
-                    <x-admin.card title="How to add a boat">
-                        <ol class="list-decimal space-y-1.5 pl-5 text-sm text-navy-600">
-                            <li>Fill in the details, price and features, and save.</li>
-                            <li>Add at least {{ config('listing.rules_engine.min_photos') }} photos (the form opens again after saving).</li>
-                            <li>Follow the checklist, then press <strong>Publish</strong>.</li>
-                        </ol>
+                        <div class="mt-4 grid gap-3 rounded-xl bg-navy-50 p-4 sm:grid-cols-2">
+                            <x-form.input name="starts_at" id="block-starts" form="block-add" type="datetime-local" label="From" required :error="$errors->block->first('starts_at')" />
+                            <x-form.input name="ends_at" id="block-ends" form="block-add" type="datetime-local" label="Until" required :error="$errors->block->first('ends_at')" />
+                            <x-form.select name="type" id="block-type" form="block-add" label="Why" :options="$blockTypes" required :error="$errors->block->first('type')" />
+                            <x-form.input name="reason" id="block-reason" form="block-add" label="Note (optional)" maxlength="255" :error="$errors->block->first('reason')" />
+                            <x-button type="submit" form="block-add" variant="dark" size="block" icon-left="calendar-x" class="sm:col-span-2">Block this time</x-button>
+                        </div>
                     </x-admin.card>
                 @endif
+            </div>
+
+            <x-admin.form-aside below-nav>
+                {{-- Live (3.7): pages/admin-boat-form.js re-checks each item as the form is filled in (rules keyed like BoatController::checklist). --}}
+                @php($done = collect($checklist['items'])->where(0, true)->count())
+                <x-admin.card title="Listing checklist" id="checklist" class="scroll-mt-32" data-checklist data-photo-count="{{ $boat->photos->count() }}" data-min-photos="{{ config('listing.rules_engine.min_photos') }}">
+                    <x-slot:actions><span class="text-xs font-bold text-navy-500"><span data-checklist-done>{{ $done }}</span> / {{ count($checklist['items']) }}</span></x-slot:actions>
+                    <ul class="space-y-2.5">
+                        @foreach ($checklist['items'] as $key => [$ok, $label, $hint])
+                            <li class="flex items-start gap-2.5 text-sm" data-check="{{ $key }}" data-ok="{{ $ok ? '1' : '0' }}">
+                                <i data-lucide="circle-check" data-check-icon="yes" @class(['mt-0.5 h-4 w-4 shrink-0 text-emerald-600', 'hidden' => ! $ok])></i>
+                                <i data-lucide="circle-alert" data-check-icon="no" @class(['mt-0.5 h-4 w-4 shrink-0 text-amber-500', 'hidden' => $ok])></i>
+                                <div class="min-w-0">
+                                    <p @class(['font-semibold', 'text-navy-950' => ! $ok, 'text-navy-500' => $ok]) data-check-label>{{ $label }}</p>
+                                    <p @class(['text-xs text-navy-500', 'hidden' => $ok]) data-check-hint>{{ $hint }}</p>
+                                </div>
+                            </li>
+                        @endforeach
+                    </ul>
+                    <div data-coi-warning @class(['hidden' => ! $checklist['coi_warning']])>
+                        <p class="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-900 ring-1 ring-amber-200"><i data-lucide="triangle-alert" class="h-4 w-4 shrink-0"></i><span>Up to <span data-coi-guests>{{ $boat->max_guests }}</span> guests, but no Coast Guard inspection (COI) is ticked. A captained charter without a COI may carry at most 6 passengers.</span></p>
+                    </div>
+                    @if ($editing && $boat->status !== BoatStatus::Published)
+                        <p @class(['mt-4 text-xs font-semibold text-emerald-700', 'hidden' => $done !== count($checklist['items'])]) data-checklist-ready>Everything is in place — publish it with the button at the top.</p>
+                    @endif
+                </x-admin.card>
 
                 <x-admin.card title="On the site">
                     <div class="space-y-5">
@@ -313,100 +377,32 @@
                     </div>
                 </x-admin.card>
 
-                <div class="flex flex-col gap-2 sm:flex-row lg:flex-col">
-                    <x-button type="submit" variant="dark" size="lg">{{ $editing ? 'Save changes' : 'Add boat' }}</x-button>
-                    <x-button :href="route('admin.boats.index')" variant="outline" size="lg">Cancel</x-button>
-                </div>
+                <x-admin.form-actions :submit="$editing ? 'Save changes' : 'Add boat'" :cancel="route('admin.boats.index')" />
 
                 @if ($editing)
                     <x-admin.lifecycle :record="$boat" label="boat" :trash-blockers="$trashBlockers" :routes="['trash' => route('admin.boats.trash', $boat)]" />
                 @endif
-            </div>
+            </x-admin.form-aside>
+
+            <x-admin.form-bar :submit="$editing ? 'Save changes' : 'Add boat'" :cancel="route('admin.boats.index')">
+                <a href="#checklist" class="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-navy-50 px-3 py-2 text-xs font-bold text-navy-700 ring-1 ring-navy-100" aria-label="Listing checklist: see what is missing"><i data-lucide="list-checks" class="h-4 w-4"></i><span><span data-checklist-done>{{ $done }}</span> / {{ count($checklist['items']) }}</span></a>
+            </x-admin.form-bar>
         </form>
 
         @if ($editing)
-            {{-- Photos and blocks have their own forms (outside the boat form). --}}
-            <div class="mt-6 grid gap-6 lg:grid-cols-3">
-                <x-admin.card title="Photos" id="photos" class="scroll-mt-32 lg:col-span-2">
-                    <x-slot:actions><span class="text-xs font-semibold text-navy-400">{{ $boat->photos->count() }} / {{ \App\Services\BoatPhotoService::MAX_PHOTOS }} · the first is the cover</span></x-slot:actions>
-                    <form method="POST" action="{{ route('admin.boats.photos.store', $boat) }}" enctype="multipart/form-data" class="flex flex-col gap-3 rounded-xl bg-navy-50 p-4 sm:flex-row sm:items-end">
-                        @csrf
-                        <x-form.file name="photos[]" id="f-photos" label="Add photos (up to 10 at a time)" multiple class="flex-1" :error="$errors->first('photos') ?: collect($errors->getMessages())->filter(fn ($m, $k) => str_starts_with($k, 'photos.'))->flatten()->first()"
-                            hint="JPG, PNG, WEBP or GIF up to {{ config('listing.rules_engine.max_photo_mb') }} MB each, at least {{ config('media.image.min_width') }} × {{ config('media.image.min_height') }} px." />
-                        <x-button type="submit" variant="dark" icon-left="upload">Upload</x-button>
-                    </form>
-                    @if ($boat->photos->isEmpty())
-                        <p class="mt-5 text-sm text-navy-500">No photos yet. Boats need at least {{ config('listing.rules_engine.min_photos') }} good photos to look right on the site.</p>
-                    @else
-                        <ul class="mt-5 grid gap-4 sm:grid-cols-2">
-                            @foreach ($boat->photos as $index => $photo)
-                                <li class="overflow-hidden rounded-xl ring-1 ring-navy-100">
-                                    <div class="relative">
-                                        <img src="{{ $photo->url('card') }}" alt="{{ $photo->alt }}" loading="lazy" class="aspect-[3/2] w-full object-cover">
-                                        @if ($index === 0)<span class="absolute left-2 top-2 rounded-full bg-brass-400 px-2.5 py-0.5 text-[11px] font-extrabold text-navy-950">Cover</span>@endif
-                                    </div>
-                                    <div class="space-y-2 p-3">
-                                        <form method="POST" action="{{ route('admin.boats.photos.update', [$boat, $photo->uuid]) }}" class="flex gap-2">
-                                            @csrf
-                                            @method('PATCH')
-                                            <label for="alt-{{ $photo->uuid }}" class="sr-only">Description of photo {{ $index + 1 }}</label>
-                                            <input id="alt-{{ $photo->uuid }}" name="alt" value="{{ $photo->alt }}" maxlength="160" placeholder="What's in the photo" class="min-w-0 flex-1 rounded-lg border border-navy-200 px-2.5 py-1.5 text-sm focus:border-navy-950 focus:outline-hidden">
-                                            <button type="submit" class="rounded-lg px-3 py-1.5 text-xs font-bold text-navy-700 ring-1 ring-navy-200 hover:bg-navy-50">Save</button>
-                                        </form>
-                                        <div class="flex flex-wrap items-center gap-1.5">
-                                            @foreach ([['first', 'Make cover', 'star', $index === 0], ['up', 'Move up', 'arrow-up', $index === 0], ['down', 'Move down', 'arrow-down', $loop->last]] as [$move, $moveLabel, $icon, $off])
-                                                <form method="POST" action="{{ route('admin.boats.photos.update', [$boat, $photo->uuid]) }}">
-                                                    @csrf
-                                                    @method('PATCH')
-                                                    <input type="hidden" name="move" value="{{ $move }}">
-                                                    <button type="submit" @disabled($off) class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-navy-700 ring-1 ring-navy-200 hover:bg-navy-50 disabled:pointer-events-none disabled:opacity-40" aria-label="{{ $moveLabel }}: photo {{ $index + 1 }}"><i data-lucide="{{ $icon }}" class="h-3.5 w-3.5"></i>{{ $move === 'first' ? 'Cover' : '' }}</button>
-                                                </form>
-                                            @endforeach
-                                            <form method="POST" action="{{ route('admin.boats.photos.destroy', [$boat, $photo->uuid]) }}" class="ml-auto">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-red-700 ring-1 ring-red-200 hover:bg-red-50" aria-label="Delete photo {{ $index + 1 }}"><i data-lucide="trash-2" class="h-3.5 w-3.5"></i>Delete</button>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </li>
-                            @endforeach
-                        </ul>
-                    @endif
-                </x-admin.card>
+            {{-- Photo and block actions act at once. Their controls sit in the Photos / Blocked times cards inside the boat form and post these forms (form="…"). --}}
+            @foreach ($boat->photos as $photo)
+                <form id="photo-{{ $photo->uuid }}-alt" method="POST" action="{{ route('admin.boats.photos.update', [$boat, $photo->uuid]) }}">@csrf @method('PATCH')</form>
+                @foreach (['first', 'up', 'down'] as $move)
+                    <form id="photo-{{ $photo->uuid }}-{{ $move }}" method="POST" action="{{ route('admin.boats.photos.update', [$boat, $photo->uuid]) }}">@csrf @method('PATCH')<input type="hidden" name="move" value="{{ $move }}"></form>
+                @endforeach
+                <form id="photo-{{ $photo->uuid }}-delete" method="POST" action="{{ route('admin.boats.photos.destroy', [$boat, $photo->uuid]) }}">@csrf @method('DELETE')</form>
+            @endforeach
+            <form id="block-add" method="POST" action="{{ route('admin.boats.blocks.store', $boat) }}">@csrf</form>
+            @foreach ($blocks as $block)
+                <form id="block-{{ $block->getRouteKey() }}-delete" method="POST" action="{{ route('admin.boats.blocks.destroy', [$boat, $block]) }}">@csrf @method('DELETE')</form>
+            @endforeach
 
-                <x-admin.card title="Blocked times" id="blocks" class="scroll-mt-32">
-                    <p class="text-xs text-navy-500">The boat can't be booked during these times (Chicago time).</p>
-                    @if ($blocks->isEmpty())
-                        <p class="mt-4 text-sm text-navy-500">No upcoming blocks.</p>
-                    @else
-                        <ul class="mt-4 divide-y divide-navy-100">
-                            @foreach ($blocks as $block)
-                                <li class="flex items-start gap-3 py-3">
-                                    <div class="min-w-0 flex-1 text-sm">
-                                        <p class="font-bold text-navy-950">{{ $block->type->label() }}</p>
-                                        <p class="text-xs text-navy-500">{{ $block->starts_at->timezone($tz)->format('M j, g:i A') }} – {{ $block->ends_at->timezone($tz)->format('M j, g:i A') }}</p>
-                                        @if ($block->reason)<p class="text-xs text-navy-400">{{ $block->reason }}</p>@endif
-                                    </div>
-                                    <form method="POST" action="{{ route('admin.boats.blocks.destroy', [$boat, $block]) }}">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="rounded-lg p-1.5 text-red-700 hover:bg-red-50" aria-label="Remove this block"><i data-lucide="x" class="h-4 w-4"></i></button>
-                                    </form>
-                                </li>
-                            @endforeach
-                        </ul>
-                    @endif
-                    <form method="POST" action="{{ route('admin.boats.blocks.store', $boat) }}" class="mt-4 space-y-3 rounded-xl bg-navy-50 p-4">
-                        @csrf
-                        <x-form.input name="starts_at" id="block-starts" type="datetime-local" label="From" required :error="$errors->block->first('starts_at')" />
-                        <x-form.input name="ends_at" id="block-ends" type="datetime-local" label="Until" required :error="$errors->block->first('ends_at')" />
-                        <x-form.select name="type" id="block-type" label="Why" :options="$blockTypes" required :error="$errors->block->first('type')" />
-                        <x-form.input name="reason" id="block-reason" label="Note (optional)" maxlength="255" :error="$errors->block->first('reason')" />
-                        <x-button type="submit" variant="dark" size="block" icon-left="calendar-x">Block this time</x-button>
-                    </form>
-                </x-admin.card>
-            </div>
 
             @push('modals')
                 <x-admin.modal id="hide-boat" title="Hide {{ $boat->title }} from the site" :open="$errors->has('note')">

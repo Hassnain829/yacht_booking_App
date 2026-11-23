@@ -1188,6 +1188,77 @@ There are also in-app notifications (bell icon) for customers, owners, captains 
     - Real bug fixed during the tests: an empty "add a missing item" box arrived as null and made every boat save fail.
     - BoatListingTest (4): highlights / engine / new items in any list (case-insensitive reuse) and the boat page order; bad input; checklist + COI warning; the seeder → draft not public → fill in + publish → first on the home page with "New".
     - Browser (isolated server): the create / edit / amenities screens at 4 widths clean. The full client flow in Chrome: checklist showed the 5 missing items → price / harbor / policy / experiences + a new deck item saved → 4 photos → checklist 9/9 → Publish → first card on the home page; the boat page lists 28 amenity lines.
+  - **Follow-up (2026-11-23, found by the user while adding a boat):**
+    - **Desktop (lg+): the right-hand column follows the page** (`<x-admin.form-aside>`, `below-nav` on the boat form).
+      - Save / Cancel stay in that column, under "On the site", as before (`<x-admin.form-actions submit cancel>`).
+      - The column sticks under the top bar (and the boat section chips) while the form scrolls.
+      - A column taller than the screen scrolls on its own, and Save / Cancel stick to its bottom edge (the cards fade under them).
+      - `ui/admin.js` (`fitFormAside`) keeps the column no taller than the screen space below its top, so Save is in view from the top of the page too, not only once the column sticks.
+      - So the checklist and Save stay in view on the user's 1366 × 640 screen.
+      - *A bottom-of-screen bar was tried first on desktop and dropped: the user wants the buttons to stay in the sidebar.*
+    - **Phones / tablets (below lg): a Save bar at the bottom of the screen** (`<x-admin.form-bar submit cancel>`, the last element of the form).
+      - The user found Save stranded mid-page on a phone (the sidebar stacks under the form), with the Photos section after it.
+      - The bar sticks to the bottom while the form is in view and lands at the very end of the form, under the Trash card.
+      - The sidebar's Save / Cancel are hidden below lg, so there is one Save per screen size.
+      - On the boat form the bar also shows the checklist counter (a link to the checklist).
+      - Toasts sit above the bar (app.css). The admin `<html>` has `scroll-pb-24 lg:scroll-pb-0`, so Tab never hides a field behind it.
+    - These forms: boat, harbor, experience, add-on, captain and cancellation policy. Settings (one column) and the short amenity form keep their own buttons.
+    - **One Save for everything on the boat form: photos go up with "Save changes" / "Add boat".**
+      - The Photos card moved inside the boat form (the last card of the main column; the form is `multipart/form-data`). Its picker is part of the save, so there is no separate Upload button, and photos can be added on **Add a boat** too (the first one is the cover).
+      - `BoatRequest` validates them as the upload did: at most 10 per save, `SafeUpload::image()` at 25 MB, at most 30 per boat (checked before anything is saved).
+      - `BoatController::store` / `update` add them after the save with `BoatPhotoService::add` (audit `boat.photos_added`). The flash says "Changes saved. 2 photos added." / "… was added with 1 photo.".
+      - A failed save can't refill a file input, so the request flashes `photos_dropped`, and the Photos card says "The photo(s) you chose … were not uploaded … choose them again".
+      - Each photo's own buttons (description, cover, move, delete) still act at once. They post small forms rendered after the boat form, through `form="photo-{uuid}-…"`.
+      - The `POST /admin/boats/{boat}/photos` endpoint stays (tested); the screen no longer uses it.
+      - **Blocked times moved above Save** (user request): it is the card after Photos in the boat form's main column. Its add / remove controls post the `block-add` / `block-{ulid}-delete` forms rendered after the boat form (`form="…"`). So its required fields never block Save changes, and its errors don't count as unsaved boat edits. On phones the order is Photos → Blocked times → checklist → On the site → Trash → Save bar.
+    - **Unsaved changes guard** (`ui/admin.js`): when a record form has edits that aren't saved, leaving asks first ("Leave site?"). That covers a link, Cancel, a photo button, a block, Publish, Trash, or closing the tab. Saving never asks. A form that came back with errors counts as unsaved. Fields of other forms (`form="…"`) don't count.
+    - **Live listing checklist** (`resources/js/pages/admin-boat-form.js`):
+      - `BoatController::checklist()` items are keyed (description, highlights, specs, harbor, price, policy, photos, experiences, hours), and the JS has the same rule for each key over the form's fields. Each item turns green, and the counters change, as the admin types, ticks or picks.
+      - `photos` = the saved photos + the ones chosen in the Photos card.
+      - The Coast Guard warning (more than 6 guests, no COI) shows and hides live.
+      - Prices count only as plain numbers, like the server's `numeric` rule ("$300" stays amber).
+      - After a failed save, the list follows what was typed (old input), not the saved boat.
+      - **Add a boat** now shows the same checklist instead of the "How to add a boat" card.
+    - **Jump to the first error:** a failed save reloads the page at the top. Now:
+      - Every error message carries `data-field-error`: the x-form components and the custom groups (trip lengths, experiences, new items, hours, gratuity, refund rules, the boat status box).
+      - On load, `resources/js/ui/admin.js`:
+        - scrolls the first error to the middle of the screen;
+        - puts the cursor in its field (via `aria-describedby`, else the first control of its group);
+        - shows a toast ("Please fix the highlighted field." / "N fields need a fix.").
+      - It is skipped when a dialog reopens with its own errors.
+    - **QA:**
+      - 489 PHP tests (3,197 assertions), all passing. BoatListingTest:
+        - a failed save shows the tagged error, with Save in the sticky column after the checklist;
+        - the checklist items carry their keys and states;
+        - the COI warning is hidden or shown;
+        - Add shows 0 / 9.
+      - 42 JS tests (+3: line count, plain numbers, rule keys = checklist keys).
+      - Pint clean; build OK.
+      - Browser (isolated server):
+        - 8 forms × 390 / 768 / 1280 / 1440, with no overflow.
+        - On lg+, scrolled to 35 / 70 / 98 % of the form, the column stays in view and Save is on screen and clickable. At the end it doesn't cover the Photos card. This also holds at 1366 × 640 and 1024 × 700.
+        - On Add a boat, typing short + description, then 3 highlights, then specs, harbor, price, policy and an experience turned the items green one by one (1 → 8 / 9; hours start ticked).
+        - 10 guests without a COI shows the warning, and ticking the COI hides it.
+        - An empty hourly rate → the page reopens at the Pricing card with the cursor in the field. A missing boat name → the cursor in the name, and the checklist shows the typed price + policy (6 / 9) rather than the saved 4 / 9.
+      - **Phone round (after the user's mobile report):**
+        - 491 PHP tests (3,218 assertions), all passing. BoatListingTest:
+          - the page order: Photos inside the form → sidebar Save → phone bar → per-photo forms → Blocked times;
+          - Save changes / Add boat upload the chosen photos;
+          - a bad file, 11 photos, and over 30 per boat are refused, with nothing saved;
+          - a failed save asks to choose the photos again.
+        - 43 JS tests (+ the photos rule).
+        - Browser:
+          - 7 forms × 390 / 768 / 1280 / 1440: on phones and tablets the bar is shown and the sidebar Save hidden (the other way round on desktop). Save is on screen at 20 / 50 / 85 % of the form, and from the top of the page at 1280, 1440, 1366 × 640 and 1024 × 700.
+          - On a phone: chose 2 photos on The Azure → Save in the bar → "Changes saved. 2 photos added.", 7 photos.
+          - Live: 3 chosen photos keep "4+ photos" amber, 4 turn it green (both counters 4 → 5).
+          - A photo's "move down" still acts at once.
+          - The guard: a clean page leaves quietly, a photo description (its own form) leaves quietly, a boat field edit asks.
+      - **Blocked times move:**
+        - 491 PHP tests, all passing; the page-order test now includes Blocked times and `block-add` before Save.
+        - At 356 / 390 / 768 / 1280 / 1440, with no overflow: the order is Photos → Blocked times → checklist → Trash → Save bar. At the page end the bar is last, with Blocked times above it. Save is on screen and clickable while Blocked times is in view.
+        - Save changes works with the block fields empty.
+        - A block was added and removed from the new place.
+        - A backwards block jumps to its error, which doesn't count as unsaved boat edits.
 
 ### Phase 4 — Booking engine (payment stubbed)
 4.1 `QuoteService` (from `CYB.quote`, in cents) + unit tests: weekend, promo, gratuity, add-ons per guest, duration prices, rounding, deposit vs full.

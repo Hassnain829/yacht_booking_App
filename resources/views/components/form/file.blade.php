@@ -29,7 +29,7 @@
         <p id="{{ $id }}-hint" class="mt-1.5 text-xs text-navy-500">{{ $hint }}</p>
     @endif
     @if ($message)
-        <p id="{{ $id }}-error" class="mt-1.5 text-xs font-semibold text-red-600">{{ $message }}</p>
+        <p data-field-error id="{{ $id }}-error" class="mt-1.5 text-xs font-semibold text-red-600">{{ $message }}</p>
     @endif
     @if ($preview && $removeLabel)
         <x-form.checkbox :name="'remove_'.$name" :id="$id.'-remove'" class="mt-3">{{ $removeLabel }}</x-form.checkbox>

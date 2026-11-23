@@ -61,7 +61,7 @@
                                     <label class="{{ $box }}"><input type="checkbox" name="durations[]" value="{{ $hours }}" @checked(in_array($hours, $chosenDurations, true)) class="h-4 w-4 accent-brass-400">{{ $hours }} h</label>
                                 @endforeach
                             </div>
-                            @if ($errors->first('durations') ?: $errors->first('durations.*'))<p class="mt-1.5 text-xs font-semibold text-red-600">{{ $errors->first('durations') ?: $errors->first('durations.*') }}</p>@endif
+                            @if ($errors->first('durations') ?: $errors->first('durations.*'))<p data-field-error class="mt-1.5 text-xs font-semibold text-red-600">{{ $errors->first('durations') ?: $errors->first('durations.*') }}</p>@endif
                         </fieldset>
 
                         <x-form.input name="time_slots_text" label="Start times" :value="implode(', ', $experience->time_slots ?? [])" required maxlength="400" placeholder="17:30, 18:00, 18:30" hint="24-hour Chicago time, separated by commas." :error="$errors->first('time_slots') ?: $errors->first('time_slots.*')" />
@@ -74,7 +74,7 @@
                                     <label class="{{ $box }}"><input type="checkbox" name="weekdays[]" value="{{ $number }}" @checked(in_array($number, $chosenDays, true)) class="h-4 w-4 accent-brass-400">{{ $label }}</label>
                                 @endforeach
                             </div>
-                            @if ($errors->first('weekdays') ?: $errors->first('weekdays.*'))<p class="mt-1.5 text-xs font-semibold text-red-600">{{ $errors->first('weekdays') ?: $errors->first('weekdays.*') }}</p>@endif
+                            @if ($errors->first('weekdays') ?: $errors->first('weekdays.*'))<p data-field-error class="mt-1.5 text-xs font-semibold text-red-600">{{ $errors->first('weekdays') ?: $errors->first('weekdays.*') }}</p>@endif
                         </fieldset>
 
                         <div class="grid gap-5 sm:grid-cols-2">
@@ -92,7 +92,7 @@
                 </x-admin.card>
             </div>
 
-            <div class="min-w-0 space-y-6">
+            <x-admin.form-aside>
                 <x-admin.card title="Photo">
                     <x-form.file name="image" label="{{ $experience->image_path ? 'Replace the photo' : 'Photo' }}" :preview="$experience->imageUrl()" :preview-alt="$experience->name" remove-label="Remove the photo"
                         hint="JPG, PNG, WEBP or GIF up to {{ (int) config('media.max_kb') / 1024 }} MB, at least {{ config('media.image.min_width') }} × {{ config('media.image.min_height') }} px. Saved as WebP; location data is removed." />
@@ -110,15 +110,14 @@
                     </div>
                 </x-admin.card>
 
-                <div class="flex flex-col gap-2 sm:flex-row lg:flex-col">
-                    <x-button type="submit" variant="dark" size="lg">{{ $editing ? 'Save changes' : 'Add experience' }}</x-button>
-                    <x-button :href="route('admin.experiences.index')" variant="outline" size="lg">Cancel</x-button>
-                </div>
+                <x-admin.form-actions :submit="$editing ? 'Save changes' : 'Add experience'" :cancel="route('admin.experiences.index')" />
 
                 @if ($editing)
                     <x-admin.lifecycle :record="$experience" label="experience" :trash-blockers="$trashBlockers" :routes="['trash' => route('admin.experiences.trash', $experience)]" />
                 @endif
-            </div>
+            </x-admin.form-aside>
+
+            <x-admin.form-bar :submit="$editing ? 'Save changes' : 'Add experience'" :cancel="route('admin.experiences.index')" />
         </form>
     @endif
 @endsection

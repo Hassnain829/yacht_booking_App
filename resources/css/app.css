@@ -257,6 +257,12 @@
         transform: translateY(10px);
         transition: all 0.3s ease;
     }
+    /* Admin forms on phones / tablets: toasts sit above the sticky Save bar (x-admin.form-bar), never over it. */
+    @media (width < 64rem) {
+        body:has([data-form-bar]) #toast-wrap {
+            bottom: 5.5rem;
+        }
+    }
 
     /* Booking: step panels */
     .step-panel {

@@ -56,7 +56,7 @@
                 </x-admin.card>
             </div>
 
-            <div class="min-w-0 space-y-6">
+            <x-admin.form-aside>
                 <x-admin.card title="Photo">
                     <x-form.file name="image" label="{{ $harbor->image_path ? 'Replace the photo' : 'Photo' }}" :preview="$harbor->imageUrl()" :preview-alt="$harbor->name" remove-label="Remove the photo"
                         hint="JPG, PNG, WEBP or GIF up to {{ (int) config('media.max_kb') / 1024 }} MB, at least {{ config('media.image.min_width') }} × {{ config('media.image.min_height') }} px. Saved as WebP; location data is removed." />
@@ -69,16 +69,15 @@
                     </div>
                 </x-admin.card>
 
-                <div class="flex flex-col gap-2 sm:flex-row lg:flex-col">
-                    <x-button type="submit" variant="dark" size="lg">{{ $editing ? 'Save changes' : 'Add harbor' }}</x-button>
-                    <x-button :href="route('admin.harbors.index')" variant="outline" size="lg">Cancel</x-button>
-                </div>
+                <x-admin.form-actions :submit="$editing ? 'Save changes' : 'Add harbor'" :cancel="route('admin.harbors.index')" />
 
                 @if ($editing)
                     {{-- Last on every screen size. Only buttons here (type="button"); its dialogs and their forms are rendered outside this form. --}}
                     <x-admin.lifecycle :record="$harbor" label="harbor" :trash-blockers="$trashBlockers" :routes="['trash' => route('admin.harbors.trash', $harbor)]" />
                 @endif
-            </div>
+            </x-admin.form-aside>
+
+            <x-admin.form-bar :submit="$editing ? 'Save changes' : 'Add harbor'" :cancel="route('admin.harbors.index')" />
         </form>
     @endif
 @endsection

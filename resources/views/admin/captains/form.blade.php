@@ -62,7 +62,7 @@
                 </x-admin.card>
             </div>
 
-            <div class="min-w-0 space-y-6">
+            <x-admin.form-aside>
                 <x-admin.card title="Photo">
                     <x-form.file name="photo" label="{{ $captain->photo_path ? 'Replace the photo' : 'Photo' }}" :preview="$captain->photoUrl()" :preview-alt="$captain->name" remove-label="Remove the photo" hint="JPG, PNG, WEBP or GIF, at least 300 × 300 px." />
                 </x-admin.card>
@@ -76,15 +76,14 @@
                     </div>
                 </x-admin.card>
 
-                <div class="flex flex-col gap-2 sm:flex-row lg:flex-col">
-                    <x-button type="submit" variant="dark" size="lg">{{ $editing ? 'Save changes' : 'Add captain' }}</x-button>
-                    <x-button :href="route('admin.captains.index')" variant="outline" size="lg">Cancel</x-button>
-                </div>
+                <x-admin.form-actions :submit="$editing ? 'Save changes' : 'Add captain'" :cancel="route('admin.captains.index')" />
 
                 @if ($editing)
                     <x-admin.lifecycle :record="$captain" label="captain" :trash-blockers="$trashBlockers" :routes="['trash' => route('admin.captains.trash', $captain)]" />
                 @endif
-            </div>
+            </x-admin.form-aside>
+
+            <x-admin.form-bar :submit="$editing ? 'Save changes' : 'Add captain'" :cancel="route('admin.captains.index')" />
         </form>
 
         @if ($editing)

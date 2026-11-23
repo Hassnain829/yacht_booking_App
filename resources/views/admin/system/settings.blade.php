@@ -66,7 +66,7 @@
                                        @class([$field, 'border-red-500' => $errors->has($name), 'border-navy-200' => ! $errors->has($name)])>
                                 <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-navy-400">{{ $unit }}</span>
                             </div>
-                            @if ($errors->has($name))<p id="set-{{ $name }}-error" class="mt-1.5 text-xs font-semibold text-red-600">{{ $errors->first($name) }}</p>@elseif ($hint)<p class="mt-1.5 text-xs text-navy-500">{{ $hint }}</p>@endif
+                            @if ($errors->has($name))<p data-field-error id="set-{{ $name }}-error" class="mt-1.5 text-xs font-semibold text-red-600">{{ $errors->first($name) }}</p>@elseif ($hint)<p class="mt-1.5 text-xs text-navy-500">{{ $hint }}</p>@endif
                         </div>
                     @endforeach
                 </div>
@@ -83,7 +83,7 @@
                         </label>
                     @endforeach
                 </div>
-                @if ($errors->first('gratuity_options') ?: $errors->first('gratuity_options.*'))<p class="mt-1.5 text-xs font-semibold text-red-600">{{ $errors->first('gratuity_options') ?: $errors->first('gratuity_options.*') }}</p>@endif
+                @if ($errors->first('gratuity_options') ?: $errors->first('gratuity_options.*'))<p data-field-error class="mt-1.5 text-xs font-semibold text-red-600">{{ $errors->first('gratuity_options') ?: $errors->first('gratuity_options.*') }}</p>@endif
             </fieldset>
             <x-form.select name="default_gratuity" label="Chosen by default" :options="collect($gratuityChoices)->mapWithKeys(fn ($p) => [$p => $p.'%'])->all()" :value="$settings['default_gratuity']" required class="mt-5 max-w-xs" />
         </x-admin.card>
