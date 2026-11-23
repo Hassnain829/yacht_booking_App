@@ -16,26 +16,20 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
 /**
- * Admin → Amenities (PLAN 3.4.5): the lists boats pick from (highlights, features, water toys, navigation).
+ * Admin → Amenities (PLAN 3.4.5, 3.7): the lists boats pick from (AmenityGroup::forms(): comfort & tech, cabin,
+ * galley, bathroom, deck & swim, water toys, navigation). A boat's own selling points are its highlight lines.
  * Deleting one removes it from the boats that had it ticked (database cascade); it needs a reason and the
  * password, and the audit entry records how many boats had it.
  */
 class AmenityController extends Controller
 {
-    public const GROUP_LABELS = [
-        'highlight' => 'Highlights (shown on the boat page)',
-        'feature' => 'Features',
-        'extra' => 'Water toys & extras',
-        'navigation' => 'Navigation',
-    ];
-
     public function index(): View
     {
         Gate::authorize('viewAny', Amenity::class);
 
         return view('admin.amenities.index', [
             'groups' => Amenity::query()->withCount('boats')->orderBy('sort')->orderBy('name')->get()->groupBy(fn (Amenity $a) => $a->group->value),
-            'labels' => self::GROUP_LABELS,
+            'labels' => $this->labels(),
         ]);
     }
 
@@ -45,7 +39,9 @@ class AmenityController extends Controller
 
         $group = request()->query('group');
 
-        return $this->form(new Amenity(['group' => is_string($group) && AmenityGroup::tryFrom($group) ? $group : AmenityGroup::Feature->value, 'sort' => 0]));
+        $known = array_key_exists((string) $group, $this->labels());
+
+        return $this->form(new Amenity(['group' => $known ? $group : AmenityGroup::Feature->value, 'sort' => 0]));
     }
 
     public function store(AmenityRequest $request, RecordWriter $writer): RedirectResponse
@@ -85,8 +81,14 @@ class AmenityController extends Controller
     {
         return view('admin.amenities.form', [
             'amenity' => $amenity,
-            'labels' => self::GROUP_LABELS,
+            'labels' => $this->labels(),
             'icons' => IconNames::options(),
         ]);
+    }
+
+    /** @return array<string, string> group => label, in form order */
+    private function labels(): array
+    {
+        return collect(AmenityGroup::forms())->mapWithKeys(fn (AmenityGroup $group) => [$group->value => $group->label()])->all();
     }
 }

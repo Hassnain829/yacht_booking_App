@@ -55,7 +55,8 @@ class SeedersTest extends TestCase
         $this->assertSame(['flexible', 'moderate', 'strict'], CancellationPolicy::query()->orderBy('sort')->pluck('slug')->all());
         $this->assertSame(50, CancellationPolicy::query()->where('slug', 'moderate')->first()->refundPercent(100));
         $this->assertSame(count(config('listing.features')), Amenity::query()->where('group', AmenityGroup::Feature)->count());
-        $this->assertTrue(Amenity::query()->where('group', AmenityGroup::Highlight)->where('name', 'Flybridge sun lounge')->exists());
+        $this->assertTrue(Amenity::query()->where('group', AmenityGroup::Galley)->where('name', 'Microwave')->exists(), 'the cruiser / yacht lists (3.7)');
+        $this->assertSame(0, Amenity::query()->where('group', AmenityGroup::Highlight)->count(), 'highlights are each boat\'s own lines now');
 
         $this->assertSame(config('demo.pricing.tax_rate_bp'), Setting::query()->where('key', 'tax_rate_bp')->value('value'));
         $this->assertSame(config('demo.pricing.gratuity_options'), Setting::query()->where('key', 'gratuity_options')->first()->value);
@@ -91,7 +92,7 @@ class SeedersTest extends TestCase
         $this->assertSame('dusable', $azure->harbor->slug);
         $this->assertSame('moderate', $azure->cancellationPolicy->slug);
         $this->assertEqualsCanonicalizing($yacht['experiences'], $azure->experiences->pluck('slug')->all());
-        $this->assertEqualsCanonicalizing($yacht['amenities'], $azure->amenities->pluck('name')->all());
+        $this->assertSame($yacht['amenities'], $azure->highlights, 'the mockup\'s amenity lines are the boat\'s highlights (3.7)');
         $this->assertSame(BoatType::Sail, Boat::query()->where('slug', 'windward')->value('type'));
 
         $photos = $azure->photos;

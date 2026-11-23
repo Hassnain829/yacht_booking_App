@@ -40,6 +40,6 @@ class DatabaseSeeder extends Seeder
 
         // The catalog and the demo fleet (Phase 3.2). On the live server they run on their own:
         // php artisan db:seed --class=CatalogSeeder --force && php artisan db:seed --class=DemoFleetSeeder --force
-        $this->call([CatalogSeeder::class, DemoFleetSeeder::class]);
+        $this->call([CatalogSeeder::class, DemoFleetSeeder::class, ClientBoatSeeder::class]); // + the client's own boat (3.7), a draft
     }
 }

@@ -66,6 +66,13 @@
             ]" />
         </div>
     @else
+        {{-- Jump to a section (3.7): the form is long, so each card has an anchor. --}}
+        <nav class="sticky top-16 z-20 -mx-4 mt-6 flex gap-2 overflow-x-auto border-b border-navy-100 bg-shell/95 px-4 py-3 backdrop-blur md:-mx-8 md:px-8" aria-label="Boat form sections">
+            @foreach (['details' => 'Details', 'specs' => 'Specs', 'location' => 'Location', 'pricing' => 'Pricing', 'rules' => 'Rules', 'features' => 'Features', 'experiences' => 'Experiences', 'hours' => 'Hours'] + ($editing ? ['photos' => 'Photos', 'blocks' => 'Blocked times'] : []) as $anchor => $label)
+                <a href="#{{ $anchor }}" class="shrink-0 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-navy-600 ring-1 ring-navy-100 hover:text-navy-950 hover:ring-navy-300">{{ $label }}</a>
+            @endforeach
+        </nav>
+
         <form method="POST" action="{{ $editing ? route('admin.boats.update', $boat) : route('admin.boats.store') }}" class="mt-6 grid gap-6 lg:grid-cols-3">
             @csrf
             @if ($editing)
@@ -73,22 +80,24 @@
             @endif
 
             <div class="min-w-0 space-y-6 lg:col-span-2">
-                <x-admin.card title="Details">
+                <x-admin.card title="Details" id="details" class="scroll-mt-32">
                     <div class="grid gap-5 sm:grid-cols-2">
                         <x-form.input name="title" label="Name" :value="$boat->title" required maxlength="120" placeholder="e.g. The Azure" class="sm:col-span-2" />
                         <x-form.input name="slug" label="Web address" :value="$boat->slug" maxlength="120" placeholder="made from the name" hint="Leave empty to make it from the name." />
                         <x-form.input name="badge" label="Badge (optional)" :value="$boat->badge" maxlength="60" placeholder="e.g. Most popular" />
                         <x-form.input name="short" label="Short description" :value="$boat->short" maxlength="255" placeholder="One line for the boat cards" class="sm:col-span-2" />
+                        <x-form.textarea name="highlights_text" label="Highlights (one per line)" :value="implode(PHP_EOL, $boat->highlights ?? [])" rows="6" maxlength="1500"
+                            placeholder="e.g. Onboard generator" hint="Shown as the Amenities list on the boat page. Up to 12 short lines — what makes this boat special." :error="$errors->first('highlights') ?: $errors->first('highlights.*')" class="sm:col-span-2" />
                         <x-form.textarea name="description" label="Description" :value="$boat->description" rows="6" maxlength="5000" class="sm:col-span-2" />
                     </div>
                 </x-admin.card>
 
-                <x-admin.card title="Specs">
+                <x-admin.card title="Specs" id="specs" class="scroll-mt-32">
                     <div class="grid gap-5 sm:grid-cols-3">
                         <x-form.select name="type" label="Type" :options="['power' => 'Power', 'sail' => 'Sail']" :value="$boat->type?->value" required />
                         <x-form.select name="category" label="Category" :options="BoatOptions::categories($boat->category)" :value="$boat->category" required placeholder="Choose…" />
                         <x-form.input name="length_ft" type="number" label="Length (ft)" :value="$boat->length_ft" required min="10" max="400" />
-                        <x-form.input name="max_guests" type="number" label="Max guests" :value="$boat->max_guests" required min="1" max="150" />
+                        <x-form.input name="max_guests" type="number" label="Max guests" :value="$boat->max_guests" required min="1" max="150" hint="Captained charters: 6 at most without a Coast Guard COI." />
                         <x-form.input name="make" label="Make" :value="$boat->make" maxlength="80" />
                         <x-form.input name="model" label="Model" :value="$boat->model" maxlength="80" />
                         <x-form.input name="year" type="number" label="Year" :value="$boat->year" min="1950" :max="now()->year + 1" />
@@ -98,14 +107,15 @@
                         <x-form.input name="heads" type="number" label="Bathrooms" :value="$boat->heads" min="0" max="50" />
                         <x-form.input name="engine_count" type="number" label="Engines" :value="$boat->engine_count" min="0" max="10" />
                         <x-form.select name="engine_type" label="Engine type" :options="BoatOptions::engineTypes()" :value="$boat->engine_type" placeholder="—" />
+                        <x-form.input name="engine_model" label="Engine make & model" :value="$boat->engine_model" maxlength="80" placeholder="e.g. Volvo Penta 4.3L GXi" />
                         <x-form.input name="horsepower" type="number" label="Horsepower" :value="$boat->horsepower" min="0" max="20000" />
                         <x-form.input name="engine_year" type="number" label="Engine year" :value="$boat->engine_year" min="1950" :max="now()->year + 1" />
                         <x-form.input name="registration_no" label="Registration no." :value="$boat->registration_no" maxlength="60" class="sm:col-span-2" />
-                        <x-form.checkbox name="uscg_inspected" hidden-zero :checked="(bool) $boat->uscg_inspected" class="self-end pb-3">USCG inspected</x-form.checkbox>
+                        <x-form.checkbox name="uscg_inspected" hidden-zero :checked="(bool) $boat->uscg_inspected" class="self-end pb-3">USCG inspected (COI)<span class="block text-xs text-navy-500">Needed for more than 6 guests.</span></x-form.checkbox>
                     </div>
                 </x-admin.card>
 
-                <x-admin.card title="Location">
+                <x-admin.card title="Location" id="location" class="scroll-mt-32">
                     <div class="grid gap-5 sm:grid-cols-2">
                         <x-form.select name="harbor" label="Departs from" :options="$harbors" :value="$boat->harbor?->slug ?? \App\Models\Harbor::withTrashed()->whereKey($boat->harbor_id)->value('slug')" placeholder="No harbor" hint="Manage the list in Fleet → Harbors." class="sm:col-span-2" />
                         <x-form.input name="street" label="Street (optional)" :value="$boat->street" maxlength="255" class="sm:col-span-2" />
@@ -119,7 +129,7 @@
                     </div>
                 </x-admin.card>
 
-                <x-admin.card title="Pricing">
+                <x-admin.card title="Pricing" id="pricing" class="scroll-mt-32">
                     <div class="space-y-6">
                         <div class="grid gap-5 sm:grid-cols-3">
                             <x-form.input name="hourly_rate" label="Hourly rate (USD)" :value="Money::input($boat->hourly_rate_cents)" required inputmode="decimal" maxlength="10" />
@@ -148,7 +158,7 @@
                     </div>
                 </x-admin.card>
 
-                <x-admin.card title="Booking rules">
+                <x-admin.card title="Booking rules" id="rules" class="scroll-mt-32">
                     <div class="space-y-6">
                         <div class="grid gap-5 sm:grid-cols-3">
                             <x-form.select name="cancellation_policy" label="Cancellation policy" :options="$policies" :value="$boat->cancellationPolicy?->slug" required placeholder="Choose…" />
@@ -176,7 +186,7 @@
                     </div>
                 </x-admin.card>
 
-                <x-admin.card title="Experiences offered">
+                <x-admin.card title="Experiences offered" id="experiences" class="scroll-mt-32">
                     @if ($experiences->isEmpty())
                         <p class="text-sm text-navy-500">No experiences yet. <a href="{{ route('admin.experiences.create') }}" class="font-bold text-navy-950 underline">Add one</a> first.</p>
                     @else
@@ -204,25 +214,30 @@
                     @endif
                 </x-admin.card>
 
-                <x-admin.card title="Amenities">
-                    <div class="space-y-5">
+                <x-admin.card title="Features & amenities" id="features" class="scroll-mt-32">
+                    <p class="mb-4 text-xs text-navy-500">Tick what this boat has. Missing something? Type it in the list's box (separate several with commas); it is added to that list for every boat.</p>
+                    <div class="space-y-6">
                         @foreach ($groupLabels as $group => $label)
-                            @if ($amenityGroups->has($group))
-                                <fieldset>
-                                    <legend class="text-sm font-bold text-navy-800">{{ $label }}</legend>
-                                    <div class="mt-2 flex flex-wrap gap-2">
-                                        @foreach ($amenityGroups[$group] as $amenity)
-                                            <label class="{{ $box }}"><input type="checkbox" name="amenities[]" value="{{ $amenity->ulid }}" @checked(in_array($amenity->ulid, $chosenAmenities, true)) class="h-4 w-4 accent-brass-400">{{ $amenity->name }}</label>
-                                        @endforeach
-                                    </div>
-                                </fieldset>
-                            @endif
+                            <fieldset>
+                                <legend class="text-sm font-bold text-navy-800">{{ $label }}</legend>
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    @foreach ($amenityGroups[$group] ?? [] as $amenity)
+                                        <label class="{{ $box }}"><input type="checkbox" name="amenities[]" value="{{ $amenity->ulid }}" @checked(in_array($amenity->ulid, $chosenAmenities, true)) class="h-4 w-4 accent-brass-400">{{ $amenity->name }}</label>
+                                    @endforeach
+                                </div>
+                                <label for="new-{{ $group }}" class="sr-only">Add to {{ $label }}</label>
+                                <input id="new-{{ $group }}" name="new_amenities[{{ $group }}]" value="{{ old('new_amenities.'.$group) }}" maxlength="300" placeholder="+ Add a missing item to {{ strtolower($label) }}"
+                                       class="mt-2 w-full rounded-xl border border-dashed border-navy-200 bg-white px-3.5 py-2 text-sm text-navy-900 placeholder:text-navy-400 focus:border-navy-950 focus:outline-hidden sm:max-w-md">
+                                @if ($errors->first('new_amenity_names.'.$group) ?: $errors->first('new_amenity_names.'.$group.'.*'))
+                                    <p class="mt-1.5 text-xs font-semibold text-red-600">{{ $errors->first('new_amenity_names.'.$group) ?: $errors->first('new_amenity_names.'.$group.'.*') }}</p>
+                                @endif
+                            </fieldset>
                         @endforeach
-                        <p class="text-xs text-navy-500">Manage the lists in Fleet → Amenities.</p>
+                        <p class="text-xs text-navy-500">Rename or remove items in Fleet → Amenities.</p>
                     </div>
                 </x-admin.card>
 
-                <x-admin.card title="Weekly opening hours">
+                <x-admin.card title="Weekly opening hours" id="hours" class="scroll-mt-32">
                     <p class="mb-4 text-xs text-navy-500">Chicago time. Trips must start and end inside these hours.</p>
                     <div class="divide-y divide-navy-100">
                         @foreach ($days as $number => $day)
@@ -251,6 +266,35 @@
             </div>
 
             <div class="min-w-0 space-y-6">
+                @if ($checklist)
+                    @php($done = collect($checklist['items'])->where(0, true)->count())
+                    <x-admin.card title="Listing checklist">
+                        <x-slot:actions><span class="text-xs font-bold text-navy-500">{{ $done }} / {{ count($checklist['items']) }}</span></x-slot:actions>
+                        <ul class="space-y-2.5">
+                            @foreach ($checklist['items'] as [$ok, $label, $hint])
+                                <li class="flex items-start gap-2.5 text-sm">
+                                    <i data-lucide="{{ $ok ? 'circle-check' : 'circle-alert' }}" @class(['mt-0.5 h-4 w-4 shrink-0', 'text-emerald-600' => $ok, 'text-amber-500' => ! $ok])></i>
+                                    <span><span @class(['font-semibold', 'text-navy-950' => ! $ok, 'text-navy-500' => $ok])>{{ $label }}</span>@unless ($ok)<span class="block text-xs text-navy-500">{{ $hint }}</span>@endunless</span>
+                                </li>
+                            @endforeach
+                        </ul>
+                        @foreach ($checklist['warnings'] as $warning)
+                            <p class="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-900 ring-1 ring-amber-200"><i data-lucide="triangle-alert" class="h-4 w-4 shrink-0"></i>{{ $warning }}</p>
+                        @endforeach
+                        @if ($done === count($checklist['items']) && $boat->status !== BoatStatus::Published)
+                            <p class="mt-4 text-xs font-semibold text-emerald-700">Everything is in place — publish it with the button at the top.</p>
+                        @endif
+                    </x-admin.card>
+                @else
+                    <x-admin.card title="How to add a boat">
+                        <ol class="list-decimal space-y-1.5 pl-5 text-sm text-navy-600">
+                            <li>Fill in the details, price and features, and save.</li>
+                            <li>Add at least {{ config('listing.rules_engine.min_photos') }} photos (the form opens again after saving).</li>
+                            <li>Follow the checklist, then press <strong>Publish</strong>.</li>
+                        </ol>
+                    </x-admin.card>
+                @endif
+
                 <x-admin.card title="On the site">
                     <div class="space-y-5">
                         <x-form.checkbox name="booking_enabled" hidden-zero :checked="$boat->booking_enabled">Bookable<span class="block text-xs text-navy-500">Untick to show the “Unavailable” tag: the boat stays on the site but can't be booked.</span></x-form.checkbox>
@@ -283,7 +327,7 @@
         @if ($editing)
             {{-- Photos and blocks have their own forms (outside the boat form). --}}
             <div class="mt-6 grid gap-6 lg:grid-cols-3">
-                <x-admin.card title="Photos" id="photos" class="scroll-mt-24 lg:col-span-2">
+                <x-admin.card title="Photos" id="photos" class="scroll-mt-32 lg:col-span-2">
                     <x-slot:actions><span class="text-xs font-semibold text-navy-400">{{ $boat->photos->count() }} / {{ \App\Services\BoatPhotoService::MAX_PHOTOS }} · the first is the cover</span></x-slot:actions>
                     <form method="POST" action="{{ route('admin.boats.photos.store', $boat) }}" enctype="multipart/form-data" class="flex flex-col gap-3 rounded-xl bg-navy-50 p-4 sm:flex-row sm:items-end">
                         @csrf
@@ -331,7 +375,7 @@
                     @endif
                 </x-admin.card>
 
-                <x-admin.card title="Blocked times" id="blocks" class="scroll-mt-24">
+                <x-admin.card title="Blocked times" id="blocks" class="scroll-mt-32">
                     <p class="text-xs text-navy-500">The boat can't be booked during these times (Chicago time).</p>
                     @if ($blocks->isEmpty())
                         <p class="mt-4 text-sm text-navy-500">No upcoming blocks.</p>

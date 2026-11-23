@@ -173,7 +173,7 @@ export default function booking() {
                             <h3 class="mt-1 font-display text-2xl text-navy-950">${y.title}</h3>
                             <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-navy-500">
                                 <span class="inline-flex items-center gap-1"><i data-lucide="users" class="h-3.5 w-3.5"></i>Up to ${y.max_guests}</span>
-                                <span class="inline-flex items-center gap-1"><i data-lucide="star" class="h-3.5 w-3.5 fill-brass-400 text-brass-400"></i>${Number(y.rating_avg).toFixed(1)} (${y.reviews_count})</span>
+                                <span class="inline-flex items-center gap-1"><i data-lucide="star" class="h-3.5 w-3.5 fill-brass-400 text-brass-400"></i>${y.reviews_count > 0 && y.rating_avg ? `${Number(y.rating_avg).toFixed(1)} (${y.reviews_count})` : 'New'}</span>
                                 <span class="inline-flex items-center gap-1"><i data-lucide="ship-wheel" class="h-3.5 w-3.5"></i>${y.crew_count > 1 ? 'Captain + crew' : 'Captain'} included</span>
                             </div>
                             ${reason

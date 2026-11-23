@@ -53,14 +53,18 @@ class CatalogSeeder extends Seeder
         }
     }
 
-    /** The wizard's lists, plus each demo boat's highlights. */
+    /** The wizard's lists, plus the cruiser / yacht groups added in 3.7. */
     private function amenities(): void
     {
         $lists = [
             AmenityGroup::Feature->value => config('listing.features'),
             AmenityGroup::Extra->value => config('listing.extras'),
             AmenityGroup::Navigation->value => config('listing.navigation'),
-            AmenityGroup::Highlight->value => collect(config('demo.yachts'))->pluck('amenities')->flatten()->unique()->values()->all(),
+            // Added for cruisers and yachts (3.7). A boat's own selling points are its `highlights` lines.
+            AmenityGroup::Cabin->value => ['Cabin', 'Forward V-berth', 'Mid-cabin berth', 'Convertible dinette', 'Bedding & linens', 'Cabin storage'],
+            AmenityGroup::Galley->value => ['Galley', 'Microwave', 'Stove / cooktop', 'Coffee maker', 'Sink with running water', 'Ice maker'],
+            AmenityGroup::Bathroom->value => ['Private enclosed head', 'Electric flush toilet', 'Separate shower', 'Sink & vanity', 'Freshwater system'],
+            AmenityGroup::Deck->value => ['Large swim platform', 'Bimini top / shade', 'Sun pad', 'Cockpit table', 'Cockpit mats', 'Raw-water washdown'],
         ];
 
         foreach ($lists as $group => $names) {

@@ -174,7 +174,7 @@ class PublicCatalog
             ->with([
                 'photos',
                 'harbor',
-                'amenities' => fn ($query) => $query->where('group', AmenityGroup::Highlight),
+                'amenities',
                 'experiences' => fn ($query) => $query->where('experiences.is_active', true)->wherePivot('is_active', true),
             ])
             ->orderBy('sort')
@@ -218,6 +218,7 @@ class PublicCatalog
             'staterooms' => $boat->staterooms,
             'heads' => $boat->heads,
             'year' => $boat->year,
+            'engine_model' => $boat->engine_model,
             'harbor' => $boat->harbor ? $this->harbor($boat->harbor) : null,
             'hourly_rate_cents' => (int) $boat->hourly_rate_cents,
             'weekend_multiplier_bp' => $boat->weekend_multiplier_bp,
@@ -238,11 +239,33 @@ class PublicCatalog
             'gallery' => $boat->photos->isEmpty() ? [self::PLACEHOLDER] : $boat->photos->map(fn (Media $photo) => $this->path($photo->path))->values()->all(),
             'short' => $boat->short,
             'description' => $boat->description,
-            'amenities' => $boat->amenities->sortBy('sort')->pluck('name')->values()->all(),
+            // The boat page's "Amenities" list: the boat's own highlights first, then what is ticked (3.7).
+            'amenities' => $this->amenityList($boat),
             'experiences' => array_values(array_intersect($boat->experiences->pluck('slug')->all(), $liveExperiences)),
             'rules' => $boat->rules['not_allowed'] ?? [],
             'updated_at' => $boat->updated_at?->toIso8601String(), // the sitemap's lastmod
         ];
+    }
+
+    /** @return list<string> highlights, then the ticked amenities in list order, without repeats */
+    private function amenityList(Boat $boat): array
+    {
+        $order = array_flip(array_map(fn (AmenityGroup $group) => $group->value, AmenityGroup::forms()));
+        $ticked = $boat->amenities
+            ->sortBy(fn ($amenity) => [$order[$amenity->group->value] ?? 99, $amenity->sort, $amenity->name])
+            ->pluck('name')
+            ->all();
+        $seen = [];
+
+        return array_values(array_filter([...($boat->highlights ?? []), ...$ticked], function (string $name) use (&$seen) {
+            $key = mb_strtolower(trim($name));
+            if (isset($seen[$key])) {
+                return false;
+            }
+            $seen[$key] = true;
+
+            return true;
+        }));
     }
 
     /** @return array<string, mixed> */

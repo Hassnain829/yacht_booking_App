@@ -7,7 +7,6 @@ use App\Enums\BoatStatus;
 use App\Enums\BoatType;
 use App\Enums\CaptainSource;
 use App\Enums\LicenseType;
-use App\Models\Amenity;
 use App\Models\Boat;
 use App\Models\CancellationPolicy;
 use App\Models\Captain;
@@ -20,7 +19,7 @@ use Illuminate\Support\Str;
 /**
  * The mockup's 6 boats as real, editable records (PLAN 3.2, user decision B), with their photos stored
  * through MediaService (WebP + card / thumb sizes, about a minute for the 27 photos).
- * Run CatalogSeeder first (harbors, policies, experiences, highlights).
+ * Run CatalogSeeder first (harbors, policies, experiences, amenities).
  *
  * - Live server (`php artisan db:seed --class=DemoFleetSeeder --force`): every demo boat carries the
  *   Unavailable tag; the admin can edit, hide or delete them. Demo captains are NOT created there
@@ -90,13 +89,13 @@ class DemoFleetSeeder extends Seeder
             'sort' => $sort,
             'rating_avg' => $yacht['rating_avg'],
             'reviews_count' => $yacht['reviews_count'],
+            'highlights' => $yacht['amenities'], // the boat's own selling points (3.7)
             'booking_enabled' => $live ? false : $yacht['booking_enabled'],
             'unavailable_reason' => $live || ! $yacht['booking_enabled'] ? self::UNAVAILABLE_REASON : null,
         ]);
         // System fields: a published house boat (never fillable).
         $boat->forceFill(['ownership' => BoatOwnership::House, 'status' => BoatStatus::Published, 'published_at' => now()])->save();
 
-        $boat->amenities()->sync(Amenity::query()->where('group', 'highlight')->whereIn('name', $yacht['amenities'])->pluck('id'));
         $boat->experiences()->sync(Experience::query()->whereIn('slug', $yacht['experiences'])->pluck('id'));
 
         // Cover first: MediaService puts each new photo last.

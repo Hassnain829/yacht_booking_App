@@ -29,7 +29,11 @@
             <x-badge variant="unavailable" icon="calendar-x" class="absolute left-4 top-4">Unavailable</x-badge>
         @endif
         <span class="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-navy-950/70 px-2.5 py-1 text-xs font-bold text-white backdrop-blur">
-            <i data-lucide="star" class="h-3.5 w-3.5 fill-brass-400 text-brass-400"></i>{{ number_format((float) $yacht->rating_avg, 1) }}
+            @if ($yacht->reviews_count > 0 && $yacht->rating_avg)
+                <i data-lucide="star" class="h-3.5 w-3.5 fill-brass-400 text-brass-400"></i>{{ number_format((float) $yacht->rating_avg, 1) }}
+            @else
+                New {{-- no reviews yet (3.7): never "0.0" --}}
+            @endif
         </span>
         <span class="absolute bottom-4 left-4 inline-flex items-center gap-1.5 text-xs font-semibold text-white">
             <i data-lucide="ship-wheel" class="h-4 w-4 text-brass-300"></i>Captain included

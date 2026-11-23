@@ -279,7 +279,7 @@ If someone opens another user's record, the app returns **404, not 403**, so att
 - **boats** (one table for house and owner boats):
   - **Identity and status:** id, ulid, slug, **ownership** (house|owner), owner_id?, **status** (draft|pending_review|changes_requested|approved|published|paused|suspended|rejected|archived).
   - **Unavailable tag:** **booking_enabled** (false = Unavailable tag), unavailable_reason.
-  - **Description:** title, short, description.
+  - **Description:** title, short, description, **highlights** (json, the boat's own selling points shown as its Amenities list — 3.7).
   - **Specs:** type (power|sail), category, make, model, year, length_ft, registration_no, uscg_inspected, max_guests, staterooms, sleeps, beds, heads, engine_count, engine_type, horsepower, engine_year.
   - **Location:** harbor_id?, location_type, street, city, state, zip, country, lat, lng.
   - **Rules and booking settings:** cancellation_policy_id, rules (json), advance_notice_minutes, allow_multiple_bookings, buffer_minutes, **extensions_enabled** (default true, admin-only; R17, added in 3.4).
@@ -287,7 +287,7 @@ If someone opens another user's record, the app returns **404, not 403**, so att
   - **Pricing:** hourly_rate_cents, weekend_multiplier_bp?, min_hours, durations (json), duration_prices (json, optional fixed price per duration), cleaning_fee_cents, captain_rate_cents (customer-facing, per hour), crew_count.
   - **Display:** badge, is_featured, sort, rating_avg, reviews_count. These are entered by the admin until reviews are added.
   - **Listing workflow:** wizard_step, submitted_at, reviewed_at, review_notes, pending_changes (json), published_at, timestamps, deleted_at.
-- **amenities:** id, name, group (highlight|feature|extra|navigation), icon. Pivot **amenity_boat**.
+- **amenities:** id, ulid, name, group (feature|cabin|galley|bathroom|deck|extra|navigation; `highlight` only for a rollback — 3.7), icon. Pivot **amenity_boat**. Specs also have **engine_model** (3.7).
 - **boat_availability_rules:** boat_id, weekday (0–6), is_open, opens_at, closes_at.
 - **boat_blocks:** boat_id? (null = all boats), starts_at, ends_at, type (owner_block|maintenance|blackout|weather), reason, created_by.
 - **boat_insurances:**
@@ -1153,6 +1153,41 @@ There are also in-app notifications (bell icon) for customers, owners, captains 
     - 484 PHP tests (3,139 assertions) + 39 JS tests; Pint clean.
   - **Browser QA (isolated server):** sitemap and robots headers / content checked; the admin's switch → cache cleared → tag on the site; public pages at 390 / 1440 clean. One run logged a dropped connection to the Google Maps embed (external); two reruns were clean.
 **QA:** admin CRUD + policy tests; public pages show admin changes; upload security tests (wrong mime type, oversized file, PHP disguised as an image); sort/filter whitelist tests.
+
+3.7 **Flexible boat listings + the client's first boat** (added 2026-11-23 on the user's request, before Phase 4). ✅ done 2026-11-23.
+  - **Why:** the client sent their boat — a 2006 Cruisers Yachts 280 CXi, ~31 ft express cruiser, twin Volvo Penta 4.3L, generator, cabin, galley, enclosed head with shower — and the boat form had no place for much of it. Boats can be of any kind, so the form had to be flexible.
+  - **Research (2026-11-23):**
+    - Chicago charters are mostly Sea Ray Sundancer-style express cruisers (30–45 ft), party pontoons / catamarans, sailboats and motor yachts.
+    - Rates run about $200–$800 per hour; the captain fee is sometimes included, sometimes separate.
+    - A captained charter without a Coast Guard COI may carry at most 6 passengers.
+    - Competitors list galley, head / shower, swim platform, generator and similar features.
+    - Model specs: twin 4.3 GXi 225 hp, ~10 ft beam, ~100 gal fuel, V-berth + mid-cabin.
+  - **Built:**
+    - Migration `add_listing_details_to_boats`: `boats.highlights` (json) + `engine_model`. Each boat's old shared "highlight" amenities are copied into its own highlights and those shared rows are removed; rollback restores them (checked forward and back on a temp DB).
+    - Amenity groups **Cabin & sleeping, Galley, Bathroom, Deck & swim** (+ seeded items). The old groups are now labelled Comfort & tech / Water toys / Navigation & safety (`AmenityGroup::label()` / `forms()`).
+    - **Boat form:**
+      - a sticky section navigation;
+      - a **highlights** box (one per line, up to 12);
+      - the engine make & model;
+      - every feature list has an **"add a missing item" box** (comma-separated; a case-insensitive match reuses an existing item, otherwise the item is created in that list);
+      - a **listing checklist** (description, highlights, type / size / guests, harbor, price, policy, 4+ photos, experiences, hours) with a **Coast Guard 6-passenger warning**;
+      - "How to add a boat" steps on the create page.
+    - **Public:** a boat's Amenities list = its highlights, then its ticked features, without repeats. A boat with no reviews shows **"New"** instead of "0.0" (card, boat page, wizard).
+    - **`ClientBoatSeeder`** (also in DatabaseSeeder): the Cruisers 280 CXi as a **draft** house boat — featured, first in order, 6 guests, specs, 8 highlights, 20 ticked features, opening hours, and a charter description (the "for sale" wording of the client's text is left out). Safe to run again (skips an existing slug).
+  - **Photos:** not taken from the internet. No Chicago ad for this boat was found, and other 280 CXi photos online belong to other boats and their sellers (copyright, and misleading to guests). The client's own photos are needed; until then the boat stays a draft.
+  - **Still needed from the client (to publish):**
+    - the boat's name, if it has one;
+    - the harbor;
+    - the price per hour, captain fee, and fuel & cleaning fee;
+    - the cancellation policy;
+    - the experiences it offers;
+    - photos;
+    - the guest limit (6 unless it has a COI).
+  - **QA:**
+    - 488 PHP tests (3,190 assertions) + 39 JS tests; Pint clean.
+    - Real bug fixed during the tests: an empty "add a missing item" box arrived as null and made every boat save fail.
+    - BoatListingTest (4): highlights / engine / new items in any list (case-insensitive reuse) and the boat page order; bad input; checklist + COI warning; the seeder → draft not public → fill in + publish → first on the home page with "New".
+    - Browser (isolated server): the create / edit / amenities screens at 4 widths clean. The full client flow in Chrome: checklist showed the 5 missing items → price / harbor / policy / experiences + a new deck item saved → 4 photos → checklist 9/9 → Publish → first card on the home page; the boat page lists 28 amenity lines.
 
 ### Phase 4 — Booking engine (payment stubbed)
 4.1 `QuoteService` (from `CYB.quote`, in cents) + unit tests: weekend, promo, gratuity, add-ons per guest, duration prices, rounding, deposit vs full.

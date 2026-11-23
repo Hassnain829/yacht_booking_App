@@ -96,6 +96,8 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
      - `IconNames::PICKER` for icon choices;
      - `Money::toCents()` / `input()` for dollar fields.
    - Full-page sensitive forms (Settings, cancellation policies) put `<x-admin.confirm-fields>` at the bottom and use the default error bag.
+   - Boats (3.7): their selling points are `boats.highlights` lines, never shared "highlight" amenities. Feature lists come from `AmenityGroup::forms()`. Remember that an empty text input arrives as `null` (ConvertEmptyStringsToNull).
+   - Never use photos found online for a real listing: only the owner's / client's own photos (copyright, and they must show the actual boat).
 7. **Tests for every endpoint:** guest, wrong user (404), wrong role, invalid input (422), valid input, rate limit (429), duplicate request.
 
 ## Porting mockup classes from Tailwind v3 to v4

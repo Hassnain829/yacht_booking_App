@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Enums\AmenityGroup;
 use App\Enums\BoatType;
 use App\Enums\CaptainSource;
 use App\Http\Requests\Admin\Concerns\PreparesSlug;
@@ -41,6 +42,18 @@ class BoatRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->prepareSlug('title');
+
+        // "Add a missing item" boxes: comma-separated names per amenity group → lists.
+        $new = [];
+        foreach ((array) $this->input('new_amenities', []) as $group => $text) {
+            // An empty box arrives as null (ConvertEmptyStringsToNull) — that's simply "nothing to add".
+            $new[$group] = match (true) {
+                is_string($text) => array_values(array_filter(array_map('trim', explode(',', $text)), fn (string $name) => $name !== '')),
+                $text === null => [],
+                default => $text,
+            };
+        }
+        $this->merge(['highlights' => $this->lines('highlights_text'), 'new_amenity_names' => $new]);
     }
 
     /**
@@ -58,6 +71,9 @@ class BoatRequest extends FormRequest
             'short' => ['nullable', 'string', 'max:255', new PlainText],
             'description' => ['nullable', 'string', 'max:5000', new PlainText],
             'badge' => ['nullable', 'string', 'max:60', new PlainText],
+            'highlights_text' => ['nullable', 'string', 'max:1500'],
+            'highlights' => ['array', 'max:12'],
+            'highlights.*' => ['string', 'max:80', 'distinct', new PlainText],
             // Specs
             'type' => ['required', Rule::enum(BoatType::class)],
             // The wizard's list, plus the boat's current category (demo boats use the mockup's own, e.g. "Superyacht").
@@ -73,6 +89,7 @@ class BoatRequest extends FormRequest
             'heads' => ['nullable', 'integer', 'between:0,50'],
             'engine_count' => ['nullable', 'integer', 'between:0,10'],
             'engine_type' => ['nullable', 'string', Rule::in(array_keys(BoatOptions::engineTypes()))],
+            'engine_model' => ['nullable', 'string', 'max:80', new PlainText],
             'horsepower' => ['nullable', 'integer', 'between:0,20000'],
             'engine_year' => ['nullable', 'integer', 'between:1950,'.$year],
             'uscg_inspected' => ['required', 'boolean'],
@@ -121,6 +138,11 @@ class BoatRequest extends FormRequest
             // Amenities, experiences, opening hours
             'amenities' => ['nullable', 'array', 'max:200'],
             'amenities.*' => ['string', 'distinct', Rule::exists('amenities', 'ulid')],
+            'new_amenities' => ['nullable', 'array:'.implode(',', array_map(fn (AmenityGroup $g) => $g->value, AmenityGroup::forms()))],
+            'new_amenities.*' => ['nullable', 'string', 'max:300'],
+            'new_amenity_names' => ['array'],
+            'new_amenity_names.*' => ['array', 'max:10'],
+            'new_amenity_names.*.*' => ['string', 'max:80', new PlainText],
             'experiences' => ['nullable', 'array', 'max:100'],
             'experiences.*' => ['array:offered,fee'],
             'experiences.*.offered' => ['nullable', 'boolean'],
@@ -179,6 +201,10 @@ class BoatRequest extends FormRequest
             'harbor.exists' => 'Choose one of the harbors in the list.',
             'zip.regex' => 'Enter a 5-digit ZIP code (or ZIP+4).',
             'hourly_rate.min' => 'The hourly rate must be at least $:min.',
+            'highlights.max' => 'Keep it to 12 highlights or fewer.',
+            'highlights.*.max' => 'Each highlight can be at most 80 characters.',
+            'new_amenity_names.*.max' => 'Add at most 10 new items to one list at a time.',
+            'new_amenity_names.*.*.max' => 'Each new item can be at most 80 characters.',
         ];
     }
 
@@ -192,7 +218,7 @@ class BoatRequest extends FormRequest
         $data = $this->safe()->only([
             'title', 'slug', 'short', 'description', 'badge',
             'type', 'category', 'make', 'model', 'year', 'length_ft', 'max_guests', 'staterooms', 'sleeps', 'beds', 'heads',
-            'engine_count', 'engine_type', 'horsepower', 'engine_year', 'uscg_inspected', 'registration_no',
+            'engine_count', 'engine_type', 'engine_model', 'horsepower', 'engine_year', 'uscg_inspected', 'registration_no',
             'street', 'city', 'state', 'zip', 'lat', 'lng',
             'min_hours', 'crew_count', 'advance_notice_minutes', 'buffer_minutes', 'allow_multiple_bookings',
             'captain_source', 'renter_operated_allowed', 'fishing_charter', 'fuel_policy',
@@ -218,14 +244,15 @@ class BoatRequest extends FormRequest
             'cleaning_fee_cents' => Money::toCents($this->validated('cleaning_fee')),
             'captain_rate_cents' => Money::toCents($this->validated('captain_rate')),
             'rules' => ['not_allowed' => array_values($this->validated('not_allowed') ?? [])],
+            'highlights' => $this->validated('highlights') === [] ? null : $this->validated('highlights'),
             'unavailable_reason' => $this->boolean('booking_enabled') ? null : $this->validated('unavailable_reason'),
         ]);
     }
 
     /**
-     * Amenity ids (the form sends ulids), offered experiences (id => package fee override in cents or null) and the 7 opening-hour rows.
+     * Amenity ids (the form sends ulids) + new item names per group, offered experiences (id => package fee override in cents or null) and the 7 opening-hour rows.
      *
-     * @return array{amenities: list<int>, experiences: array<int, ?int>, hours: list<array{weekday: int, is_open: bool, opens_at: ?string, closes_at: ?string}>}
+     * @return array{amenities: list<int>, new_amenities: array<string, list<string>>, experiences: array<int, ?int>, hours: list<array{weekday: int, is_open: bool, opens_at: ?string, closes_at: ?string}>}
      */
     public function relationData(): array
     {
@@ -234,6 +261,7 @@ class BoatRequest extends FormRequest
 
         return [
             'amenities' => Amenity::query()->whereIn('ulid', $this->validated('amenities') ?? [])->pluck('id')->map(fn ($id) => (int) $id)->all(),
+            'new_amenities' => collect($this->validated('new_amenity_names') ?? [])->filter()->all(),
             'experiences' => $chosen->mapWithKeys(fn (array $row, string $slug) => [$ids[$slug] => Money::toCents($row['fee'] ?? null)])->all(),
             'hours' => collect(range(0, 6))->map(function (int $day) {
                 $row = $this->validated('hours')[$day] ?? [];

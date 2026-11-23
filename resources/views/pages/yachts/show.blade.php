@@ -50,7 +50,11 @@
                     @endif
                     <h1 class="mt-4 font-display text-5xl md:text-6xl">{{ $yacht->title }}</h1>
                     <div class="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-white/70">
-                        <span class="inline-flex items-center gap-1.5"><x-stars :rating="$yacht->rating_avg" /><strong class="ml-1 text-white">{{ number_format($yacht->rating_avg, 1) }}</strong> ({{ $yacht->reviews_count }} reviews)</span>
+                        @if ($yacht->reviews_count > 0 && $yacht->rating_avg)
+                            <span class="inline-flex items-center gap-1.5"><x-stars :rating="$yacht->rating_avg" /><strong class="ml-1 text-white">{{ number_format($yacht->rating_avg, 1) }}</strong> ({{ $yacht->reviews_count }} reviews)</span>
+                        @else
+                            <span class="inline-flex items-center gap-1.5"><i data-lucide="sparkles" class="h-4 w-4 text-brass-300"></i>New on Chicago Yacht Booking</span>
+                        @endif
                         <span class="inline-flex items-center gap-1.5"><i data-lucide="sailboat" class="h-4 w-4 text-brass-300"></i>{{ $yacht->length_ft }} ft {{ $yacht->category }}</span>
                         <span class="inline-flex items-center gap-1.5"><i data-lucide="users" class="h-4 w-4 text-brass-300"></i>Up to {{ $yacht->max_guests }} guests</span>
                         <span class="inline-flex items-center gap-1.5"><i data-lucide="map-pin" class="h-4 w-4 text-brass-300"></i>{{ $harbor?->name }}</span>

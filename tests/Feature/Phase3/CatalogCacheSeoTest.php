@@ -77,11 +77,12 @@ class CatalogCacheSeoTest extends TestCase
         $this->delete('/admin/experiences/fireworks', ['reason' => 'Season is over now.', 'password' => 'password', 'dialog' => 'trash-record'])->assertRedirect();
         $this->get('/experiences')->assertDontSee('id="fireworks"', false);
 
-        // an amenity deleted from every boat
-        $highlight = Amenity::query()->where('name', 'Flybridge sun lounge')->sole();
-        $this->get('/yachts/azure')->assertSee('Flybridge sun lounge');
-        $this->delete("/admin/amenities/{$highlight->ulid}", ['reason' => 'Not on the boat any more.', 'dialog' => 'destroy-record'])->assertRedirect();
-        $this->get('/yachts/azure')->assertDontSee('Flybridge sun lounge');
+        // an amenity deleted from every boat (ticked on The Azure through the boat form's service)
+        $table = Amenity::query()->create(['group' => 'deck', 'name' => 'Teak cockpit table', 'sort' => 1]);
+        app(BoatService::class)->save($azure->fresh(), [], ['amenities' => [$table->id], 'experiences' => $azure->experiences()->pluck('experiences.id')->mapWithKeys(fn ($id) => [$id => null])->all(), 'hours' => []], $this->admin);
+        $this->get('/yachts/azure')->assertSee('Teak cockpit table');
+        $this->delete("/admin/amenities/{$table->ulid}", ['reason' => 'Not on the boat any more.', 'dialog' => 'destroy-record'])->assertRedirect();
+        $this->get('/yachts/azure')->assertDontSee('Teak cockpit table');
 
         // publishing / hiding a boat
         $golden = Boat::query()->where('slug', 'golden')->sole();
@@ -94,12 +95,15 @@ class CatalogCacheSeoTest extends TestCase
     public function test_the_boat_form_clears_the_cache_when_only_its_relations_change(): void
     {
         $azure = Boat::query()->where('slug', 'azure')->sole();
-        $this->get('/yachts/azure')->assertSee('Flybridge sun lounge'); // build the cache
+        $generator = Amenity::query()->create(['group' => 'feature', 'name' => 'Generator', 'sort' => 1]);
+        $azure->amenities()->attach($generator);
+        PublicCatalog::flush(); // attach() fires no model events
+        $this->get('/yachts/azure')->assertSee('Generator'); // build the cache
 
         $this->actingAs($this->admin)->get("/admin/boats/{$azure->ulid}/edit")->assertOk();
         app(BoatService::class)->save($azure->fresh(), [], ['amenities' => [], 'experiences' => [], 'hours' => []], $this->admin);
 
-        $this->get('/yachts/azure')->assertDontSee('Flybridge sun lounge');
+        $this->get('/yachts/azure')->assertDontSee('>Generator<', false)->assertSee('Flybridge sun lounge'); // a highlight line stays
         $this->assertSame([], app(PublicCatalog::class)->yacht('azure')->experiences);
     }
 

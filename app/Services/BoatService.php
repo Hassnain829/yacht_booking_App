@@ -117,7 +117,7 @@ class BoatService
     }
 
     /**
-     * @param  array{amenities: list<int>, experiences: array<int, ?int>, hours: list<array<string, mixed>>}  $relations
+     * @param  array{amenities: list<int>, new_amenities?: array<string, list<string>>, experiences: array<int, ?int>, hours: list<array<string, mixed>>}  $relations
      * @return array{0: array<string, mixed>, 1: array<string, mixed>} [before, after] of what changed
      */
     private function syncRelations(Boat $boat, array $relations): array
@@ -125,9 +125,20 @@ class BoatService
         $before = [];
         $after = [];
 
+        // Items the admin typed into "Add a missing item": reuse one with that name in that list, else create it.
+        $chosen = $relations['amenities'];
+        foreach ($relations['new_amenities'] ?? [] as $group => $names) {
+            foreach ($names as $name) {
+                // Case-insensitive match ("generator" = "Generator"): MySQL's unique index would refuse a twin anyway.
+                $existing = Amenity::query()->where('group', $group)->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->value('id');
+                $chosen[] = $existing ?? Amenity::query()->create(['group' => $group, 'name' => $name, 'sort' => 100])->getKey();
+            }
+        }
+        $chosen = array_values(array_unique($chosen));
+
         $oldAmenities = $boat->amenities()->pluck('amenities.id')->sort()->values()->all();
-        $boat->amenities()->sync($relations['amenities']);
-        $newAmenities = collect($relations['amenities'])->sort()->values()->all();
+        $boat->amenities()->sync($chosen);
+        $newAmenities = collect($chosen)->sort()->values()->all();
         if ($oldAmenities !== $newAmenities) {
             $names = fn (array $ids) => Amenity::query()->whereIn('id', $ids)->orderBy('name')->pluck('name')->all();
             [$before['amenities'], $after['amenities']] = [$names($oldAmenities), $names($newAmenities)];

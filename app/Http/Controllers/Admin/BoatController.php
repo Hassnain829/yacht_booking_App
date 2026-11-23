@@ -217,12 +217,43 @@ class BoatController extends Controller
             'harbors' => $harbors->filter()->mapWithKeys(fn (Harbor $h) => [$h->slug => $h->name.($h->is_active ? '' : ' (hidden)')])->all(),
             'policies' => CancellationPolicy::query()->where('is_active', true)->orderBy('sort')->get()->mapWithKeys(fn (CancellationPolicy $p) => [$p->slug => $p->name])->all(),
             'amenityGroups' => Amenity::query()->orderBy('sort')->orderBy('name')->get()->groupBy(fn (Amenity $a) => $a->group->value),
-            'groupLabels' => [AmenityGroup::Highlight->value => 'Highlights (shown on the boat page)', AmenityGroup::Feature->value => 'Features', AmenityGroup::Extra->value => 'Water toys & extras', AmenityGroup::Navigation->value => 'Navigation'],
+            'groupLabels' => collect(AmenityGroup::forms())->mapWithKeys(fn (AmenityGroup $g) => [$g->value => $g->label()])->all(),
             'experiences' => Experience::query()->orderBy('sort')->orderBy('name')->get(),
+            'checklist' => $boat->exists ? $this->checklist($boat) : null,
             'blocks' => $boat->exists ? $boat->blocks()->where('ends_at', '>', now()->subDay())->orderBy('starts_at')->get() : collect(),
             'blockTypes' => collect([BlockType::Maintenance, BlockType::Blackout, BlockType::Weather])->mapWithKeys(fn (BlockType $t) => [$t->value => $t->label()])->all(),
             'trashBlockers' => $boat->exists && ! $boat->trashed() ? $boat->trashBlockers() : [],
             'deleteBlockers' => $boat->trashed() ? $boat->permanentDeleteBlockers() : [],
         ]);
+    }
+
+    /**
+     * What a boat still needs to look right on the site (shown beside the form, 3.7). Nothing here blocks saving;
+     * the client sees at a glance what to fill in before publishing.
+     *
+     * @return array{items: list<array{0: bool, 1: string, 2: string}>, warnings: list<string>}
+     */
+    private function checklist(Boat $boat): array
+    {
+        $minPhotos = (int) config('listing.rules_engine.min_photos');
+
+        return [
+            'items' => [
+                [filled($boat->description) && filled($boat->short), 'Description', 'A one-line summary and a full description.'],
+                [count($boat->highlights ?? []) >= 3, 'Highlights', 'At least 3 short selling points for the boat page.'],
+                [$boat->category && $boat->length_ft && $boat->max_guests, 'Type, size and guests', 'Category, length and the guest limit.'],
+                [$boat->harbor_id !== null, 'Departure harbor', 'Where guests board.'],
+                [(int) $boat->hourly_rate_cents > 0, 'Hourly price', 'The rate guests pay per hour.'],
+                [$boat->cancellation_policy_id !== null, 'Cancellation policy', 'Flexible, moderate or strict.'],
+                [$boat->photos->count() >= $minPhotos, "{$minPhotos}+ photos", 'Clear, bright photos of this boat: outside, deck and cabin.'],
+                [$boat->experiences->isNotEmpty(), 'Experiences offered', 'At least one, e.g. Sunset Cruise.'],
+                [$boat->availabilityRules->where('is_open', true)->isNotEmpty(), 'Opening hours', 'The days and hours trips can run.'],
+            ],
+            'warnings' => array_values(array_filter([
+                ! $boat->uscg_inspected && $boat->max_guests > 6
+                    ? "Up to {$boat->max_guests} guests, but no Coast Guard inspection (COI) is ticked. A captained charter without a COI may carry at most 6 passengers."
+                    : null,
+            ])),
+        ];
     }
 }

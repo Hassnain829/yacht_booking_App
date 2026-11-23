@@ -30,7 +30,7 @@ class AmenityRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:80', new PlainText, Rule::unique('amenities', 'name')->where('group', $this->input('group'))->ignore($amenity instanceof Amenity ? $amenity->getKey() : null)],
-            'group' => ['required', Rule::enum(AmenityGroup::class)],
+            'group' => ['required', Rule::enum(AmenityGroup::class)->only(AmenityGroup::forms())],
             'icon' => ['nullable', 'string', Rule::in(IconNames::PICKER)],
             'sort' => ['required', 'integer', 'between:0,9999'],
         ];

@@ -27,9 +27,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * a request can never make a boat someone else's or publish it (CLAUDE.md security standard).
  */
 #[Fillable([
-    'slug', 'title', 'short', 'description',
+    'slug', 'title', 'short', 'description', 'highlights',
     'type', 'category', 'make', 'model', 'year', 'length_ft', 'registration_no', 'uscg_inspected', 'max_guests',
-    'staterooms', 'sleeps', 'beds', 'heads', 'engine_count', 'engine_type', 'horsepower', 'engine_year',
+    'staterooms', 'sleeps', 'beds', 'heads', 'engine_count', 'engine_type', 'engine_model', 'horsepower', 'engine_year',
     'harbor_id', 'location_type', 'street', 'city', 'state', 'zip', 'country', 'lat', 'lng',
     'cancellation_policy_id', 'rules', 'advance_notice_minutes', 'allow_multiple_bookings', 'buffer_minutes', 'extensions_enabled',
     'renter_operated_allowed', 'captain_source', 'fishing_charter', 'fuel_policy',
@@ -185,6 +185,7 @@ class Boat extends Model implements Trashable
             'fishing_charter' => 'boolean',
             'is_featured' => 'boolean',
             'rules' => 'array',
+            'highlights' => 'array', // the boat's own selling points, shown on its page (3.7)
             'durations' => 'array',
             'duration_prices' => 'array',
             'pending_changes' => 'array',
