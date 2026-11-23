@@ -1,6 +1,6 @@
 # Chicago Yacht Booking — project rules
 
-A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. Customers book trips, owners list boats, and one admin runs everything.
+A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. Customers book trips, owners list boats, captains take trips from their own dashboard (Phase 8), and one admin runs everything.
 
 - **Master plan:** [docs/PLAN.md](docs/PLAN.md). It holds the decisions, DB schema, business rules, the security standard (§8.2), the phases and the QA gate (§15). Read the relevant section before every step, and update the plan when a decision changes.
 - **Design source:** `C:\Users\DETRIOTS\Desktop\Yacht-Web` (static HTML/Tailwind v3/JS mockup). Port it to Blade **1:1**. Never redesign anything without asking.

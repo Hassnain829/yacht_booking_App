@@ -1,8 +1,14 @@
 # Chicago Yacht Booking — Platform Plan
 
-**Status:** v0.3 (2026-11-21), with the user's decisions applied. R2–R7 are confirmed; R1 has a recommendation (Stellar Business). Nothing has been built yet.
+**Status:** v0.4 (2026-11-23), with the user's decisions applied. R2–R17 are confirmed; R1 has a recommendation (Stellar Business). Phases 0–2 and 3.1–3.3 are built (§14).
 **Design source:** `C:\Users\DETRIOTS\Desktop\Yacht-Web`, a static HTML/Tailwind/JS mockup with 13 pages.
 **Target:** this Laravel 13 app (`D:\Yacht_laravel\Yacht-Booking`).
+
+**What changed in v0.4 (2026-11-23):**
+- **Captains get their own account and dashboard** (D19, replaces "no captain login"): they apply or are invited, the admin approves them, and they see trip offers, their trips, availability and pay.
+- **Trip offers:** the admin offers a paid trip to all eligible captains or to selected ones; **the first captain to accept gets it** (§7.8).
+- **Trip extensions:** during the trip, the customer can add time and pay for it, if the boat and the captain are free (D20, §7.9).
+- Phase 8 is rewritten for both (§14).
 
 **What changed in v0.2:**
 - The admin dashboard is custom (no Filament).
@@ -24,6 +30,8 @@ A secure, role-based yacht charter marketplace for Chicago:
 
 - **Customers** book a boat, an experience, a date, a duration and a time slot, then pay online and manage their trips.
 - **Boat owners** list boats with the List Your Boat wizard, manage them, see bookings and withdraw their earnings.
+- **Captains** accept trip offers, see their trips and pay, and are told about every change in their own dashboard (D19).
+- **Customers on a running trip** can add time and pay for it, if the boat and the captain are free (D20).
 - **The admin** runs everything: fleet, experiences, prices, captains, bookings, payments, refunds, owner payouts and deductions, the contact inbox, site content and users.
 - The look stays the same as the mockup: navy/brass, Playfair Display + Manrope.
 - **Fast to v1:** only core features first, with optional features in §17 "Later".
@@ -39,7 +47,7 @@ A secure, role-based yacht charter marketplace for Chicago:
 | # | Decision |
 |---|---|
 | D1 | Laravel Blade + Tailwind. The mockup design is the source of truth. The design is ported first (Phase 1). |
-| D2 | Role-based access: **customer**, **owner** and **admin**. One admin for now; staff/manager roles later. |
+| D2 | Role-based access: **customer**, **owner**, **captain** (added 2026-11-23, D19) and **admin**. One admin for now; staff/manager roles later. |
 | D3 | **Custom admin dashboard**, built from scratch with Laravel defaults (no Filament). |
 | D4 | Interactive flows use **vanilla JS (ES modules via Vite) + JSON endpoints**. No Livewire/Alpine. The endpoints must be hardened (§8.2). |
 | D5 | Auth: **Laravel Fortify** with our own Blade screens. |
@@ -47,7 +55,7 @@ A secure, role-based yacht charter marketplace for Chicago:
 | D7 | **Owners set their own prices** in the wizard (a new Pricing step); the admin can adjust them before approval. |
 | D8 | **Platform commission** on owner boats is configurable: a global % plus a per-owner override. Placeholder 20%; the client gives the final figure. |
 | D9 | **Owner payouts:** earnings become withdrawable **72 hours after the trip ends**. The owner requests a withdrawal → the admin approves → Stripe Connect transfer. If a customer complains about the boat, the admin can **deduct** from the owner's earnings. The admin can also pause an owner's payouts or hold one payment. |
-| D10 | **Captains:** the customer sees a fixed "Captain & crew" fee at checkout. The admin assigns the captain later, and **the captain gets an email**. The captain's email (provided by the captain) is stored on the captain profile and shown in the assignment form. **No captain login for now.** |
+| D10 | **Captains:** the customer sees a fixed "Captain & crew" fee at checkout. After payment the captain is found through **trip offers** (first to accept) or **assigned directly** by the admin (§7.8). The captain is told in their dashboard, by the bell and by email. *(Updated 2026-11-23: "no captain login" replaced by D19.)* |
 | D11 | The admin adds, edits and offers experiences. Boats the admin adds can go live directly; owner boats need approval. |
 | D12 | Boats that can't be booked show an **Unavailable** tag. |
 | D13 | **Refunds follow Boatsetter-style policies** (Flexible / Moderate / Strict), based on hours before the trip. The rules can be edited, and the admin can always issue a custom refund (§7.4). |
@@ -55,7 +63,9 @@ A secure, role-based yacht charter marketplace for Chicago:
 | D15 | Files are stored on disk in the project (`storage/`). **The DB stores only the path.** |
 | D16 | **Hosting: Namecheap.** The plan type is still open (R1). |
 | D17 | **Laravel Boost (dev-only) is added just before Phase 2** (decided 2026-11-21) for version-correct docs search, DB schema/query, logs and browser-logs tools. Its guidelines live only inside the `<laravel-boost-guidelines>` block; our `CLAUDE.md` rules outside that block stay the source of truth. Phase 0–1 run without it. |
-| D18 | Optional features (reviews, waiver, deposit hold, messaging, SMS, gift cards, captain portal, staff roles) come **later**. |
+| D18 | Optional features (reviews, waiver, deposit hold, messaging, SMS, gift cards, staff roles) come **later**. *(The captain portal moved into v1 on 2026-11-23, D19.)* |
+| D19 | **Captain portal** (user decision 2026-11-23). Captains have a login with the `captain` role and a dashboard at `/captain`: trip offers (accept / decline), their trips, acknowledging an assignment, their availability, profile + license documents, and pay. A captain account is created by **applying** (admin approval needed) or by an **admin invite**. Built in Phase 8 (§7.8). |
+| D20 | **Trip extensions** (user decision 2026-11-23). During the trip, until a cut-off before the end, the customer can **add time and pay for it** as a separate payment. It is allowed only if the boat **and** the captain are free for the extra time. The captain, the owner (owner boats) and the admin are told when it is paid. Built in Phase 8 (§7.9). |
 
 ### 2.2 Small confirmations
 
@@ -66,11 +76,18 @@ A secure, role-based yacht charter marketplace for Chicago:
 | R3 | Minimum withdrawal amount? | ✅ $50 (stored as a setting). |
 | R4 | How long after the trip can a customer complain? | ✅ 72 hours, the same as the payout delay. |
 | R5 | What happens when an owner cancels a confirmed trip? | ✅ The customer gets a full refund, and **the admin can deduct a penalty** from the owner. Nothing is deducted automatically. |
-| R6 | Does the captain's email include customer details? | ✅ **No.** The captain's email contains **no customer information** (§7.8). |
+| R6 | Does the captain see customer details? | ✅ **Only the booking reference and the customer's name** (updated 2026-11-23). The captain recognizes the group at the dock by the reference (e.g. `CYB-7K3P9Q`) and the customer's **full name** (first + last name, the user's choice), shown in the captain dashboard. Never the phone, email, address or customer notes. **Emails to the captain carry the reference only**, no name (§7.8). |
 | R7 | Commission %? | ✅ 20% for now (stored as a setting). |
 | R8 | Emails during development? | ✅ `MAIL_MAILER=log` locally (emails go to `storage/logs/laravel.log`). Real SMTP (Namecheap business mailbox) in Phase 9/11. (2026-11-22) |
 | R9 | Must customers verify their email? | ✅ Yes, **before paying** (checkout requires `verified`, Phase 4). Owners verify before listing a boat (Phase 2.3). (2026-11-22) |
 | R10 | Is 2FA mandatory for the admin? | ✅ **No — the admin's choice** (user decision 2026-11-22, replaces "mandatory"): on / off in Admin → Settings → Security. Recommended on the live site. Owner withdrawals still need 2FA (Phase 7). |
+| R11 | How does a captain get an account? | ✅ **Both ways** (2026-11-23): the captain applies (`/captains/apply`, with license details and documents) and waits for the admin's approval, **or** the admin invites a captain by email. |
+| R12 | Trip offer timing? | ✅ An offer stays open **24 hours** by default (the admin can change it per request). A captain can **release** an accepted trip up to **48 hours** before the start, with a reason; after that only the admin can remove them. Both are settings. |
+| R13 | Does a trip offer show the captain's pay? | ✅ **Yes:** the pay for that trip (pay rate × hours) is shown on the offer. |
+| R14 | Extension step? | ✅ **Whole hours only** (user decision 2026-11-23): the customer picks +1 h, +2 h, +3 h, … up to the free time. No half hours. |
+| R15 | When can a trip be extended? | ✅ **Only during the trip**, until **30 minutes before it ends** (a setting). Adding hours before the trip is done by the admin for now. |
+| R16 | Is an extension refundable? | ✅ **No**, once paid. Only the admin can refund it (e.g. the trip ended early because of the weather). |
+| R17 | Extensions on owner boats? | ✅ **Allowed.** Every boat has an **"Allow trip extensions"** switch, **on by default**, controlled by the admin. |
 
 ---
 
@@ -104,9 +121,14 @@ A secure, role-based yacht charter marketplace for Chicago:
 - **One `users` table and one login page** for everyone.
 - Signing up makes you a **customer**. Clicking **List Your Boat** makes you an **owner**: same email, same password. An owner can still book trips.
 - When an owner logs in, the header account menu also shows **"Owner dashboard"**.
+- **Captains** (D19, R11) get the `captain` role in one of two ways:
+  - They **apply** at `/captains/apply`. This creates the account and a captain profile with `application_status = pending`. Until the admin approves, the captain area shows only "Your application is being reviewed" and no trips.
+  - Or the admin creates the captain profile and sends an **invite** (a signed link, valid 7 days). The captain sets a password and is approved straight away.
+  - The header account menu shows **"Captain dashboard"**. A captain can still book trips as a customer.
+  - An owner account can't also be a captain in v1 (one role per account). An owner who wants to drive platform trips uses a separate email.
 - **The admin never signs up publicly.** The account is created with `php artisan app:create-admin`. 2FA is the admin's choice (R10: Settings → Security, recommended), and after login the admin goes to `/admin`.
 - **The admin dashboard shows everyone:**
-  - A Users screen with tabs for Customers and Owners.
+  - A Users screen with tabs for Customers, Owners and Captains.
   - Each user's page shows their bookings, payments, boats, earnings, withdrawals, complaints, login history and admin notes.
   - Actions on a user: suspend, ban, reset 2FA.
 
@@ -127,9 +149,18 @@ A secure, role-based yacht charter marketplace for Chicago:
 4. Before the first withdrawal: connect payouts (Stripe Connect) and turn on 2FA.
 5. See bookings, earnings and withdrawals in the owner dashboard.
 
+**Captain** (D19, §7.8)
+
+1. Apply (or accept the admin's invite) → verify email → the admin approves.
+2. Mark days off in "Availability".
+3. Get trip offers (dashboard, bell, email) → accept or decline. The first captain to accept gets the trip.
+4. Or be assigned directly by the admin → press **Acknowledge** so the admin knows it was seen.
+5. See upcoming trips, trip changes and extensions, and pay in the captain dashboard.
+
 **Redirect after login**
 
 - Admin → `/admin`.
+- Captain → `/captain`.
 - Owner with listings → `/owner`.
 - Everyone else → the page they were on, or `/account/trips`.
 
@@ -139,27 +170,32 @@ A secure, role-based yacht charter marketplace for Chicago:
 |---|---|---|
 | `customer` | Anyone who registers | Default. |
 | `owner` | Users who list a boat | Set by the system when the first listing starts. Includes all customer abilities. |
+| `captain` | Platform captains (D19) | Set by the system when a captain applies or accepts an invite. Sees trips only once the admin has approved them. Includes all customer abilities. |
 | `admin` | The client / you (one account) | Full rights. Only created with the artisan command. 2FA optional (R10), recommended. |
 | *(later)* `manager`, `support` | Staff | Added later. |
 
 How it works in code:
 
-- The `users.role` column is **never mass-assignable**. Only system actions change it: registration sets `customer`, the first listing sets `owner`, and the artisan command creates `admin`.
+- The `users.role` column is **never mass-assignable**. Only system actions change it: registration sets `customer`, the first listing sets `owner`, a captain application or invite sets `captain`, and the artisan command creates `admin`.
 - Every permission is a **named Gate**, for example `Gate::define('approve-payouts', fn ($u) => $u->isAdmin())`. Controllers and views only check these names (`can('approve-payouts')`).
 - Staff roles can be added later by changing the Gate definitions. Controllers don't change.
-- **Ownership** is checked by **Policies** (`BoatPolicy`, `BookingPolicy`, `PayoutPolicy`, `ComplaintPolicy`).
+- **Ownership** is checked by **Policies** (`BoatPolicy`, `BookingPolicy`, `PayoutPolicy`, `ComplaintPolicy`, `CaptainTripOfferPolicy`).
 
 ### 4.4 Access matrix
 
-| Area | Guest | Customer | Owner | Admin |
-|---|---|---|---|---|
-| Public site, build a booking | ✅ | ✅ | ✅ | ✅ |
-| Checkout / pay | login | ✅ | ✅ | – |
-| My trips, complaints (own only) | – | ✅ | ✅ | – |
-| List Your Boat, My boats (own only) | login | ✅ (becomes owner) | ✅ | – |
-| Earnings / withdrawals (own only) | – | – | ✅ + 2FA | – |
-| `/admin` dashboard | – | – | – | ✅ (2FA optional, R10) |
-| Refunds, payouts, deductions, settings | – | – | – | ✅ + password re-confirmation |
+| Area | Guest | Customer | Owner | Captain | Admin |
+|---|---|---|---|---|---|
+| Public site, build a booking | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Checkout / pay, extend a running trip | login | ✅ | ✅ | ✅ | – |
+| My trips, complaints (own only) | – | ✅ | ✅ | ✅ | – |
+| List Your Boat, My boats (own only) | login | ✅ (becomes owner) | ✅ | – | – |
+| Earnings / withdrawals (own only) | – | – | ✅ + 2FA | – | – |
+| Apply as a captain | ✅ (creates the account) | ✅ | – | – | – |
+| `/captain` dashboard: offers sent to them, their assigned trips, availability, pay (own only) | – | – | – | ✅ (approved only) | – |
+| `/admin` dashboard | – | – | – | – | ✅ (2FA optional, R10) |
+| Refunds, payouts, deductions, settings | – | – | – | – | ✅ + password re-confirmation |
+
+A captain sees a booking only while they hold an open offer for it or are assigned to it. A trip they declined, lost or were removed from returns 404.
 
 If someone opens another user's record, the app returns **404, not 403**, so attackers can't even learn that the record exists.
 
@@ -173,6 +209,8 @@ If someone opens another user's record, the app returns **404, not 403**, so att
 | Checkout / hold | `/checkout/*` | `auth`, `active`, throttle |
 | Owner | `/list-your-boat`, `/owner/*` | `auth`, `active`, `verified` (+ `role:owner` after the first listing) |
 | Owner money | `/owner/payouts/*` | + `2fa`, `password.confirm` |
+| Captain application | `/captains/apply` | `web`, throttle, Turnstile + honeypot |
+| Captain | `/captain/*` | `auth`, `active`, `verified`, `role:captain`; trip pages also need an approved captain profile; offer answers throttled |
 | Admin | `/admin/*` | `auth`, `active`, `verified`, `can:access-admin`, `admin.idle` (30 min); money actions also need `password.confirm`. No `2fa` (R10). |
 | Stripe webhooks | `/webhooks/stripe` | **No** session or CSRF; Stripe signature check; throttle |
 
@@ -191,8 +229,8 @@ If someone opens another user's record, the app returns **404, not 403**, so att
 1. **Identity and access:** users, roles, 2FA, sessions, login log, audit log.
 2. **Fleet:** harbors, boats (the client's own boats + owner boats), photos, amenities, availability rules, blocks/blackouts, insurance.
 3. **Catalog:** experiences, add-ons, cancellation policies, which boats offer which experiences.
-4. **Captains:** profiles (with email), licenses, documents, availability, assignment + email, captain pay.
-5. **Booking engine:** quote, availability, holds, bookings, line items, status history, promo codes.
+4. **Captains:** accounts (apply / invite + approval), profiles, licenses, documents, availability, **trip offers (first to accept)**, direct assignment + acknowledgement, the captain dashboard, notifications, captain pay.
+5. **Booking engine:** quote, availability, holds, bookings, line items, status history, promo codes, **trip extensions**.
 6. **Payments:** Stripe customers, saved cards, payments, refunds, disputes, webhooks.
 7. **Owner finance:** ledger, commission, 72-hour release, complaints + deductions, withdrawals, payout pause/hold, Stripe Connect.
 8. **Listings:** the List Your Boat wizard (with the Pricing step), the admin review queue, re-approval of edits.
@@ -223,7 +261,7 @@ If someone opens another user's record, the app returns **404, not 403**, so att
 
 - **users:**
   - id, ulid, first_name, last_name, email (unique), email_verified_at, phone, password, avatar_path.
-  - **role** (customer|owner|admin, *not fillable*), status (active|suspended|banned), status_reason.
+  - **role** (customer|owner|captain|admin, *not fillable*), status (active|suspended|banned), status_reason.
   - two_factor_secret, two_factor_recovery_codes, two_factor_confirmed_at.
   - stripe_customer_id, marketing_opt_in, last_login_at, last_login_ip, password_changed_at (2.5), timestamps, deleted_at.
 - **sessions, password_reset_tokens, cache, jobs, failed_jobs:** already exist.
@@ -244,7 +282,7 @@ If someone opens another user's record, the app returns **404, not 403**, so att
   - **Description:** title, short, description.
   - **Specs:** type (power|sail), category, make, model, year, length_ft, registration_no, uscg_inspected, max_guests, staterooms, sleeps, beds, heads, engine_count, engine_type, horsepower, engine_year.
   - **Location:** harbor_id?, location_type, street, city, state, zip, country, lat, lng.
-  - **Rules and booking settings:** cancellation_policy_id, rules (json), advance_notice_minutes, allow_multiple_bookings, buffer_minutes.
+  - **Rules and booking settings:** cancellation_policy_id, rules (json), advance_notice_minutes, allow_multiple_bookings, buffer_minutes, **extensions_enabled** (default true, admin-only; R17, added in 3.4).
   - **Operation:** renter_operated_allowed, captain_source (owner|platform), fishing_charter, fuel_policy.
   - **Pricing:** hourly_rate_cents, weekend_multiplier_bp?, min_hours, durations (json), duration_prices (json, optional fixed price per duration), cleaning_fee_cents, captain_rate_cents (customer-facing, per hour), crew_count.
   - **Display:** badge, is_featured, sort, rating_avg, reviews_count. These are entered by the admin until reviews are added.
@@ -274,21 +312,31 @@ If someone opens another user's record, the app returns **404, not 403**, so att
   - license_type (oupv|master|other), license_number (encrypted), license_expires_on, max_passengers_licensed.
   - years_experience, languages (json), pay_rate_cents (internal, per hour).
   - is_active, is_public, sort, deleted_at.
-- **captain_unavailability:** captain_id, starts_at, ends_at, reason.
+  - *Added in Phase 8.1 (D19):* **user_id** (nullable, unique: the captain's login), **application_status** (pending|approved|rejected), approved_at, rejection_reason, invited_at. `is_active` stays the admin's on/off switch for an approved captain.
+- **captain_unavailability:** captain_id, starts_at, ends_at, reason. Entered by the captain (their days off) or by the admin.
+- **captain_trip_offers** (Phase 8.2, §7.8):
+  - id, ulid, booking_id, captain_id, **status** (offered|accepted|declined|filled|withdrawn|expired).
+  - pay_cents (the pay shown on the offer, R13), expires_at, offered_by, responded_at, decline_reason?, timestamps.
+  - One open offer per captain per booking. Index on (captain_id, status) and (booking_id, status).
 - License documents are stored in `media`, on the private disk.
 
 ### 6.5 Booking engine
 
 - **bookings:**
   - **Identity:** id, ulid, reference (unique, e.g. `CYB-7K3P9Q`), customer_id, boat_id, experience_id?.
-  - **Captain:** captain_id?, captain_assigned_at, **captain_notified_at**, captain_notes (written by the admin, sent to the captain; never customer personal data).
+  - **Captain:** captain_id?, captain_assigned_at, **captain_assigned_via** (offer|direct), **captain_notified_at**, **captain_acknowledged_at**, captain_notes (written by the admin, shown to the captain; never customer personal data).
   - **Status:** `status` (§7.3), `payment_status` (unpaid|deposit_paid|paid|partially_refunded|refunded|failed).
   - **Trip:** starts_at, ends_at, hours, guests, occasion, customer_notes, admin_notes.
   - **Contact snapshot:** contact_first_name, contact_last_name, contact_email, contact_phone, heard_from.
   - **Money:** payment_plan (deposit|full), subtotal_cents, discount_cents, tax_cents, gratuity_bp, gratuity_cents, total_cents, amount_paid_cents, amount_refunded_cents, balance_due_cents, balance_due_at.
   - **Snapshots:** promo_code_id?, policy_snapshot (json), pricing_snapshot (json).
   - **Lifecycle:** hold_expires_at, confirmed_at, completed_at, cancelled_at, cancelled_by_role (customer|owner|admin|system), cancellation_reason, source (web|admin|phone), timestamps.
-- **booking_items:** booking_id, type (charter|captain|package|addon|cleaning|discount|tax|gratuity|fee), addon_id?, label, description, quantity, unit_amount_cents, amount_cents, **payee** (platform|owner|captain), sort.
+- **booking_items:** booking_id, **booking_extension_id?** (set on the lines of an extension), type (charter|captain|package|addon|cleaning|discount|tax|gratuity|fee), addon_id?, label, description, quantity, unit_amount_cents, amount_cents, **payee** (platform|owner|captain), sort.
+- **booking_extensions** (Phase 8.5, §7.9):
+  - id, ulid, booking_id, hours (whole hours, R14), old_ends_at, new_ends_at.
+  - **status** (hold|paid|expired|cancelled|refunded), hold_expires_at, confirmed_at.
+  - subtotal_cents, tax_cents, gratuity_cents, total_cents, payment_id?, idempotency_key (unique), requested_by, timestamps.
+  - The booking's `ends_at` and `hours` change only when the extension is **paid**. Its lines are `booking_items` with `booking_extension_id`, so receipts and the ledger keep the extension separate.
 - **booking_status_history:** booking_id, from_status, to_status, actor_id?, note, created_at.
 - **booking_complaints:**
   - id, ulid, booking_id, customer_id, boat_id, owner_id?, category (boat_condition|cleanliness|late_start|safety|missing_amenities|captain|other), description.
@@ -303,7 +351,7 @@ If someone opens another user's record, the app returns **404, not 403**, so att
 - **customer_payment_methods:** user_id, stripe_payment_method_id, brand, last4, exp_month, exp_year, is_default. This is a display cache only.
 - **payments:**
   - id, booking_id, user_id, provider_intent_id (unique), provider_charge_id.
-  - kind (deposit|balance|full|extra), amount_cents.
+  - kind (deposit|balance|full|extension|extra), amount_cents.
   - status (requires_payment|requires_action|processing|succeeded|failed|canceled), failure_code, failure_message, paid_at.
   - idempotency_key (unique), meta (json).
 - **refunds:** id, payment_id, booking_id, amount_cents, reason (customer_cancel|owner_cancel|weather|complaint|admin|dispute), policy_pct?, status, provider_refund_id, created_by, note.
@@ -330,6 +378,8 @@ If someone opens another user's record, the app returns **404, not 403**, so att
   - Business info: name, phone, email, address, hours, social links.
   - Booking and pricing: tax_rate_bp, deposit_bp, balance_due_days, weekend_multiplier_bp, gratuity options, hold_minutes, season dates.
   - Owner money: commission_bp, **payout_delay_hours = 72**, **complaint_window_hours = 72**, **min_withdrawal_cents = 5000**.
+  - Captains (R12): **captain_offer_hours = 24**, **captain_release_hours = 48**, captain_ack_reminder_hours = 12, captain_turnaround_minutes = 30 (the minimum gap between two trips of one captain). Placeholders except the first two.
+  - Extensions (R15): **extension_cutoff_minutes = 30**, extension_hold_minutes = 10, extension_max_trip_hours = 8 (the longest a trip can become). Placeholders except the first. Extensions are always whole hours (R14), so there is no step setting.
 - **pages:** slug, title, body (sanitized HTML), seo fields, is_published. Holds terms, privacy and cancellation policy.
 - **faqs, testimonials:** content shown on the site.
 - **media** (every file):
@@ -369,10 +419,12 @@ A slot is free only if all of these hold:
 - It doesn't overlap a block, a blackout or the end of the season.
 - The experience allows that weekday and season.
 - It is at least `advance_notice` ahead of now.
-- It doesn't overlap any `hold` or `confirmed` booking of that boat (+ buffer).
+- It doesn't overlap any `hold` or `confirmed` booking of that boat (+ buffer), **using each booking's current end time** (after paid extensions) **and any extension still on hold** (§7.9).
 - Guests ≤ max_guests.
 
 **No double booking:** the hold is created in a DB transaction that locks the boat row (`lockForUpdate`) and re-checks the overlap before inserting.
+
+**One "busy times" source.** `AvailabilityService` gives the busy intervals of a boat (bookings + extension holds + buffer, blocks, closed hours) and of a captain (assigned trips + `captain_turnaround_minutes`, unavailability). The booking wizard, trip offers (§7.8) and extensions (§7.9) all use it, so they can never disagree.
 
 ### 7.3 Booking lifecycle
 
@@ -383,6 +435,9 @@ hold (15 min) ──payment ok (webhook)──▶ confirmed ──trip ends─�
 ```
 
 Payment status and captain assignment are tracked separately. Every change is written to `booking_status_history` + `audit_logs`.
+
+- **Captain state** (worked out from the booking and its offers, not stored as its own status): needs a captain → offered → assigned → acknowledged (§7.8).
+- **An extension doesn't change the booking status.** A paid extension moves `ends_at` and writes a history line ("extended by 1 h, ends 9:00 PM").
 
 ### 7.4 Cancellation and refunds (Boatsetter-style, flexible)
 
@@ -415,6 +470,8 @@ Example: total $1,000 (no gratuity), deposit paid $500.
 
 **Every refund automatically reverses the owner's share** of that booking (a `refund_reversal` ledger entry).
 
+**Trip extensions are not refundable by the customer** (R16). Only the admin can refund one, fully or partly, e.g. when the weather ends the trip early (custom refund, with a reason and an audit entry).
+
 ### 7.5 Money split for owner boats (proposed; confirm with the client and an accountant)
 
 | Line | Goes to |
@@ -427,6 +484,8 @@ Example: total $1,000 (no gratuity), deposit paid $500.
 | Gratuity | Captain / crew, 100% |
 
 House boats (the client's own fleet): all revenue goes to the platform. Only captain pay and gratuity go into the captain ledger.
+
+**Extensions use the same split** for their lines (charter, captain, tax, gratuity), and the captain's pay grows by pay rate × extra time.
 
 ### 7.6 Owner earnings, 72-hour release, complaints and withdrawals
 
@@ -478,21 +537,93 @@ draft → pending_review → approved → published ⇄ paused (owner)
   - The owner sees an "estimated earnings after commission" preview.
 - A daily job turns off `booking_enabled` when insurance expires, and emails the owner and the admin.
 
-### 7.8 Captain assignment + email
+### 7.8 Captains: accounts, trip offers, assignment (D19)
 
-- The assignment form in the admin booking page shows the selected captain's **email and phone**, both from the captain's profile and provided by the captain.
-- **Checks before saving** (every one must pass):
-  1. The captain is active.
-  2. Their license is valid on the trip date.
-  3. The license type allows the guest count (an OUPV "six-pack" captain can take at most 6 passengers).
-  4. The captain has no overlapping trip and no unavailability at that time.
-- **On save:**
-  - A queued **email goes to the captain**. It includes the date and time (Chicago time), harbor and map link, boat, guest count and experience. It also includes the admin's **"Notes for captain"**, if any, the admin's contact details for coordination, and an `.ics` file.
-  - **No customer information** goes in the email (R6): no name, phone, email or customer notes. The admin passes on anything the captain needs through "Notes for captain".
-  - `captain_notified_at` is set, and a "Resend email" button is available.
-- **Reassignment:** the old captain gets an "unassigned" email and the new captain gets the assignment email.
-- **Trip changes:** if the booking is cancelled or rescheduled, the captain is emailed.
-- The customer sees the captain's name, photo and bio on the trip page and in the reminder email.
+**Accounts (R11)**
+
+- **Apply:** `/captains/apply` creates the account (role `captain`) and a captain profile with `application_status = pending`. The form asks for name, phone, bio, license type, number and expiry, years of experience, languages and the license document (private disk). The admin approves or rejects it with a reason, and the captain gets an email.
+- **Invite:** the admin creates the profile in Admin → Captains and presses "Send invite". The captain gets a signed link (valid 7 days), sets a password and is approved straight away.
+- Changes to the license (type, number, expiry, document) after approval go back to the admin for review. Text changes (bio, languages, photo) apply at once.
+
+**Eligible captain.** A captain can be offered or assigned a trip only if every one of these passes:
+
+1. The profile is approved and active, and the account is active.
+2. Their license is valid on the trip date.
+3. The license type allows the guest count (an OUPV "six-pack" captain can take at most 6 passengers).
+4. They have no overlapping trip (+ `captain_turnaround_minutes`) and no unavailability at that time (§7.2).
+
+The admin sees every captain in the request and assign forms. Ineligible ones are greyed out with the reason.
+
+**Trip offers: the first captain to accept gets the trip**
+
+1. A booking is **confirmed** (paid) → it shows as "Needs a captain" on the admin home and in the bookings list. Boats with `captain_source = owner` are skipped: the owner drives.
+2. In the booking page the admin presses **"Request captains"** and picks **all eligible captains** or **selected ones**, plus a deadline (default `captain_offer_hours` = 24 h, never later than the trip start). An optional "Notes for captain" goes with it.
+3. Each chosen captain gets a `captain_trip_offers` row and is told in **three places**: the dashboard, the bell and an email.
+4. The offer shows the date and time (Chicago time), duration, boat, harbor + map, guest count, experience, admin notes and **the pay for the trip** (R13). It has **Accept** and **Decline** buttons.
+5. **Accept** runs in a DB transaction that **locks the booking row** (`lockForUpdate`). It then re-checks that the booking is still confirmed, still has no captain, the offer is still open and not expired, and the captain is still eligible (point 4 above: they may have accepted another trip meanwhile). Then it assigns the captain (`captain_assigned_via = offer`, `captain_acknowledged_at` = now). Two captains pressing Accept in the same second → one gets the trip, the other sees "This trip was just taken."
+6. The other offers become **filled**: they leave those dashboards, and those captains get a short "Trip filled" note in the bell, not an email.
+7. Nobody accepts by the deadline → the offers become **expired**, and the admin gets an alert. The admin can send new offers or assign directly.
+8. The admin can **withdraw** open offers at any time.
+
+**Direct assignment** (the admin picks one captain, as before)
+
+- The same eligibility checks apply. The captain is told in the dashboard, by the bell and by email (+ `.ics`), and `captain_notified_at` is set. A "Resend" button is available.
+- The captain presses **Acknowledge** in the dashboard or from the email link (`captain_acknowledged_at`). Not acknowledged after `captain_ack_reminder_hours` → a reminder goes to the captain and an alert to the admin. This covers missed emails.
+- **Reassignment:** the old captain is told "unassigned"; the new captain gets the assignment.
+
+**Releasing a trip (R12).** A captain can give back an accepted or assigned trip up to `captain_release_hours` (48 h) before the start, with a reason. The booking goes back to "Needs a captain" and the admin is alerted. Closer to the trip, only the admin can remove them. Every release is written to the booking history and the audit log.
+
+**What the captain sees (R6)**
+
+- In the captain dashboard: date and time, harbor + map, boat, guests, experience, occasion, admin notes, the **booking reference** and the customer's **full name**, so the group can be recognized at the dock.
+- **Never** the customer's phone, email, address or own notes. The admin passes on anything else through "Notes for captain".
+- **Emails to the captain** carry the trip details and the **reference only** (no customer name), plus a link to the dashboard and an `.ics` file.
+
+**Changes after assignment.** If the booking is cancelled, rescheduled or extended (§7.9), the captain is told (dashboard, bell, email).
+
+The customer sees the captain's name, photo and bio on the trip page and in the reminder email.
+
+### 7.9 Trip extensions (D20)
+
+**When the customer can extend (R15, R17)**
+
+- Only while the trip is running, from its start until **`extension_cutoff_minutes` (30) before its end**. Before the trip, the admin changes the hours by hand for now.
+- Only if the boat has **"Allow trip extensions"** on (`extensions_enabled`, default on, set by the admin).
+- Only for a confirmed, fully paid booking. By trip day the balance has always been charged (§7.1).
+
+**What is offered.** The trip page (My trips → trip, on the phone) shows an **"Extend your trip"** card. The server works out the options in **whole hours** (R14): +1 h, +2 h, +3 h, … The longest option is the number of whole hours that fit in the smallest of these (a 1 h 40 min gap gives +1 h only):
+
+- the time until the boat's next booking or block, minus the buffer (another customer's details are never shown, only "available until 9:00 PM");
+- the boat's closing time that day;
+- the time until the captain's next trip (minus the turnaround) or unavailability;
+- the time until the trip reaches `extension_max_trip_hours`.
+
+If not even one hour is free, the card says so and shows the business phone.
+
+**Price (calculated on the server only, §7.1).** It uses the booking's **pricing snapshot** (the rates at booking time), not today's rates:
+
+```
+charter  = hourly rate (with the same weekend multiplier as the trip) × extra hours
+captain  = captain_rate × extra hours
+tax      = tax_rate × (charter + captain)
+gratuity = the booking's gratuity % × (charter + captain)
+total    = charter + captain + tax + gratuity
+```
+
+No cleaning fee, package fee, add-ons or promo code. A boat's fixed duration prices don't apply to extensions (the hourly rate does).
+
+**Flow**
+
+1. The customer picks an option. `POST` creates a `booking_extensions` row with status **hold** for `extension_hold_minutes` (10). It runs in a DB transaction that locks the boat row and re-checks the boat and the captain, the same as a booking hold. While on hold, the extra time counts as busy for everyone else (§7.2). This needs an idempotency key and a rate limit.
+2. **Payment** is a separate Stripe payment (`payments.kind = extension`): one tap with a saved card ("Pay $X with Visa •••4242"), or a new card. 3-D Secure works as usual.
+3. **Only the webhook confirms it** (§8.4). On success, in one transaction: the extension becomes **paid**; the booking's `ends_at` and `hours` move; the extension lines are added; a history line is written; and the owner and captain ledger entries are added (§7.5).
+4. **Who is told:**
+   - **The captain:** "Extension paid — the trip now ends at 9:00 PM", in the dashboard, by the bell and by email. No approval is needed: the system has already checked that the captain is free.
+   - **The owner** (owner boats) and **the admin**.
+   - **The customer:** a receipt and an updated `.ics` file.
+5. The payment fails or the hold expires → the extension becomes **expired** or **cancelled** and nothing changes.
+
+**Refund (R16).** An extension can't be refunded by the customer. Only the admin can refund it (§7.4).
 
 ---
 
@@ -580,13 +711,15 @@ These rules apply to every Blade form, every JSON endpoint called from our JS, a
 
 11. **Rate limits** use a named limiter per endpoint:
     - quote/availability, e.g. 60/min;
-    - hold creation, e.g. 10/min;
+    - hold creation, e.g. 10/min (booking holds and extension holds);
+    - captain offer answers (accept / decline / acknowledge / release), e.g. 30/min;
+    - captain applications, e.g. 5/hour per IP;
     - promo code checks, e.g. 10/min (stops code guessing);
     - uploads;
     - contact and newsletter, e.g. 5/hour per IP;
     - login, register and password reset.
-12. **Idempotency:** hold creation, payments, refunds, payouts and withdrawals require a client idempotency key, stored with a unique index. A double-click or retry can never create two of anything. Each runs inside a **DB transaction**.
-13. **Bots:** Turnstile + a honeypot field on every public, unauthenticated form (register, contact, newsletter) and on checkout.
+12. **Idempotency:** hold creation (bookings and extensions), payments, refunds, payouts and withdrawals require a client idempotency key, stored with a unique index. A double-click or retry can never create two of anything. Each runs inside a **DB transaction**. Accepting a trip offer locks the booking row, so a repeated Accept returns the same result.
+13. **Bots:** Turnstile + a honeypot field on every public, unauthenticated form (register, captain application, contact, newsletter) and on checkout.
 14. **Uploads:**
     - Separate endpoints with mime, size and dimension validation, re-encoding, and UUID filenames (§9).
     - PHP `upload_max_filesize` / `post_max_size` set to match.
@@ -664,42 +797,47 @@ These rules apply to every Blade form, every JSON endpoint called from our JS, a
 
 ```
 app/
-  Enums/          Role, BoatStatus, BookingStatus, PaymentStatus, PayoutStatus, LedgerType, ComplaintStatus…
-  Models/         User, OwnerProfile, Boat, Harbor, Experience, Addon, Captain, Booking, BookingItem,
-                  BookingComplaint, Payment, Refund, LedgerEntry, Payout, PromoCode, ContactMessage,
-                  Media, Setting, AuditLog…
+  Enums/          Role, BoatStatus, BookingStatus, PaymentStatus, PayoutStatus, LedgerType, ComplaintStatus,
+                  CaptainApplicationStatus, CaptainOfferStatus, ExtensionStatus…
+  Models/         User, OwnerProfile, Boat, Harbor, Experience, Addon, Captain, CaptainTripOffer,
+                  CaptainUnavailability, Booking, BookingItem, BookingExtension, BookingComplaint, Payment,
+                  Refund, LedgerEntry, Payout, PromoCode, ContactMessage, Media, Setting, AuditLog…
   Policies/       one per model (ownership + Gates)
   Http/
-    Controllers/  Public/, Account/, Owner/, Admin/, Webhooks/   (thin; HTML or JSON)
+    Controllers/  Public/, Account/, Owner/, Captain/, Admin/, Webhooks/   (thin; HTML or JSON)
     Requests/     one FormRequest per form / endpoint / wizard step
     Resources/    API Resources = the JSON whitelist
     Middleware/   EnsureAccountIsActive, EnsureUserHasRole, RequireTwoFactor, AdminIdleTimeout, SecurityHeaders
   Services/       QuoteService, AvailabilityService, BookingService, PaymentService (Stripe, behind an
                   interface so tests can fake it), RefundService, CancellationPolicyService, LedgerService,
-                  PayoutService, ComplaintService, CaptainAssignmentService, MediaService, SettingsService,
+                  PayoutService, ComplaintService, CaptainAssignmentService (eligibility, offers, direct
+                  assignment, release), TripExtensionService, MediaService, SettingsService,
                   AuditService, TurnstileService
-  Actions/        CreateBookingHold, ConfirmBooking, CancelBooking, AssignCaptain, SubmitListing,
-                  ApproveListing, RequestWithdrawal, ApproveWithdrawal, ResolveComplaint…
+  Actions/        CreateBookingHold, ConfirmBooking, CancelBooking, AssignCaptain, OfferTripToCaptains,
+                  AcceptTripOffer, ReleaseTrip, ApproveCaptain, CreateExtensionHold, ConfirmExtension,
+                  SubmitListing, ApproveListing, RequestWithdrawal, ApproveWithdrawal, ResolveComplaint…
   Events/ Listeners/  e.g. BookingConfirmed → emails, ledger entries, notifications
-  Jobs/           ChargeBalance, ExpireHolds, ReleaseEarnings, SendTripReminders, ProcessStripeWebhook,
+  Jobs/           ChargeBalance, ExpireHolds (bookings + extensions), ExpireCaptainOffers,
+                  RemindUnacknowledgedTrips, ReleaseEarnings, SendTripReminders, ProcessStripeWebhook,
                   InsuranceExpiryCheck, CleanupOrphanFiles
   Mail/ Notifications/
   Support/        Money, ChicagoTime
 resources/
   views/
-    layouts/      app (public), wizard (minimal header), account, owner, admin, mail
+    layouts/      app (public), wizard (minimal header), account, owner, captain, admin, mail
     partials/     header, footer, mobile-menu, admin-sidebar, admin-topbar
     components/   public: button, badge, yacht-card, experience-card, section-heading, input, select,
                   radio-card, accordion, lightbox, toast, stepper, price-summary
                   admin:  data-table, filters, stat-card, status-badge, form-section, modal, confirm-dialog,
                           empty-state, tabs, pagination
-    pages/ booking/ checkout/ account/ owner/ admin/ auth/ errors/
+    pages/ booking/ checkout/ account/ owner/ captain/ admin/ auth/ errors/
   js/
     lib/          http.js (CSRF fetch), dom.js (escape/render), money.js, dates.js, toast.js
-    pages/        home.js, yachts.js, yacht.js, booking/*.js, checkout.js, contact.js
+    pages/        home.js, yachts.js, yacht.js, booking/*.js, checkout.js, contact.js, extend-trip.js
     owner/        wizard/*.js, boats.js, payouts.js
+    captain/      offers.js, availability.js
     admin/        tables.js, booking-calendar.js, assign-captain.js, uploads.js
-routes/  web.php (public + JSON) · account.php · owner.php · admin.php · webhooks.php · console.php (scheduler)
+routes/  web.php (public + JSON) · account.php · owner.php · captain.php · admin.php · webhooks.php · console.php (scheduler)
 ```
 
 - **Rule:** business logic lives in Services and Actions, never in controllers, Blade or JS. Status changes go through one method per model (e.g. `BookingService::transition()`), which checks the allowed moves and writes the history.
@@ -708,7 +846,9 @@ routes/  web.php (public + JSON) · account.php · owner.php · admin.php · web
   | Job | Runs |
   |---|---|
   | queue worker | every minute |
-  | ExpireHolds | every minute |
+  | ExpireHolds (bookings + extensions) | every minute |
+  | ExpireCaptainOffers | every 5 minutes |
+  | RemindUnacknowledgedTrips | hourly |
   | ChargeBalance | hourly |
   | ReleaseEarnings | hourly (72 h rule) |
   | SendTripReminders | hourly |
@@ -724,7 +864,8 @@ routes/  web.php (public + JSON) · account.php · owner.php · admin.php · web
 | Booking JSON | `/book` (wizard page) + JSON: `GET /book/availability`, `POST /book/quote`, `POST /book/hold` |
 | Checkout | `/checkout/{booking:ulid}` (+ JSON: `POST …/payment-intent`, `POST …/promo`) · `/bookings/{ulid}/confirmation` |
 | Auth | `/login` · `/register` · `/forgot-password` · `/reset-password/{token}` · `/email/verify` · `/two-factor-challenge` · `/user/confirm-password` |
-| Customer | `/account` (profile, security, sessions, cards) · `/account/trips` · `/account/trips/{ulid}` (cancel, receipt, complaint) |
+| Customer | `/account` (profile, security, sessions, cards) · `/account/trips` · `/account/trips/{ulid}` (cancel, receipt, complaint; extend: JSON `GET …/extension-options`, `POST …/extensions`, `POST …/extensions/{ulid}/payment-intent`) |
+| Captain | `/captains/apply` · `/captain` (home: offers + next trips) · `/captain/offers` (JSON `POST …/{ulid}/accept`, `…/decline`) · `/captain/trips` · `/captain/trips/{ulid}` (acknowledge, release) · `/captain/availability` · `/captain/earnings` · `/captain/profile` · `/captain/invite/{token}` |
 | Owner | `/list-your-boat` → `/owner/boats/{ulid}/wizard/{step}` (JSON `PATCH` per step, `POST` photos) · `/owner` · `/owner/boats` · `/owner/bookings` · `/owner/calendar` · `/owner/earnings` · `/owner/payouts` · `/owner/complaints` |
 | Admin | `/admin` · `/admin/bookings` (+ calendar) · `/admin/boats` · `/admin/listings` · `/admin/experiences` · `/admin/addons` · `/admin/captains` · `/admin/harbors` · `/admin/users` · `/admin/payouts` · `/admin/complaints` · `/admin/payments` · `/admin/promo-codes` · `/admin/inbox` · `/admin/content` · `/admin/settings` · `/admin/audit-log` |
 | Webhooks | `/webhooks/stripe` |
@@ -736,13 +877,13 @@ routes/  web.php (public + JSON) · account.php · owner.php · admin.php · web
 | Audience | Emails |
 |---|---|
 | Account | Verify email, password reset, password changed, new-device login, 2FA on/off |
-| Customer | Booking confirmation (+ .ics + PDF receipt), payment receipt, balance reminder (T-10 days), balance charged / failed, trip reminder T-24h (harbor + captain), captain assigned, cancellation + refund, complaint received / resolved |
-| Owner | Listing submitted / approved / changes requested / rejected, new booking, booking cancelled, complaint opened (please respond) / resolved, deduction applied, withdrawal requested / approved / paid / rejected, payouts paused, insurance expiring |
-| **Captain** | **Trip assigned (+ .ics)**, unassigned, trip changed / cancelled. Trip details and admin notes only, **no customer information** |
-| Admin | New booking, unassigned trip within 7 days, failed balance charge, listing to review, withdrawal to approve, new complaint, new contact message, dispute opened |
+| Customer | Booking confirmation (+ .ics + PDF receipt), payment receipt, balance reminder (T-10 days), balance charged / failed, trip reminder T-24h (harbor + captain), captain assigned, **trip extended (receipt + updated .ics)**, cancellation + refund, complaint received / resolved |
+| Owner | Listing submitted / approved / changes requested / rejected, new booking, booking cancelled, **trip extended**, complaint opened (please respond) / resolved, deduction applied, withdrawal requested / approved / paid / rejected, payouts paused, insurance expiring |
+| **Captain** | Application received / approved / rejected, invite, **new trip offer**, offer withdrawn, **trip assigned (+ .ics)**, please acknowledge (reminder), trip released, unassigned, trip changed / cancelled, **trip extended**, trip reminder T-24h. Trip details, admin notes and the **booking reference only — no customer name or contact details** (R6). "Trip filled" is a bell note only |
+| Admin | New booking, unassigned trip within 7 days, **new captain application**, **offers expired with no captain**, **trip not acknowledged**, **captain released a trip**, **trip extended**, failed balance charge, listing to review, withdrawal to approve, new complaint, new contact message, dispute opened |
 | Contact form | Auto-reply to the sender; notification to the business inbox (Reply-To = sender); admin replies are sent from the dashboard |
 
-There are also in-app notifications (bell icon) for customers, owners and the admin.
+There are also in-app notifications (bell icon) for customers, owners, captains and the admin. Captains need them from Phase 8, so the bell is built there and reused in 9.3.
 
 ---
 
@@ -750,17 +891,17 @@ There are also in-app notifications (bell icon) for customers, owners and the ad
 
 | Section | Contents |
 |---|---|
-| **Home** | Today's and upcoming trips; revenue (gross / net / commission); bookings by status; **action list** (listings to review, withdrawals to approve, open complaints, trips without a captain, failed charges, new messages) |
-| **Bookings** | List with search, filters, sort and pagination + **calendar**; detail (line items, payments, history, notes); change status; **assign captain + email**; cancel / refund; resend emails; manual booking (phone orders) |
-| **Fleet** | Boats (house + owner: photos, pricing, availability, blocks, experiences offered, **Unavailable toggle**); **Listings review queue**; harbors; amenities |
+| **Home** | Today's and upcoming trips; revenue (gross / net / commission); bookings by status; **action list** (listings to review, withdrawals to approve, open complaints, trips without a captain, offers expired with no captain, trips not acknowledged, captain applications, failed charges, new messages) |
+| **Bookings** | List with search, filters, sort and pagination + **calendar**; detail (line items, payments, extensions, history, notes); change status; **request captains (all eligible / selected, deadline) or assign directly**, offer status per captain, withdraw offers; cancel / refund; resend emails; manual booking (phone orders) |
+| **Fleet** | Boats (house + owner: photos, pricing, availability, blocks, experiences offered, **Unavailable toggle**, **Allow trip extensions toggle**); **Listings review queue**; harbors; amenities |
 | **Catalog** | Experiences (slots, durations, weekdays, season, fees, images); add-ons; cancellation policies (edit hours and %); promo codes |
-| **Captains** | Profiles (email, phone, license + expiry, documents, pay rate), availability, trips, earnings |
+| **Captains** | **Applications queue (approve / reject with a reason)**, invite, profiles (email, phone, license + expiry, documents, pay rate), license changes to review, availability, offers, trips, earnings |
 | **Finance** | Payments, refunds, disputes, owner ledgers, **withdrawals (approve / reject / hold)**, **pause owner payouts**, deductions and adjustments, captain payouts, CSV export |
 | **Complaints** | Queue, detail (customer text and photos, owner response, booking earnings), resolve (no action / deduction / refund / reject) |
-| **Users** | Customers and owners: detail, suspend / ban, reset 2FA, notes |
+| **Users** | Customers, owners and captains: detail, suspend / ban, reset 2FA, notes |
 | **Inbox** | Contact messages (status, reply by email, spam); newsletter subscribers |
 | **Content** | Business info, hero, FAQs, testimonials, gallery, legal pages, SEO |
-| **Settings** | Tax, deposit, balance days, weekend multiplier, gratuity options, commission, payout delay (72 h), complaint window, minimum withdrawal, hold minutes, season |
+| **Settings** | Tax, deposit, balance days, weekend multiplier, gratuity options, commission, payout delay (72 h), complaint window, minimum withdrawal, hold minutes, season; **captains** (offer hours, release hours, acknowledge reminder, turnaround); **extensions** (cut-off, hold minutes, longest trip) |
 | **System** | Audit log, login log, failed jobs |
 
 ---
@@ -772,7 +913,8 @@ There are also in-app notifications (bell icon) for customers, owners and the ad
 **New pages, in the same design:**
 
 - **Auth:** login, register, forgot / reset password, verify email, 2FA challenge, confirm password.
-- **Customer:** My trips; trip detail (cancel with a refund preview, receipt, calendar, complaint form, captain card); profile & security (password, 2FA, sessions); saved cards.
+- **Customer:** My trips; trip detail (cancel with a refund preview, receipt, calendar, complaint form, captain card, **"Extend your trip" card** during the trip); profile & security (password, 2FA, sessions); saved cards.
+- **Captain** (no mockup exists: built with the **owner dashboard's design** — sidebar, cards, tables, pills — no new look): apply form, invite / set password, home (open offers + next trips), offers, trips + trip detail (acknowledge, release), availability, earnings, profile + license documents.
 - **Owner:**
   - Wizard: a **Pricing step**.
   - Pages: bookings, calendar (blocks), earnings, withdrawals + payout setup (Stripe Connect), complaints (respond), boat edit.
@@ -865,6 +1007,7 @@ There are also in-app notifications (bell icon) for customers, owners and the ad
   - **Seeders now store the design images through MediaService** (WebP; boat photos with card / thumb sizes): about 45 s for the 39 images. The design files stay untouched. A boat whose photos fail is rolled back (so re-running doesn't skip it). Without GD, seeding stops with a clear message before any harbor or boat is created. A local database seeded in 3.2 keeps its JPEG copies (they still work: no variants, so the main file is used); `php artisan migrate:fresh --seed` (+ `app:create-admin`) gives the WebP versions — optional.
   - QA: 403 PHP (2,343 assertions) + 39 JS tests (25 new: WebP + sizes + random names, no enlarging, EXIF / GPS / comment / appended PHP dropped, upright photos, 10 refused files — PHP as .jpg, image as .php / .phtml, PHP behind a GIF header, SVG, HTML as .webp, PDF as photo, empty, broken — nothing saved for any of them, decompression bomb, failed DB write leaves no files, collections / ULID folders, the SafeUpload rule, private documents, delete after commit + rollback, the file route: guest / other customer / other owner / suspended / uploader / admin / public photo / unknown / missing file / JSON 404 / 429, the `.htaccess`). Tests that seed use tiny stand-ins of the design images (`Tests\Concerns\FakesDesignImages`), so the suite stays fast. Real seeding twice on a temporary SQLite database + storage folder (45 s, then nothing added); an isolated server: `/storage` link serves files, `/files/{uuid}`: guest → login / 401, other owner → 404, admin → the PDF byte for byte with `attachment`, `no-store`, `nosniff`; zero PHP warnings. Fixed during QA: a PHP 8.5 deprecation in `Media::url()` (null array key) and `MediaService::delete()` deleting files for a stale model whose row still existed.
 3.4 Admin screens: Boats, Experiences, Add-ons, Harbors, Amenities, Captains, Users, Settings, Cancellation policies; dashboard skeleton.
+  - **Added 2026-11-23 (R17):** the boat form gets an **"Allow trip extensions"** switch (new column `boats.extensions_enabled`, default on; admin-only, owners can't change it). The Captains screen manages captain profiles only; captain accounts, applications and invites come in Phase 8.1.
   - **User requirements (2026-11-22):** the admin can edit / unpublish / mark Unavailable **any** boat (house or owner); the Unavailable tag is admin-only (owners block dates in their calendar). Owner boats appear on the site only after the admin approves them (status `published`); an owner's edits to a live boat wait for re-approval (`pending_changes`, Phase 6). **Delete = soft delete (Trash) with Restore; Delete permanently = removes the database row** (and its files and pivot rows) — blocked when the record has bookings / payments (financial records are kept, PLAN §8.5); then it can only stay archived. Every delete / restore / permanent delete needs a password confirmation, a reason and an audit entry. Applies to boats, captains, experiences, add-ons and harbors (add soft deletes to harbors and add-ons); cancellation policies and settings are edit-only.
 3.5 Public pages read from the DB. **Unavailable** tag from `booking_enabled`. Set up the **client's own boat** (once its details arrive) and mark the other boats unavailable.
 3.6 Cache the public catalog; SEO meta + sitemap.
@@ -872,7 +1015,7 @@ There are also in-app notifications (bell icon) for customers, owners and the ad
 
 ### Phase 4 — Booking engine (payment stubbed)
 4.1 `QuoteService` (from `CYB.quote`, in cents) + unit tests: weekend, promo, gratuity, add-ons per guest, duration prices, rounding, deposit vs full.
-4.2 `AvailabilityService`: rules, blocks, bookings + buffer, advance notice, weekdays and season, guest limits.
+4.2 `AvailabilityService`: rules, blocks, bookings + buffer, advance notice, weekdays and season, guest limits. Built around one "busy intervals" method for boats (and later captains), so trip offers and extensions (Phase 8) reuse it (§7.2).
 4.3 Booking wizard JS ⇄ JSON endpoints (`availability`, `quote`, `hold`); deep links (`?yacht=`, `?experience=`, `?date=`).
 4.4 Hold + checkout: bookings, line items, status history, hold expiry, **double-booking lock**, inline login/register, promo codes + redemptions.
 4.5 Confirmation page + email + .ics.
@@ -905,12 +1048,13 @@ There are also in-app notifications (bell icon) for customers, owners and the ad
 7.6 Tax forms (1099) via the Stripe Express dashboard link.
 **QA:** ledger invariants (balance = sum of entries; available never includes held money); 72 h boundary tests; complaint → deduction → negative balance recovery; permission tests; audit entries for every money action.
 
-### Phase 8 — Captain operations
-8.1 Captain documents + license-expiry alerts; captain unavailability.
-8.2 Assign / reassign on the booking page (checks from §7.8) → **email to the captain** (+ .ics), resend button, unassigned email.
-8.3 Captain card on the customer trip page and in the reminder email; "trips without a captain" on the admin home.
-8.4 Captain pay ledger (pay rate × hours + gratuity) and captain payouts (manual).
-**QA:** conflict tests (overlap, expired license, passenger limit); email content tests; reassignment flow.
+### Phase 8 — Captains: portal, trip offers, extensions (rewritten 2026-11-23, D19 + D20)
+8.1 **Captain accounts + dashboard:** `captain` role; `captains.user_id` + application columns; apply form (Turnstile, license document on the private disk) and admin approval / rejection; admin invite (signed link → set password); `/captain` layout in the owner dashboard's design; profile (license changes go back for review); availability (days off → `captain_unavailability`); license-expiry alerts; the bell (database notifications).
+8.2 **Trip offers + assignment (§7.8):** eligibility checks; "Request captains" (all eligible / selected, deadline) → `captain_trip_offers`; accept with the booking-row lock (**the first to accept gets the trip**), decline, filled, withdrawn, expired (`ExpireCaptainOffers`); direct assignment + **Acknowledge** + reminder (`RemindUnacknowledgedTrips`); release up to 48 h before; reassignment.
+8.3 **Notifications:** dashboard + bell + email (+ .ics) for offers, assignments, changes, cancellations and extensions (reference only, no customer name in emails, R6); captain trip reminder T-24h; captain card on the customer trip page and in the reminder email; admin alerts and the action list (no captain, offers expired, not acknowledged, applications).
+8.4 **Captain pay:** ledger (pay rate × hours + gratuity, extensions included), earnings page, captain payouts (manual).
+8.5 **Trip extensions (§7.9):** "Extend your trip" card; options from `AvailabilityService` (boat + captain); extension hold + lock; Stripe payment (saved card one tap); webhook confirms → booking `ends_at`, extension lines, ledger; captain / owner / admin / customer told; admin refund only.
+**QA:** offer race (two captains accept at the same moment → exactly one wins); eligibility tests (overlap + turnaround, expired license, passenger limit, unavailability, not approved, suspended); captain isolation (another captain's offer or trip → 404; a declined / lost / released trip → 404); no customer contact data in captain pages, JSON or emails; release cut-off; acknowledge reminder; extension tests: cut-off, whole hours only (a half hour is refused with 422), next booking + buffer, captain's next trip, closing time, longest trip, two customers on the same free time, hold expiry, webhook replay, ledger entries; the §8.2 endpoint test set for every new endpoint.
 
 ### Phase 9 — Communication
 9.1 Contact form end to end: §8.2 rules + Turnstile + honeypot + throttle; stored; email to the business inbox + auto-reply; admin inbox with replies.
@@ -1014,7 +1158,8 @@ The static mockup can stay on Vercel for client demos until Phase 1 is done.
   - Payout pause and hold.
   - Stripe Connect handles owner bank details, KYC and 1099s.
 - **Refunds:** Boatsetter-style cancellation policies stored as editable rules, with a refund preview and an admin override.
-- **Captains:** a captain assignment email (+ .ics), USCG passenger limits tied to the license type, and license and insurance expiry checks.
+- **Captains:** a captain portal (apply / invite + approval), trip offers where the first to accept gets the trip, acknowledgement of assignments, assignment emails (+ .ics), USCG passenger limits tied to the license type, and license and insurance expiry checks.
+- **Trip extensions:** extra time bought during the trip, checked against the boat's and the captain's schedule.
 - **Listings:** re-approval of risky edits on published owner boats.
 - **Files:** private storage for documents, image re-encoding, and backups that include `storage/`.
 - **Records:** an audit log, a login log, and account deletion with anonymization.
@@ -1023,9 +1168,9 @@ The static mockup can stay on Vercel for client demos until Phase 1 is done.
 
 - Reviews and ratings. Until then, the admin sets the rating and review count shown on each boat.
 - Liability waiver e-signature and security-deposit holds.
-- Customer ↔ owner messaging, and SMS.
+- Customer ↔ owner messaging, and SMS (also for captain offers and trip extensions).
 - Gift cards and customer credits.
-- A captain portal login.
+- Adding hours before the trip from the customer's side (the admin does it for now).
 - Staff roles (manager, support) with permissions.
 - Automatic scheduled payouts.
 - Multi-language and analytics.
