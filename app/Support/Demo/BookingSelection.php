@@ -2,6 +2,7 @@
 
 namespace App\Support\Demo;
 
+use App\Services\PublicCatalog;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Fluent;
 
@@ -44,10 +45,10 @@ class BookingSelection
 
     public ?string $occasion = null;
 
-    public function __construct(private DemoCatalog $catalog) {}
+    public function __construct(private PublicCatalog $catalog) {}
 
     /** @param array<string, mixed> $input */
-    public static function from(array $input, DemoCatalog $catalog): self
+    public static function from(array $input, PublicCatalog $catalog): self
     {
         $selection = new self($catalog);
         $str = fn (string $key) => isset($input[$key]) && is_string($input[$key]) ? trim($input[$key]) : null;

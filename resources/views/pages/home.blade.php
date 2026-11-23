@@ -17,6 +17,9 @@
         ['slug' => 'private', 'text' => 'Your yacht, your route — skyline, beaches or simply open water.', 'image' => 'images/yacht-aerial.jpg'],
     ];
     $experienceNames = $experiences->pluck('name', 'slug');
+    // Only tiles whose experience is live: hiding or trashing one in the admin removes its tile (PLAN 3.5).
+    $destinations = array_values(array_filter($destinations, fn (array $tile) => $experienceNames->has($tile['slug'])));
+    $occasions = array_values(array_filter($occasions, fn (array $tile) => $experienceNames->has($tile['slug'])));
     $whyUs = [
         ['icon' => 'ship-wheel', 'title' => 'Captain included', 'text' => 'Every package comes with a licensed, background-checked captain. No extra hiring.'],
         ['icon' => 'cloud-sun', 'title' => 'Weather guarantee', 'text' => 'If the captain calls it, you reschedule free or get a full refund.'],

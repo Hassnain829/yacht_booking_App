@@ -11,11 +11,19 @@
     $selectClass = 'w-full appearance-none rounded-full border border-navy-200 bg-white py-2.5 pl-4 pr-9 text-sm font-semibold text-navy-800 focus:border-navy-950 focus:outline-hidden';
     $guestOptions = [0 => 'Any group size', 6 => '2–6 guests', 13 => '7–13 guests', 49 => '14–49 guests', 80 => '50–80 guests'];
     $visibleCount = $yachts->where('visible', true)->count();
+    // The mockup says "Six hand-picked yachts…"; the number follows the live fleet (3.5).
+    $fleetCount = $yachts->count();
+    $countWord = ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve'][$fleetCount - 1] ?? null;
+    $fleetIntro = match (true) {
+        $fleetCount === 0 => 'Hand-picked yachts for every kind of Chicago day',
+        $countWord !== null => $countWord.' hand-picked '.($fleetCount === 1 ? 'yacht' : 'yachts').' for every kind of Chicago day',
+        default => $fleetCount.' hand-picked yachts for every kind of Chicago day',
+    }.' — each one inspected, insured and captained by a licensed local pro.';
 @endphp
 
 @section('content')
     <x-page-hero image="images/yacht-skyline-majesty.jpg" crumb="Yachts" image-class="opacity-60" overlay-class="from-navy-950/80 via-navy-950/50 to-navy-950"
-                 intro="Six hand-picked yachts for every kind of Chicago day — each one inspected, insured and captained by a licensed local pro.">
+                 :intro="$fleetIntro">
         Our <em>Fleet</em>
     </x-page-hero>
 

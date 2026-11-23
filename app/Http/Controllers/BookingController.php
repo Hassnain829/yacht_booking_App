@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\PublicCatalog;
 use App\Support\Demo\BookingSelection;
-use App\Support\Demo\DemoCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Fluent;
 use Illuminate\View\View;
@@ -17,7 +17,7 @@ class BookingController extends Controller
      * Phase 1: catalog + demo availability run in the browser.
      * Phase 4: GET /book/availability and POST /book/quote JSON endpoints, then POST /book/hold.
      */
-    public function create(Request $request, DemoCatalog $catalog): View
+    public function create(Request $request, PublicCatalog $catalog): View
     {
         $selection = BookingSelection::from($request->query(), $catalog);
         $pricing = $catalog->pricing();

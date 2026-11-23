@@ -40,8 +40,13 @@
                         <div class="overflow-hidden rounded-[2rem]"><img src="{{ asset($experience->image) }}" alt="{{ $experience->name }}" loading="lazy" class="aspect-[5/4] w-full object-cover transition duration-[1.2s] hover:scale-105"></div>
                         <div data-flip-badge @class(['absolute -bottom-6 rounded-2xl bg-white p-5 shadow-card', 'left-6' => $flip, 'right-6' => ! $flip])>
                             <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-navy-400">All-in from</p>
-                            <p class="text-2xl font-extrabold text-navy-950">{{ money($experience->from_cents) }}</p>
-                            <p class="text-xs text-navy-400">incl. captain · before tax</p>
+                            @if ($experience->from_cents !== null)
+                                <p class="text-2xl font-extrabold text-navy-950">{{ money($experience->from_cents) }}</p>
+                                <p class="text-xs text-navy-400">incl. captain · before tax</p>
+                            @else
+                                <p class="text-2xl font-extrabold text-navy-950">On request</p>
+                                <p class="text-xs text-navy-400">no yacht offers it right now</p>
+                            @endif
                         </div>
                     </div>
                     <div class="reveal" data-delay="1">

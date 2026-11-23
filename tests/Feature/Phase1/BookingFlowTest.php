@@ -2,11 +2,14 @@
 
 namespace Tests\Feature\Phase1;
 
+use App\Models\Boat;
+use App\Services\PublicCatalog;
 use App\Support\Demo\BookingSelection;
-use App\Support\Demo\DemoCatalog;
 use App\Support\Demo\DemoQuote;
 use Carbon\CarbonImmutable;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\SeedsPublicCatalog;
 use Tests\TestCase;
 
 /**
@@ -18,11 +21,14 @@ use Tests\TestCase;
  */
 class BookingFlowTest extends TestCase
 {
+    use RefreshDatabase, SeedsPublicCatalog;
+
     /** "Today" for every test: Tuesday 14 July 2026, 10:00 in Chicago. */
     protected function setUp(): void
     {
         parent::setUp();
         $this->travelTo(CarbonImmutable::parse('2026-07-14 10:00:00', 'America/Chicago'));
+        $this->seedPublicCatalog(); // the booking pages read the database since 3.5
     }
 
     /* ------------------------------------------------------------------ helpers */
@@ -45,7 +51,7 @@ class BookingFlowTest extends TestCase
 
     private function selection(array $input): BookingSelection
     {
-        return BookingSelection::from($input, app(DemoCatalog::class));
+        return BookingSelection::from($input, app(PublicCatalog::class));
     }
 
     /** @return array<string, mixed> */
@@ -60,7 +66,7 @@ class BookingFlowTest extends TestCase
     /** What the server should charge for a payload (same calculator as the controller). */
     private function expectedQuote(array $payload, string $plan): array
     {
-        $catalog = app(DemoCatalog::class);
+        $catalog = app(PublicCatalog::class);
 
         return DemoQuote::fromConfig()->quote($catalog->yacht($payload['yacht']), $catalog->experience($payload['experience']), [
             'date' => $payload['date'],
@@ -94,9 +100,8 @@ class BookingFlowTest extends TestCase
         $this->assertNull($this->selection(['experience' => 'sunset', 'yacht' => 'lakeside'])->yacht, 'Lakeside does not run sunset cruises');
         $this->assertNull($this->selection(['yacht' => 'no-such-boat'])->yacht);
 
-        $yachts = config('demo.yachts');
-        $yachts[0]['booking_enabled'] = false; // azure
-        config(['demo.yachts' => $yachts]);
+        Boat::query()->where('slug', 'azure')->update(['booking_enabled' => false]); // the admin's Unavailable switch
+        $this->app->forgetInstance(PublicCatalog::class);
         $this->assertNull($this->selection(['experience' => 'sunset', 'yacht' => 'azure'])->yacht);
 
         $wizard = $this->embedded($this->get('/book?yacht=azure')->getContent(), 'data-wizard');
@@ -294,9 +299,8 @@ class BookingFlowTest extends TestCase
 
     public function test_a_boat_that_stops_taking_bookings_is_rejected_at_checkout(): void
     {
-        $yachts = config('demo.yachts');
-        $yachts[0]['booking_enabled'] = false; // azure
-        config(['demo.yachts' => $yachts]);
+        Boat::query()->where('slug', 'azure')->update(['booking_enabled' => false]); // the admin's Unavailable switch
+        $this->app->forgetInstance(PublicCatalog::class);
 
         $this->postJson('/checkout', $this->payload())->assertStatus(422)->assertJsonValidationErrors('booking');
     }

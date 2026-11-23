@@ -12,10 +12,12 @@ use App\Models\Experience;
 use App\Models\Harbor;
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\PublicCatalog;
 use App\View\Composers\FooterComposer;
 use App\View\Composers\HeaderComposer;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Foundation\Http\Events\RequestHandled;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
@@ -31,7 +33,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // One catalog per request: the controller, the footer and the booking pieces share its queries (PLAN 3.5).
+        $this->app->scoped(PublicCatalog::class);
     }
 
     /**
@@ -39,6 +42,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // …and forgotten after every request, so a long-lived process (tests, workers) never serves stale data.
+        Event::listen(RequestHandled::class, fn () => $this->app->forgetInstance(PublicCatalog::class));
+
         View::composer('partials.footer', FooterComposer::class);
         View::composer(['partials.header', 'partials.mobile-menu'], HeaderComposer::class);
 

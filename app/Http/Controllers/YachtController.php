@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\Demo\DemoCatalog;
+use App\Services\PublicCatalog;
 use App\Support\Demo\DemoQuote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -21,7 +21,7 @@ class YachtController extends Controller
      * works without JS and links are shareable. Unknown values are ignored, never echoed raw.
      * Every boat is rendered; non-matching ones are `hidden` and the JS re-filters instantly.
      */
-    public function index(Request $request, DemoCatalog $catalog): View
+    public function index(Request $request, PublicCatalog $catalog): View
     {
         $yachts = $catalog->yachts();
         $harbors = $catalog->harbors();
@@ -50,11 +50,11 @@ class YachtController extends Controller
     }
 
     /** Yacht detail page. */
-    public function show(string $slug, DemoCatalog $catalog): View
+    public function show(string $slug, PublicCatalog $catalog): View
     {
         $yacht = $catalog->yacht($slug) ?? abort(404);
         $experiences = $catalog->experiences()->whereIn('slug', $yacht->experiences)->values();
-        $quote = DemoQuote::fromConfig();
+        $quote = DemoQuote::fromSettings();
 
         // First experience + its shortest duration = the default shown in the booking card.
         $firstExperience = $experiences->first();

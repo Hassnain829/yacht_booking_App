@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\Demo\DemoCatalog;
+use App\Services\PublicCatalog;
 use Illuminate\View\View;
 
 class HomeController extends Controller
 {
     /** Phase 1: demo catalog. Phase 3: Eloquent (Boat, Experience, Testimonial, Faq). */
-    public function __invoke(DemoCatalog $catalog): View
+    public function __invoke(PublicCatalog $catalog): View
     {
         $yachts = $catalog->yachts();
 

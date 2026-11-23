@@ -45,8 +45,11 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
   - Business logic lives in `app/Services` and `app/Actions`. Controllers stay thin.
   - Each model's status changes go through one service method, which also writes the history.
   - Use `app/Enums` for statuses, one FormRequest per form/endpoint, one Policy per model, and API Resources for every JSON response.
+- **Public catalog (since 3.5):** the public site reads `App\Services\PublicCatalog`, the database catalog in the Fluent shape the views and the booking JS use. It returns only published / shown records, never the Trash, and image paths for `asset()`.
+  - Never look up an experience, boat or add-on by a fixed slug without handling "not there": the admin can hide or trash any of them.
+  - Page tests seed it with `Tests\Concerns\SeedsPublicCatalog` (+ RefreshDatabase).
 - **Phase 1 demo code** (delete when the real data arrives):
-  - Demo data lives in `config/demo*.php`, read through `App\Support\Demo\*` (shaped like the future models, dates relative to "now").
+  - Demo data lives in `config/demo*.php`, read through `App\Support\Demo\*` (shaped like the future models, dates relative to "now"). Since 3.5 only the still-demo screens use it (My trips, owner area, admin bookings / finance, promo codes, page content).
   - `<form data-demo-form="message">` = a form whose endpoint doesn't exist yet: the browser validates it, then shows a toast. Remove the attribute when the endpoint is built.
 - **Components with built-in classes take props, never a second conflicting class:** `x-button` → `size`/`variant`, `x-admin.pill` → `tone`, `x-admin.table` → `min`.
 - **Files:**

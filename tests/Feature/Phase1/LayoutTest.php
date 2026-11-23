@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Fluent;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\SeedsPublicCatalog;
 use Tests\TestCase;
 
 /**
@@ -14,7 +15,13 @@ use Tests\TestCase;
  */
 class LayoutTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, SeedsPublicCatalog;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seedPublicCatalog(); // the public pages read the database since 3.5
+    }
 
     private const NAV_LABELS = ['Home', 'Yachts', 'Experiences', 'Pricing', 'About Us', 'Contact Us', 'List Your Boat'];
 

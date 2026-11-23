@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests;
 
+use App\Services\PublicCatalog;
 use App\Support\Demo\BookingSelection;
-use App\Support\Demo\DemoCatalog;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -100,6 +100,6 @@ class CheckoutRequest extends FormRequest
 
     public function selection(): BookingSelection
     {
-        return BookingSelection::from($this->only(['experience', 'yacht', 'guests', 'date', 'time', 'hours', 'addons', 'occasion']), app(DemoCatalog::class));
+        return BookingSelection::from($this->only(['experience', 'yacht', 'guests', 'date', 'time', 'hours', 'addons', 'occasion']), app(PublicCatalog::class));
     }
 }

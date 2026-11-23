@@ -2,7 +2,11 @@
 
 namespace Tests\Feature\Phase1;
 
+use App\Models\Boat;
+use App\Services\PublicCatalog;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\SeedsPublicCatalog;
 use Tests\TestCase;
 
 /**
@@ -11,6 +15,14 @@ use Tests\TestCase;
  */
 class PublicPagesTest extends TestCase
 {
+    use RefreshDatabase, SeedsPublicCatalog;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seedPublicCatalog(); // the pages read the database since 3.5
+    }
+
     /** @return array<string, array{0: string, 1: list<string>}> */
     public static function pages(): array
     {
@@ -82,9 +94,8 @@ class PublicPagesTest extends TestCase
 
     public function test_unavailable_yacht_shows_the_tag_and_cannot_be_booked(): void
     {
-        $yachts = config('demo.yachts');
-        $yachts[0]['booking_enabled'] = false; // azure
-        config(['demo.yachts' => $yachts]);
+        Boat::query()->where('slug', 'azure')->update(['booking_enabled' => false]); // the admin's Unavailable switch
+        $this->app->forgetInstance(PublicCatalog::class);
 
         $this->get('/yachts/azure')
             ->assertOk()

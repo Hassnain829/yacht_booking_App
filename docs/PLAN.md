@@ -1110,7 +1110,30 @@ There are also in-app notifications (bell icon) for customers, owners, captains 
     - **Order on an existing database:** run `php artisan migrate` before seeding again — the seeders write amenity ULIDs.
   - **Added 2026-11-23 (R17):** the boat form gets an **"Allow trip extensions"** switch (new column `boats.extensions_enabled`, default on; admin-only, owners can't change it). The Captains screen manages captain profiles only; captain accounts, applications and invites come in Phase 8.1.
   - **User requirements (2026-11-22):** the admin can edit / unpublish / mark Unavailable **any** boat (house or owner); the Unavailable tag is admin-only (owners block dates in their calendar). Owner boats appear on the site only after the admin approves them (status `published`); an owner's edits to a live boat wait for re-approval (`pending_changes`, Phase 6). **Delete = soft delete (Trash) with Restore; Delete permanently = removes the database row** (and its files and pivot rows) — blocked when the record has bookings / payments (financial records are kept, PLAN §8.5); then it can only stay archived. Every delete / restore / permanent delete needs a password confirmation, a reason and an audit entry. Applies to boats, captains, experiences, add-ons and harbors (add soft deletes to harbors and add-ons); cancellation policies and settings are edit-only.
-3.5 Public pages read from the DB. **Unavailable** tag from `booking_enabled`. Set up the **client's own boat** (once its details arrive) and mark the other boats unavailable.
+3.5 Public pages read from the DB. **Unavailable** tag from `booking_enabled`. Set up the **client's own boat** (once its details arrive) and mark the other boats unavailable. ✅ done 2026-11-23.
+  - **`App\Services\PublicCatalog`** (a scoped singleton, forgotten after every request) replaces DemoCatalog for the public site: home, fleet, boat page, experiences, pricing, about, contact, footer, the booking wizard, checkout and confirmation (`BookingSelection`, `CheckoutRequest`).
+    - It returns the same Fluent shape the Phase 1 views and the booking JS were built on, so the markup didn't change.
+    - Only what the admin made public is shown: `published` boats (Unavailable tag = `booking_enabled`), shown experiences / add-ons / harbors; SoftDeletes leaves out the Trash.
+    - A boat offers an experience only while that experience is shown, not in the Trash, and on for that boat.
+    - Images are "storage/…" paths for `asset()` (same host → CSP-safe). Fleet cards use the 800 px "card" copy. A record without a photo gets `images/placeholder-boat.svg`.
+    - Prices and rules (tax, deposit, weekend rate, balance days, gratuity) come from **Settings**; promo codes and the editable content (stats, testimonials, FAQs, team) stay demo config until 4.7 / Phase 10.
+  - The demo screens that are still demo (My trips, owner area, admin bookings / finance) keep DemoCatalog + `DemoQuote::fromConfig()` until Phases 4–7.
+  - **Hardened for a catalog the admin changes:**
+    - Home tiles of a hidden / trashed experience drop out; this crashed before.
+    - Pricing: packages whose boat or experience is gone drop out; no live boat → no estimator.
+    - Experiences: one that no boat offers shows "On request".
+    - Contact: no harbor → no map.
+    - Checkout / confirmation samples use whatever is bookable, or send the visitor to /book.
+  - **The client's own boat:** the admin can now add it in Admin → Boats and switch the demo boats to Unavailable — no code step is needed once the details arrive.
+  - Not yet: a boat's own weekend markup, fixed duration prices and per-boat package fees are applied by the QuoteService (4.1); until then the site's estimates use the hourly rate and the site weekend rate.
+  - **Tests:**
+    - The page tests seed the demo catalog through `Tests\Concerns\SeedsPublicCatalog`, which uses `InstantMediaService` (no image encoding: 491 s → 48 s).
+    - New PublicCatalogTest (8): hidden / trashed / draft records left out (also from the wizard and deep links), the admin's edits and Unavailable switch on the site, same-host `/storage` images + the placeholder, Settings prices, an empty catalog, home tiles, the checkout sample.
+    - 478 PHP tests (3,083 assertions) + 39 JS tests; Pint clean.
+  - **Browser QA:**
+    - Isolated server with the real demo seed (27 WebP photos; `APP_URL` on another host name): 14 public pages (home, fleet + filter, two boat pages, experiences + filter, pricing, about, contact, wizard + deep link, checkout, confirmation) at 390 / 768 / 1280 / 1440 px with no overflow, broken images, console errors or CSP reports. Every page loads its images from `/storage` on the page's own host.
+    - Flow: the admin switched The Azure off → its fleet card showed Unavailable → the wizard no longer preselected it from a deep link.
+  - **Fixed during QA:** the fleet hero said "Six hand-picked yachts" whatever the fleet was; it now follows the live count (and still reads "Six…" with the 6 demo boats).
 3.6 Cache the public catalog; SEO meta + sitemap.
 **QA:** admin CRUD + policy tests; public pages show admin changes; upload security tests (wrong mime type, oversized file, PHP disguised as an image); sort/filter whitelist tests.
 

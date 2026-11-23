@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\Demo\DemoCatalog;
+use App\Services\PublicCatalog;
 use App\Support\Demo\DemoQuote;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -15,7 +15,7 @@ class ExperienceController extends Controller
 
     private const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-    public function index(Request $request, DemoCatalog $catalog): View
+    public function index(Request $request, PublicCatalog $catalog): View
     {
         $category = $request->query('category');
         $category = is_string($category) && array_key_exists($category, self::CATEGORIES) ? $category : 'all';

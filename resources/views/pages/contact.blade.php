@@ -58,9 +58,11 @@
                 </div>
 
                 <div class="space-y-6">
-                    <div class="reveal overflow-hidden rounded-[2rem] ring-1 ring-navy-100" data-delay="1">
-                        <iframe title="Map of {{ $harbor->name }}, Chicago" src="https://www.google.com/maps?q={{ urlencode($harbor->map_query) }}&amp;output=embed" class="h-80 w-full border-0" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
-                    </div>
+                    @if ($harbor)
+                        <div class="reveal overflow-hidden rounded-[2rem] ring-1 ring-navy-100" data-delay="1">
+                            <iframe title="Map of {{ $harbor->name }}, Chicago" src="https://www.google.com/maps?q={{ urlencode($harbor->map_query) }}&amp;output=embed" class="h-80 w-full border-0" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+                        </div>
+                    @endif
                     <div class="reveal rounded-[2rem] bg-navy-950 p-8 text-white" data-delay="2">
                         <p class="font-display text-2xl">Quick answers</p>
                         <div class="mt-4 divide-y divide-white/10" data-accordion="single">

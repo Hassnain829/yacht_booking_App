@@ -2,13 +2,14 @@
 
 namespace App\Support\Demo;
 
+use App\Services\PublicCatalog;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Fluent;
 
 /**
  * Price calculator, ported from the mockup's CYB.quote() (docs/PLAN.md §7.1). All money in cents.
  *
- * Phase 1: used for server-rendered examples (yacht page, pricing page).
+ * Phase 1: used for server-rendered examples (yacht page, pricing page). Since 3.5 its rates come from Settings.
  * Phase 4: becomes App\Services\QuoteService (reads the DB, promo codes table, settings).
  * Must stay identical to resources/js/lib/demo-quote.js (tests/Unit/DemoQuoteTest + tests/js).
  */
@@ -17,9 +18,16 @@ class DemoQuote
     /** @param  array<string, mixed>  $pricing  config('demo.pricing') */
     public function __construct(private array $pricing) {}
 
+    /** For the screens still on demo bookings (My trips, owner and admin bookings) until Phase 4. */
     public static function fromConfig(): self
     {
         return new self(config('demo.pricing'));
+    }
+
+    /** The public site since 3.5: tax, deposit and weekend rate from Admin → Settings; promo codes still demo. */
+    public static function fromSettings(): self
+    {
+        return new self(app(PublicCatalog::class)->pricing());
     }
 
     /** Durations offered for this boat + experience (never shorter than the boat's minimum). */

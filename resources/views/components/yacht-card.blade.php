@@ -5,7 +5,7 @@
     <x-yacht-card :yacht="$yacht" experience="sunset" :delay="2" />
 
     $yacht: slug, title, category, length_ft, max_guests, min_hours, hourly_rate_cents,
-            rating_avg, badge, cover, short, booking_enabled, harbor->name
+            rating_avg, badge, cover (cover_card = the 800 px copy, if any), short, booking_enabled, harbor->name
     Unavailable boats stay visible (details link works) but cannot be booked.
 --}}
 @props(['yacht', 'experience' => null, 'delay' => null])
@@ -18,7 +18,7 @@
 
 <article {{ $attributes->class('reveal group flex flex-col overflow-hidden rounded-3xl bg-white shadow-card ring-1 ring-navy-100/60 transition duration-500 hover:-translate-y-1.5') }} @if ($delay) data-delay="{{ $delay }}" @endif>
     <a href="{{ $detailsUrl }}" class="relative block aspect-[4/3] overflow-hidden" tabindex="-1" aria-hidden="true">
-        <img src="{{ asset($yacht->cover) }}" alt="" loading="lazy" decoding="async"
+        <img src="{{ asset($yacht->cover_card ?? $yacht->cover) }}" alt="" loading="lazy" decoding="async"
              @class(['h-full w-full object-cover transition duration-[1.2s] group-hover:scale-110', 'grayscale-[60%]' => ! $available])>
         <div class="absolute inset-0 bg-gradient-to-t from-navy-950/60 via-transparent to-transparent"></div>
         @if ($available)

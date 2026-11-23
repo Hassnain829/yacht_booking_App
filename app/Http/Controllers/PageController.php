@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\Demo\DemoCatalog;
+use App\Services\PublicCatalog;
 use App\Support\Demo\DemoQuote;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Fluent;
@@ -11,7 +11,7 @@ use Illuminate\View\View;
 /** Content pages: pricing, about, contact. */
 class PageController extends Controller
 {
-    public function pricing(DemoCatalog $catalog): View
+    public function pricing(PublicCatalog $catalog): View
     {
         $yachts = $catalog->yachts();
         $experiences = $catalog->experiences();
@@ -33,20 +33,25 @@ class PageController extends Controller
             ['title' => 'Sunset for Two', 'yacht' => 'windward', 'experience' => 'sunset', 'hours' => 2, 'guests' => 2, 'weekend' => false, 'addons' => ['champagne'], 'perks' => ['2-hour sunset sail', 'Licensed captain', 'Champagne toast', 'Blankets & ice'], 'featured' => false],
             ['title' => 'Playpen Party', 'yacht' => 'azure', 'experience' => 'playpen', 'hours' => 4, 'guests' => 12, 'weekend' => true, 'addons' => ['lilypad'], 'perks' => ['4 hours at the Playpen', 'Captain included', 'Lily pad & floats', 'Saturday rate'], 'featured' => true],
             ['title' => 'Corporate Cruise', 'yacht' => 'skyline', 'experience' => 'corporate', 'hours' => 3, 'guests' => 40, 'weekend' => false, 'addons' => ['catering'], 'perks' => ['3-hour skyline cruise', 'Captain + 2 crew', 'Catering for 40', 'Event coordinator'], 'featured' => false],
-        ])->map(function (array $package) use ($catalog, $addons, $calculator, $nextDate) {
-            $yacht = $catalog->yacht($package['yacht']);
-            $quote = $calculator->quote($yacht, $catalog->experience($package['experience']), [
-                'date' => $nextDate($package['weekend']),
-                'hours' => $package['hours'],
-                'guests' => $package['guests'],
-                'addons' => $addons->whereIn('slug', $package['addons'])->values()->all(),
-            ]);
+        ])
+            // A package whose boat or experience is hidden / in the Trash is simply not shown (PLAN 3.5).
+            ->filter(fn (array $package) => $catalog->yacht($package['yacht']) !== null && $catalog->experience($package['experience']) !== null)
+            ->values()
+            ->map(function (array $package) use ($catalog, $addons, $calculator, $nextDate) {
+                $yacht = $catalog->yacht($package['yacht']);
+                $quote = $calculator->quote($yacht, $catalog->experience($package['experience']), [
+                    'date' => $nextDate($package['weekend']),
+                    'hours' => $package['hours'],
+                    'guests' => $package['guests'],
+                    'addons' => $addons->whereIn('slug', $package['addons'])->values()->all(),
+                ]);
 
-            return new Fluent($package + ['yachtModel' => $yacht, 'quote' => $quote]);
-        });
+                return new Fluent($package + ['yachtModel' => $yacht, 'quote' => $quote]);
+            });
 
-        $first = $yachts->first();
-        $firstExperiences = $experiences->whereIn('slug', $first->experiences)->values();
+        // The estimator starts on the first live boat that offers an experience (none live → no estimator).
+        $first = $yachts->first(fn (Fluent $yacht) => $yacht->experiences !== []) ?? $yachts->first();
+        $firstExperiences = $first ? $experiences->whereIn('slug', $first->experiences)->values() : collect();
 
         return view('pages.pricing', [
             'packages' => $packages,
@@ -54,7 +59,7 @@ class PageController extends Controller
             'experiences' => $experiences,
             'addons' => $addons,
             'pricing' => $pricing,
-            'estimator' => [
+            'estimator' => $first === null ? null : [
                 'yacht' => $first,
                 'experiences' => $firstExperiences,
                 'durations' => DemoQuote::durations($first, $firstExperiences->first()),
@@ -64,7 +69,7 @@ class PageController extends Controller
         ]);
     }
 
-    public function about(DemoCatalog $catalog): View
+    public function about(PublicCatalog $catalog): View
     {
         return view('pages.about', [
             'harbors' => $catalog->harbors(),
@@ -73,7 +78,7 @@ class PageController extends Controller
         ]);
     }
 
-    public function contact(DemoCatalog $catalog): View
+    public function contact(PublicCatalog $catalog): View
     {
         return view('pages.contact', [
             'experiences' => $catalog->experiences(),

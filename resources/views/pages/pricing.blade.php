@@ -7,9 +7,9 @@
 @php
     $fieldClass = 'mt-1.5 w-full rounded-xl border border-navy-200 bg-white px-4 py-3 text-sm font-semibold focus:border-navy-950 focus:outline-hidden';
     $weekendPct = App\Support\Money::percent($pricing['weekend_multiplier_bp'] - 10000);
-    $est = $estimator;
-    $estYacht = $est['yacht'];
-    $estQuote = $est['quote'];
+    $est = $estimator; // null when no boat is live (the estimator section is then left out)
+    $estYacht = $est['yacht'] ?? null;
+    $estQuote = $est['quote'] ?? null;
     $formula = [
         ['sailboat', 'Yacht rate', 'per hour × duration'],
         ['ship-wheel', 'Captain & crew', 'included in package'],
@@ -22,7 +22,7 @@
         'experiences' => $experiences->map(fn ($e) => ['slug' => $e->slug, 'name' => $e->name, 'package_fee_cents' => $e->package_fee_cents, 'durations' => $e->durations])->values(),
         'addons' => $addons->map(fn ($a) => collect($a->toArray())->only(['slug', 'name', 'price_cents', 'unit']))->values(),
         'pricing' => collect($pricing)->only(['weekend_multiplier_bp', 'tax_rate_bp', 'deposit_bp']),
-        'dates' => $est['dates'],
+        'dates' => $est['dates'] ?? null,
         'bookUrl' => route('booking.create'),
     ];
     $policies = [
@@ -85,7 +85,8 @@
         </div>
     </section>
 
-    {{-- Estimator --}}
+    {{-- Estimator (needs at least one live boat) --}}
+    @if ($est)
     <section class="bg-white py-24">
         <div class="container grid gap-12 lg:grid-cols-[1fr_1.1fr] lg:gap-20">
             <div class="reveal">
@@ -162,6 +163,7 @@
             </div>
         </div>
     </section>
+    @endif
 
     {{-- Rate card --}}
     <section class="py-24">
