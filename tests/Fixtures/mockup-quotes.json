@@ -1,0 +1,733 @@
+{
+  "_about": "Answers of the mockup's CYB.quote() (Desktop/Yacht-Web/assets/js/app.js + data.js) for 20 cases, in cents. The mockup rounds tax, gratuity, % discounts and the deposit to whole dollars; QuoteService keeps cents. Regenerate only if the mockup pricing changes.",
+  "cases": [
+    {
+      "input": {
+        "yacht": "azure",
+        "experience": "playpen",
+        "date": "2027-05-03",
+        "hours": 3,
+        "guests": 1,
+        "addons": [],
+        "promo": "",
+        "gratuity": 15,
+        "plan": "deposit"
+      },
+      "expected": {
+        "weekend": false,
+        "rate": 45000,
+        "charter": 135000,
+        "captain": 25500,
+        "lines": {
+          "charter": 135000,
+          "captain": 25500,
+          "package": 15000,
+          "cleaning": 15000
+        },
+        "subtotal": 190500,
+        "discount": 0,
+        "tax": 17100,
+        "gratuity": 24100,
+        "total": 231700,
+        "deposit": 115900,
+        "due_now": 115900,
+        "balance": 115800
+      }
+    },
+    {
+      "input": {
+        "yacht": "skyline",
+        "experience": "private",
+        "date": "2027-05-06",
+        "hours": 4,
+        "guests": 8,
+        "addons": [
+          "catering"
+        ],
+        "promo": "WELCOME10",
+        "gratuity": 18,
+        "plan": "full"
+      },
+      "expected": {
+        "weekend": false,
+        "rate": 95000,
+        "charter": 380000,
+        "captain": 70000,
+        "lines": {
+          "charter": 380000,
+          "captain": 70000,
+          "addon-catering": 28000,
+          "cleaning": 25000
+        },
+        "subtotal": 503000,
+        "discount": 38000,
+        "tax": 41900,
+        "gratuity": 81000,
+        "total": 587900,
+        "deposit": 294000,
+        "due_now": 587900,
+        "balance": 0
+      }
+    },
+    {
+      "input": {
+        "yacht": "windward",
+        "experience": "private",
+        "date": "2027-05-09",
+        "hours": 4,
+        "guests": 3,
+        "addons": [
+          "champagne",
+          "decor"
+        ],
+        "promo": "SUNSET50",
+        "gratuity": 20,
+        "plan": "deposit"
+      },
+      "expected": {
+        "weekend": true,
+        "rate": 25900,
+        "charter": 103600,
+        "captain": 26000,
+        "lines": {
+          "charter": 103600,
+          "captain": 26000,
+          "addon-champagne": 12000,
+          "addon-decor": 17500,
+          "cleaning": 7500
+        },
+        "subtotal": 166600,
+        "discount": 5000,
+        "tax": 14500,
+        "gratuity": 25900,
+        "total": 202000,
+        "deposit": 101000,
+        "due_now": 101000,
+        "balance": 101000
+      }
+    },
+    {
+      "input": {
+        "yacht": "golden",
+        "experience": "fireworks",
+        "date": "2027-05-12",
+        "hours": 3,
+        "guests": 9,
+        "addons": [
+          "catering",
+          "dj",
+          "ice"
+        ],
+        "promo": "",
+        "gratuity": 0,
+        "plan": "full"
+      },
+      "expected": {
+        "weekend": false,
+        "rate": 39500,
+        "charter": 118500,
+        "captain": 25500,
+        "lines": {
+          "charter": 118500,
+          "captain": 25500,
+          "package": 25000,
+          "addon-catering": 31500,
+          "addon-dj": 45000,
+          "addon-ice": 4500,
+          "cleaning": 15000
+        },
+        "subtotal": 265000,
+        "discount": 0,
+        "tax": 23900,
+        "gratuity": 0,
+        "total": 288900,
+        "deposit": 144500,
+        "due_now": 288900,
+        "balance": 0
+      }
+    },
+    {
+      "input": {
+        "yacht": "lakeside",
+        "experience": "fireworks",
+        "date": "2027-05-15",
+        "hours": 3,
+        "guests": 29,
+        "addons": [],
+        "promo": "WELCOME10",
+        "gratuity": 15,
+        "plan": "deposit"
+      },
+      "expected": {
+        "weekend": true,
+        "rate": 143800,
+        "charter": 431400,
+        "captain": 67500,
+        "lines": {
+          "charter": 431400,
+          "captain": 67500,
+          "package": 25000,
+          "cleaning": 30000
+        },
+        "subtotal": 553900,
+        "discount": 43100,
+        "tax": 46000,
+        "gratuity": 74800,
+        "total": 631600,
+        "deposit": 315800,
+        "due_now": 315800,
+        "balance": 315800
+      }
+    },
+    {
+      "input": {
+        "yacht": "onyx",
+        "experience": "celebration",
+        "date": "2027-05-18",
+        "hours": 4,
+        "guests": 36,
+        "addons": [
+          "catering"
+        ],
+        "promo": "SUNSET50",
+        "gratuity": 18,
+        "plan": "full"
+      },
+      "expected": {
+        "weekend": false,
+        "rate": 165000,
+        "charter": 660000,
+        "captain": 110000,
+        "lines": {
+          "charter": 660000,
+          "captain": 110000,
+          "package": 17500,
+          "addon-catering": 126000,
+          "cleaning": 35000
+        },
+        "subtotal": 948500,
+        "discount": 5000,
+        "tax": 84900,
+        "gratuity": 138600,
+        "total": 1167000,
+        "deposit": 583500,
+        "due_now": 1167000,
+        "balance": 0
+      }
+    },
+    {
+      "input": {
+        "yacht": "azure",
+        "experience": "proposal",
+        "date": "2027-05-21",
+        "hours": 3,
+        "guests": 4,
+        "addons": [
+          "champagne",
+          "decor"
+        ],
+        "promo": "",
+        "gratuity": 20,
+        "plan": "deposit"
+      },
+      "expected": {
+        "weekend": true,
+        "rate": 51800,
+        "charter": 155400,
+        "captain": 25500,
+        "lines": {
+          "charter": 155400,
+          "captain": 25500,
+          "package": 29500,
+          "addon-champagne": 12000,
+          "addon-decor": 17500,
+          "cleaning": 15000
+        },
+        "subtotal": 254900,
+        "discount": 0,
+        "tax": 22900,
+        "gratuity": 36200,
+        "total": 314000,
+        "deposit": 157000,
+        "due_now": 157000,
+        "balance": 157000
+      }
+    },
+    {
+      "input": {
+        "yacht": "skyline",
+        "experience": "celebration",
+        "date": "2027-05-24",
+        "hours": 4,
+        "guests": 1,
+        "addons": [
+          "catering",
+          "dj",
+          "ice"
+        ],
+        "promo": "WELCOME10",
+        "gratuity": 0,
+        "plan": "full"
+      },
+      "expected": {
+        "weekend": false,
+        "rate": 95000,
+        "charter": 380000,
+        "captain": 70000,
+        "lines": {
+          "charter": 380000,
+          "captain": 70000,
+          "package": 17500,
+          "addon-catering": 3500,
+          "addon-dj": 45000,
+          "addon-ice": 4500,
+          "cleaning": 25000
+        },
+        "subtotal": 545500,
+        "discount": 38000,
+        "tax": 45700,
+        "gratuity": 0,
+        "total": 553200,
+        "deposit": 276600,
+        "due_now": 553200,
+        "balance": 0
+      }
+    },
+    {
+      "input": {
+        "yacht": "windward",
+        "experience": "proposal",
+        "date": "2027-05-27",
+        "hours": 2,
+        "guests": 3,
+        "addons": [],
+        "promo": "SUNSET50",
+        "gratuity": 15,
+        "plan": "deposit"
+      },
+      "expected": {
+        "weekend": false,
+        "rate": 22500,
+        "charter": 45000,
+        "captain": 13000,
+        "lines": {
+          "charter": 45000,
+          "captain": 13000,
+          "package": 29500,
+          "cleaning": 7500
+        },
+        "subtotal": 95000,
+        "discount": 5000,
+        "tax": 8100,
+        "gratuity": 8700,
+        "total": 106800,
+        "deposit": 53400,
+        "due_now": 53400,
+        "balance": 53400
+      }
+    },
+    {
+      "input": {
+        "yacht": "golden",
+        "experience": "sunset",
+        "date": "2027-05-30",
+        "hours": 4,
+        "guests": 12,
+        "addons": [
+          "catering"
+        ],
+        "promo": "",
+        "gratuity": 18,
+        "plan": "full"
+      },
+      "expected": {
+        "weekend": true,
+        "rate": 45400,
+        "charter": 181600,
+        "captain": 34000,
+        "lines": {
+          "charter": 181600,
+          "captain": 34000,
+          "addon-catering": 42000,
+          "cleaning": 15000
+        },
+        "subtotal": 272600,
+        "discount": 0,
+        "tax": 24500,
+        "gratuity": 38800,
+        "total": 335900,
+        "deposit": 168000,
+        "due_now": 335900,
+        "balance": 0
+      }
+    },
+    {
+      "input": {
+        "yacht": "lakeside",
+        "experience": "celebration",
+        "date": "2027-06-02",
+        "hours": 3,
+        "guests": 71,
+        "addons": [
+          "champagne",
+          "decor"
+        ],
+        "promo": "WELCOME10",
+        "gratuity": 20,
+        "plan": "deposit"
+      },
+      "expected": {
+        "weekend": false,
+        "rate": 125000,
+        "charter": 375000,
+        "captain": 67500,
+        "lines": {
+          "charter": 375000,
+          "captain": 67500,
+          "package": 17500,
+          "addon-champagne": 12000,
+          "addon-decor": 17500,
+          "cleaning": 30000
+        },
+        "subtotal": 519500,
+        "discount": 37500,
+        "tax": 43400,
+        "gratuity": 88500,
+        "total": 613900,
+        "deposit": 307000,
+        "due_now": 307000,
+        "balance": 306900
+      }
+    },
+    {
+      "input": {
+        "yacht": "onyx",
+        "experience": "celebration",
+        "date": "2027-06-05",
+        "hours": 4,
+        "guests": 29,
+        "addons": [
+          "catering",
+          "dj",
+          "ice"
+        ],
+        "promo": "SUNSET50",
+        "gratuity": 0,
+        "plan": "full"
+      },
+      "note": "Float artifact: the mockup's JS shows $1897/hr (1650 × 1.15 = 1897.4999999999998); the exact rate rounds to $1898. Expected values: the same mockup code without the float noise.",
+      "expected": {
+        "weekend": true,
+        "rate": 189800,
+        "charter": 759200,
+        "captain": 110000,
+        "lines": {
+          "charter": 759200,
+          "captain": 110000,
+          "package": 17500,
+          "addon-catering": 101500,
+          "addon-dj": 45000,
+          "addon-ice": 4500,
+          "cleaning": 35000
+        },
+        "subtotal": 1072700,
+        "discount": 5000,
+        "tax": 96100,
+        "gratuity": 0,
+        "total": 1163800,
+        "deposit": 581900,
+        "due_now": 1163800,
+        "balance": 0
+      }
+    },
+    {
+      "input": {
+        "yacht": "azure",
+        "experience": "river",
+        "date": "2027-06-08",
+        "hours": 3,
+        "guests": 7,
+        "addons": [],
+        "promo": "",
+        "gratuity": 15,
+        "plan": "deposit"
+      },
+      "expected": {
+        "weekend": false,
+        "rate": 45000,
+        "charter": 135000,
+        "captain": 25500,
+        "lines": {
+          "charter": 135000,
+          "captain": 25500,
+          "package": 7500,
+          "cleaning": 15000
+        },
+        "subtotal": 183000,
+        "discount": 0,
+        "tax": 16500,
+        "gratuity": 24100,
+        "total": 223600,
+        "deposit": 111800,
+        "due_now": 111800,
+        "balance": 111800
+      }
+    },
+    {
+      "input": {
+        "yacht": "skyline",
+        "experience": "sunset",
+        "date": "2027-06-11",
+        "hours": 4,
+        "guests": 43,
+        "addons": [
+          "catering"
+        ],
+        "promo": "WELCOME10",
+        "gratuity": 18,
+        "plan": "full"
+      },
+      "expected": {
+        "weekend": true,
+        "rate": 109300,
+        "charter": 437200,
+        "captain": 70000,
+        "lines": {
+          "charter": 437200,
+          "captain": 70000,
+          "addon-catering": 150500,
+          "cleaning": 25000
+        },
+        "subtotal": 682700,
+        "discount": 43700,
+        "tax": 57500,
+        "gratuity": 91300,
+        "total": 787800,
+        "deposit": 393900,
+        "due_now": 787800,
+        "balance": 0
+      }
+    },
+    {
+      "input": {
+        "yacht": "windward",
+        "experience": "private",
+        "date": "2027-06-14",
+        "hours": 8,
+        "guests": 3,
+        "addons": [
+          "champagne",
+          "decor"
+        ],
+        "promo": "SUNSET50",
+        "gratuity": 20,
+        "plan": "deposit"
+      },
+      "expected": {
+        "weekend": false,
+        "rate": 22500,
+        "charter": 180000,
+        "captain": 52000,
+        "lines": {
+          "charter": 180000,
+          "captain": 52000,
+          "addon-champagne": 12000,
+          "addon-decor": 17500,
+          "cleaning": 7500
+        },
+        "subtotal": 269000,
+        "discount": 5000,
+        "tax": 23800,
+        "gratuity": 46400,
+        "total": 334200,
+        "deposit": 167100,
+        "due_now": 167100,
+        "balance": 167100
+      }
+    },
+    {
+      "input": {
+        "yacht": "golden",
+        "experience": "celebration",
+        "date": "2027-06-17",
+        "hours": 4,
+        "guests": 2,
+        "addons": [
+          "catering",
+          "dj",
+          "ice"
+        ],
+        "promo": "",
+        "gratuity": 0,
+        "plan": "full"
+      },
+      "expected": {
+        "weekend": false,
+        "rate": 39500,
+        "charter": 158000,
+        "captain": 34000,
+        "lines": {
+          "charter": 158000,
+          "captain": 34000,
+          "package": 17500,
+          "addon-catering": 7000,
+          "addon-dj": 45000,
+          "addon-ice": 4500,
+          "cleaning": 15000
+        },
+        "subtotal": 281000,
+        "discount": 0,
+        "tax": 25300,
+        "gratuity": 0,
+        "total": 306300,
+        "deposit": 153200,
+        "due_now": 306300,
+        "balance": 0
+      }
+    },
+    {
+      "input": {
+        "yacht": "lakeside",
+        "experience": "private",
+        "date": "2027-06-20",
+        "hours": 3,
+        "guests": 33,
+        "addons": [],
+        "promo": "WELCOME10",
+        "gratuity": 15,
+        "plan": "deposit"
+      },
+      "expected": {
+        "weekend": true,
+        "rate": 143800,
+        "charter": 431400,
+        "captain": 67500,
+        "lines": {
+          "charter": 431400,
+          "captain": 67500,
+          "cleaning": 30000
+        },
+        "subtotal": 528900,
+        "discount": 43100,
+        "tax": 43700,
+        "gratuity": 74800,
+        "total": 604300,
+        "deposit": 302200,
+        "due_now": 302200,
+        "balance": 302100
+      }
+    },
+    {
+      "input": {
+        "yacht": "onyx",
+        "experience": "celebration",
+        "date": "2027-06-23",
+        "hours": 4,
+        "guests": 22,
+        "addons": [
+          "catering"
+        ],
+        "promo": "SUNSET50",
+        "gratuity": 18,
+        "plan": "full"
+      },
+      "expected": {
+        "weekend": false,
+        "rate": 165000,
+        "charter": 660000,
+        "captain": 110000,
+        "lines": {
+          "charter": 660000,
+          "captain": 110000,
+          "package": 17500,
+          "addon-catering": 77000,
+          "cleaning": 35000
+        },
+        "subtotal": 899500,
+        "discount": 5000,
+        "tax": 80500,
+        "gratuity": 138600,
+        "total": 1113600,
+        "deposit": 556800,
+        "due_now": 1113600,
+        "balance": 0
+      }
+    },
+    {
+      "input": {
+        "yacht": "azure",
+        "experience": "private",
+        "date": "2027-06-26",
+        "hours": 6,
+        "guests": 10,
+        "addons": [
+          "champagne",
+          "decor"
+        ],
+        "promo": "",
+        "gratuity": 20,
+        "plan": "deposit"
+      },
+      "expected": {
+        "weekend": true,
+        "rate": 51800,
+        "charter": 310800,
+        "captain": 51000,
+        "lines": {
+          "charter": 310800,
+          "captain": 51000,
+          "addon-champagne": 12000,
+          "addon-decor": 17500,
+          "cleaning": 15000
+        },
+        "subtotal": 406300,
+        "discount": 0,
+        "tax": 36600,
+        "gratuity": 72400,
+        "total": 515300,
+        "deposit": 257700,
+        "due_now": 257700,
+        "balance": 257600
+      }
+    },
+    {
+      "input": {
+        "yacht": "skyline",
+        "experience": "corporate",
+        "date": "2027-06-29",
+        "hours": 4,
+        "guests": 36,
+        "addons": [
+          "catering",
+          "dj",
+          "ice"
+        ],
+        "promo": "WELCOME10",
+        "gratuity": 0,
+        "plan": "full"
+      },
+      "expected": {
+        "weekend": false,
+        "rate": 95000,
+        "charter": 380000,
+        "captain": 70000,
+        "lines": {
+          "charter": 380000,
+          "captain": 70000,
+          "addon-catering": 126000,
+          "addon-dj": 45000,
+          "addon-ice": 4500,
+          "cleaning": 25000
+        },
+        "subtotal": 650500,
+        "discount": 38000,
+        "tax": 55100,
+        "gratuity": 0,
+        "total": 667600,
+        "deposit": 333800,
+        "due_now": 667600,
+        "balance": 0
+      }
+    }
+  ]
+}

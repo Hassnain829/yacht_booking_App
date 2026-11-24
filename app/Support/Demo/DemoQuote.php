@@ -10,7 +10,9 @@ use Illuminate\Support\Fluent;
  * Price calculator, ported from the mockup's CYB.quote() (docs/PLAN.md §7.1). All money in cents.
  *
  * Phase 1: used for server-rendered examples (yacht page, pricing page). Since 3.5 its rates come from Settings.
- * Phase 4: becomes App\Services\QuoteService (reads the DB, promo codes table, settings).
+ * Since 4.1 the real price is App\Services\QuoteService (each boat's weekend rate, fixed prices, package
+ * overrides, promo limits, the deposit cut-off). This class only feeds the screens that are still demo, and
+ * goes away when the wizard (4.3), My trips (4.6) and admin bookings (4.7) read real quotes and bookings.
  * Must stay identical to resources/js/lib/demo-quote.js (tests/Unit/DemoQuoteTest + tests/js).
  */
 class DemoQuote

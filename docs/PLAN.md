@@ -1261,10 +1261,44 @@ There are also in-app notifications (bell icon) for customers, owners, captains 
         - A backwards block jumps to its error, which doesn't count as unsaved boat edits.
 
 ### Phase 4 — Booking engine (payment stubbed)
-4.1 `QuoteService` (from `CYB.quote`, in cents) + unit tests: weekend, promo, gratuity, add-ons per guest, duration prices, rounding, deposit vs full.
+4.1 `QuoteService` (from `CYB.quote`, in cents) + unit tests: weekend, promo, gratuity, add-ons per guest, duration prices, rounding, deposit vs full. ✅ done 2026-11-23.
+  - **Built:**
+    - `App\Services\QuoteService::quote(QuoteRequest): Quote` and `durations(Boat, ?Experience)`.
+    - Value objects in `app/Support/Pricing`:
+      - `QuoteRequest`: the choices only, with `localStart(date, time)` in Chicago time → UTC.
+      - `PromoTerms`: percent in bp or fixed in cents, `applies_to`, min subtotal, max discount.
+      - `QuoteLine`: shaped like a `booking_items` row (type, key, label, description, quantity, unit and amount in cents, payee).
+      - `Quote`: lines + adjustments (discount / tax / gratuity), totals, plan, deposit, balance due date, `pricingSnapshot`, `items()`, `toArray()`.
+    - Enums `BookingItemType`, `Payee`, `PaymentPlan`, `PromoType`, `PromoAppliesTo`.
+    - `QuoteException` is a `ValidationException`, so a choice that doesn't fit gives a 422 on its field: hours, guests, experience, addons or gratuity.
+    - No migration: the booking and promo tables come with the steps that write them.
+  - **Rules settled (§7.1 as applied):**
+    - **Weekend:** Fri–Sun is decided by the trip start in **Chicago time** (Thursday 11:30 PM is a weekday although it is Friday in UTC). The weekend hourly rate is rounded to whole dollars, as in the mockup. The **boat's own weekend multiplier** wins over the site setting.
+    - **Fixed price:** a boat's fixed price for a length replaces rate × hours. In 4.1 it is the same on every day. **User decision (2026-11-24): keep it flexible.** The admin can choose to add the weekend markup to a boat's fixed prices too (a per-boat switch in the boat form, read by QuoteService). It will be built with 4.2.
+    - **Lengths offered:** the experience's lengths, narrowed to the boat's own when they overlap (no overlap → the experience's), never below the boat's minimum.
+    - **Package fee:** the boat's override (pivot; $0 = no package line), else the experience fee. An experience the boat doesn't offer (not attached, pivot off, experience hidden) is refused.
+    - **Add-ons:** flat ones once, per-guest ones × guests; an add-on chosen twice counts once; hidden or trashed ones are refused.
+    - **Zero lines:** a $0 captain or fuel & cleaning line is left out.
+    - **Promo:** a % of the charter or the subtotal, or a fixed amount, never more than its base or its cap. Below its minimum subtotal it gives $0 and a reason ("SUNSET50 needs a booking of at least $2,000."). Tax is on the subtotal after the discount.
+    - **Gratuity:** % of charter + captain only. It must be 0 or one of the Settings options.
+    - **Deposit:** the Settings deposit % of the total; the balance is due `balance_due_days` (7) before the start. A trip starting sooner can only be paid in full (exactly 7 days ahead still allows a deposit).
+    - **Payee per line (§7.5):**
+      - house boats: everything to the platform, the gratuity to the captain;
+      - owner boats: charter + fuel & cleaning to the owner;
+      - when the owner drives (`captain_source = owner`): the captain line and the gratuity to the owner;
+      - package, add-ons, tax and the discount: the platform. **Confirmed by the user (2026-11-24): promo codes are given by the admin, so the platform pays for them (owner earnings are on the full charter).**
+    - **`pricingSnapshot`:** the rates used (hourly, weekend flag + multiplier, rate, fixed price, captain rate, crew, package, cleaning, tax %, gratuity %, deposit %, balance days, promo terms, ownership, captain source). Bookings store it; extensions (8.5) price from it.
+  - Still on `DemoQuote` until their steps: the wizard and checkout (4.3 / 4.4), the yacht / pricing / experience page examples (4.3), My trips (4.6), admin bookings (4.7).
+  - **QA:**
+    - 506 PHP tests, all passing. New: Phase4/QuoteParityTest (1 test, 301 assertions) + Phase4/QuoteServiceTest (14).
+    - **Parity with the mockup on 20 cases:** `tests/Fixtures/mockup-quotes.json` holds the answers of the mockup's own `CYB.quote()` (its `app.js` + `data.js` run in Node), covering 6 boats, 8 weekend days, add-ons, both promos, gratuity 0 / 15 / 18 / 20, and deposit and full payment.
+      - Every price line, the hourly rate and the subtotal match **to the cent**.
+      - The discount, tax and gratuity match to the dollar, and the totals within $2: the mockup rounds those to whole dollars, while checkout keeps cents.
+      - One case is a mockup float artifact: 1650 × 1.15 = 1897.4999… in JS, so the mockup shows $1,897/hr for an exact $1,897.50 that rounds to $1,898. That case is noted in the fixture and answered by the same mockup code without the float noise.
 4.2 `AvailabilityService`: rules, blocks, bookings + buffer, advance notice, weekdays and season, guest limits. Built around one "busy intervals" method for boats (and later captains), so trip offers and extensions (Phase 8) reuse it (§7.2).
 4.3 Booking wizard JS ⇄ JSON endpoints (`availability`, `quote`, `hold`); deep links (`?yacht=`, `?experience=`, `?date=`).
 4.4 Hold + checkout: bookings, line items, status history, hold expiry, **double-booking lock**, inline login/register, promo codes + redemptions.
+  - *2026-11-24, request to book:* owner boats are booked by request, and the owner approves first (Boatsetter-style, "Instant book" off by default). The booking statuses leave room for it (a request waiting for the owner, then accepted / declined / expired). The owner side is built in Phase 6. House boats are booked at once.
 4.5 Confirmation page + email + .ics.
 4.6 My trips + trip detail.
 4.7 Admin: Bookings (list, calendar, detail, status, notes) + promo codes.
@@ -1279,6 +1313,21 @@ There are also in-app notifications (bell icon) for customers, owners, captains 
 **QA:** Stripe test-card matrix (success, decline, 3-D Secure, insufficient funds); webhook replay and duplicates; refund math tests for every policy window (including deposit-only cases).
 
 ### Phase 6 — Owners: List Your Boat (real)
+> **Client request (2026-11-24): List Your Boat should work exactly like Boatsetter's.** The field-by-field map of Boatsetter's flow (start page with address + year / make / model, conditional location fields, start-time availability, per-duration pricing after listing, owner add-ons, manage tabs) and the comparison with our wizard are in [docs/research/boatsetter-list-your-boat.md](research/boatsetter-list-your-boat.md). Its §6 lists the client decisions needed before Phase 6.
+
+**Answered 2026-11-24** (details in §6 of that file):
+- **Like Boatsetter in fields and logic** (our own wording).
+- **Per-duration package pricing** with a Suggested ⇄ Custom toggle, set after listing.
+- **Buoy-style insurance questions** (the insurer is arranged later).
+- **Owner add-ons per boat.**
+- **Request to book**, with the owner's approval.
+- **No paid APIs:**
+  - a large make list + free-text model;
+  - Chicago-only harbor / marina list instead of Google address autocomplete;
+  - a rule-based earnings estimate.
+
+Still open: **start-time slots vs opening hours** (affects 4.2). Steps 6.1–6.5 will be rewritten from these decisions when Phase 6 starts.
+
 6.1 List Your Boat → auth → owner profile + role, set automatically.
 6.2 Wizard JS ⇄ `PATCH` per step (FormRequest per step): photos (min 4), insurance + COI (private), **Pricing step**, the 32/33 ft rules, resume, save & exit, final re-validation.
 6.3 Admin review queue (approve / request changes / reject) + emails; on approval the admin confirms pricing, commission and experiences → publish.

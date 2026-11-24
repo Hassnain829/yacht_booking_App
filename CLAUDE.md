@@ -39,6 +39,7 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
 ## Conventions
 
 - **Money** is integer cents (`*_cents`). **Rates** are basis points (`*_bp`; 2000 = 20%). Format only at the edge: `resources/js/lib/money.js` in JS, and a PHP Money helper in later phases.
+- **Prices** come only from `App\Services\QuoteService` (PLAN §7.1, since 4.1). Never add up a price in a controller, a view or JS. A changed price rule needs its test in `tests/Feature/Phase4/QuoteServiceTest`, and the mockup parity (`QuoteParityTest`) must keep passing.
 - **Time:** store UTC. Display in `config('app.display_timezone')` (America/Chicago). Date-only values are `YYYY-MM-DD` strings (`resources/js/lib/dates.js`).
 - **Public IDs:** use a `ulid` column in URLs. Never expose numeric IDs.
 - **Code structure:**
