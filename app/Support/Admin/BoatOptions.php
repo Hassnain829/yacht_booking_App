@@ -17,11 +17,6 @@ final class BoatOptions
     /** @var list<int> trip lengths (hours) a boat can offer */
     public const DURATIONS = [1, 2, 3, 4, 5, 6, 8, 10, 12];
 
-    /** Default weekly hours for a new boat (Chicago time). */
-    public const OPENS = '08:00';
-
-    public const CLOSES = '23:00';
-
     /**
      * The wizard's categories, plus `$current` when a boat already has another one (the demo boats use the
      * mockup's labels, e.g. "Luxury Yacht"), so editing such a boat never forces a new category.

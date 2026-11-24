@@ -77,7 +77,10 @@ class QuoteService
         $balanceDueDays = (int) $settings['balance_due_days'];
         $multiplierBp = $boat->weekend_multiplier_bp ?? (int) $settings['weekend_multiplier_bp'];
 
-        $experience = $request->experience ? $this->offeredExperience($boat, $request->experience) : null;
+        $experience = null;
+        if ($request->experience) {
+            $experience = $boat->offering($request->experience) ?? throw QuoteException::on('experience', 'This boat doesn\'t offer that experience.');
+        }
         $this->check($request, $settings['gratuity_options']);
 
         $hours = $request->hours;
@@ -85,16 +88,23 @@ class QuoteService
         $ownerBoat = ! $boat->isHouse();
         $ownerCaptains = $boat->captain_source === CaptainSource::Owner;
 
-        // Charter: the weekend hourly rate is rounded to whole dollars (as in the mockup); a fixed price for this
-        // length replaces rate × hours on every day.
+        // Charter: the weekend hourly rate is rounded to whole dollars (as in the mockup). A fixed price for this
+        // length replaces rate × hours; on Fri–Sun it gets the weekend rate too when the admin switched that on
+        // for the boat (user decision 2026-11-24), also rounded to whole dollars.
         $weekend = in_array($request->startsAt->setTimezone(config('app.display_timezone'))->dayOfWeek, [0, 5, 6], true);
-        $rate = $weekend ? (int) round($boat->hourly_rate_cents * $multiplierBp / 10000 / 100) * 100 : (int) $boat->hourly_rate_cents;
+        $rate = $weekend ? $this->weekendAmount((int) $boat->hourly_rate_cents, $multiplierBp) : (int) $boat->hourly_rate_cents;
         $fixedPrice = $this->fixedPrice($boat, $hours);
+        $fixedWeekend = $fixedPrice !== null && $weekend && $boat->weekend_fixed_prices;
+        if ($fixedWeekend) {
+            $fixedPrice = $this->weekendAmount($fixedPrice, $multiplierBp);
+        }
         $charter = $fixedPrice ?? $rate * $hours;
 
         $lines = [new QuoteLine(
             BookingItemType::Charter, 'charter', 'Yacht charter',
-            $fixedPrice !== null ? "Fixed price for {$hours} ".Str::plural('hr', $hours) : Money::format($rate).'/hr × '.$hours.' '.Str::plural('hr', $hours).($weekend ? ' · weekend rate' : ''),
+            $fixedPrice !== null
+                ? "Fixed price for {$hours} ".Str::plural('hr', $hours).($fixedWeekend ? ' · weekend rate' : '')
+                : Money::format($rate).'/hr × '.$hours.' '.Str::plural('hr', $hours).($weekend ? ' · weekend rate' : ''),
             $fixedPrice !== null ? 1 : $hours, $fixedPrice ?? $rate, $charter, $ownerBoat ? Payee::Owner : Payee::Platform,
         )];
 
@@ -183,6 +193,7 @@ class QuoteService
                 'weekend_multiplier_bp' => $multiplierBp,
                 'rate_cents' => $rate,
                 'fixed_price_cents' => $fixedPrice,
+                'weekend_fixed_prices' => (bool) $boat->weekend_fixed_prices,
                 'captain_rate_cents' => $captainRate,
                 'crew_count' => (int) $boat->crew_count,
                 'package_fee_cents' => $packageFee,
@@ -198,18 +209,10 @@ class QuoteService
         );
     }
 
-    /** The experience as this boat offers it (with the pivot's package fee override), or a 422 on "experience". */
-    private function offeredExperience(Boat $boat, Experience $experience): Experience
+    /** An amount with the weekend multiplier, rounded to whole dollars (as the mockup does for the hourly rate). */
+    private function weekendAmount(int $cents, int $multiplierBp): int
     {
-        $offered = $boat->relationLoaded('experiences')
-            ? $boat->experiences->firstWhere('id', $experience->getKey())
-            : $boat->experiences()->whereKey($experience->getKey())->first();
-
-        if (! $offered instanceof Experience || ! $offered->is_active || ! (bool) $offered->pivot->is_active) {
-            throw QuoteException::on('experience', 'This boat doesn\'t offer that experience.');
-        }
-
-        return $offered;
+        return (int) round($cents * $multiplierBp / 10000 / 100) * 100;
     }
 
     /**

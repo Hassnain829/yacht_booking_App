@@ -118,6 +118,15 @@ class QuoteServiceTest extends TestCase
         $this->assertSame([180000, null], [$this->quote(['hours' => 4])->charterCents, $this->quote(['hours' => 4])->fixedPriceCents], 'other lengths use the hourly rate');
     }
 
+    public function test_the_admin_can_add_the_weekend_rate_to_a_boats_fixed_prices(): void
+    {
+        $this->boat->forceFill(['duration_prices' => ['3' => 120050], 'weekend_fixed_prices' => true])->save();
+
+        $saturday = $this->quote(['startsAt' => QuoteRequest::localStart('2027-06-05', '12:00')]);
+        $this->assertSame([138100, 'Fixed price for 3 hrs · weekend rate', true], [$saturday->charterCents, $saturday->lines[0]->description, $saturday->pricingSnapshot['weekend_fixed_prices']], '$1,200.50 × 1.15 = $1,380.58, to whole dollars');
+        $this->assertSame([120050, 'Fixed price for 3 hrs'], [$this->quote()->charterCents, $this->quote()->lines[0]->description], 'weekdays keep the fixed price');
+    }
+
     public function test_lengths_come_from_the_experience_narrowed_by_the_boat_and_never_below_its_minimum(): void
     {
         $this->assertSame([3, 4], $this->quotes->durations($this->boat, $this->sunset), 'the 2-hour length is below the 3-hour minimum');

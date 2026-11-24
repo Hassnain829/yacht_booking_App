@@ -95,10 +95,15 @@ class Captain extends Model implements Trashable
         return [];
     }
 
-    /** Phase 8 adds: trips and pay records of this captain (kept for the books). */
+    /** Trips this captain drove or is down for are kept for the books (pay records follow in Phase 8). */
     public function permanentDeleteBlockers(): array
     {
-        return [];
+        $trips = Booking::query()->where('captain_id', $this->getKey())->count();
+
+        return $trips === 0 ? [] : [trans_choice(
+            '{1} 1 trip has this captain and keeps the profile for the records.|[2,*] :count trips have this captain and keep the profile for the records.',
+            $trips,
+        )];
     }
 
     /** The photo (public disk); license documents are `media` rows, deleted by TrashService. */

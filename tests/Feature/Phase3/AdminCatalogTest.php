@@ -155,6 +155,17 @@ class AdminCatalogTest extends TestCase
         $this->get('/admin/experiences/create')->assertSee('Start times use the 24-hour format')->assertSee('value="9am"', false);
     }
 
+    public function test_experience_start_times_sit_on_the_boats_half_hour_grid(): void
+    {
+        $this->actingAs($this->admin);
+
+        $this->postJson('/admin/experiences', $this->experience(['time_slots_text' => '17:45, 23:00, 04:30']))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['time_slots.0' => 'on the hour or half hour', 'time_slots.1', 'time_slots.2']);
+        $this->post('/admin/experiences', $this->experience(['time_slots_text' => '05:00, 22:00, 17:30']))->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame(['05:00', '17:30', '22:00'], Experience::query()->sole()->time_slots);
+    }
+
     public function test_an_experience_moves_through_the_trash_and_its_photo_goes_with_a_permanent_delete(): void
     {
         $experience = Experience::factory()->create(['name' => 'Fireworks', 'slug' => 'fireworks', 'image_path' => 'experiences/fireworks.webp']);

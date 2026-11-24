@@ -11,6 +11,7 @@ use App\Models\CancellationPolicy;
 use App\Models\Harbor;
 use App\Models\User;
 use App\Services\PublicCatalog;
+use App\Support\StartTimes;
 use Database\Seeders\ClientBoatSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -39,9 +40,9 @@ class BoatListingTest extends TestCase
     /** @return array<string, mixed> the boat form for The Azure, as it is, with overrides */
     private function azureForm(array $overrides = []): array
     {
-        $hours = [];
+        $startTimes = [];
         foreach (range(0, 6) as $day) {
-            $hours[$day] = ['open' => '1', 'opens' => '09:00', 'closes' => '22:00'];
+            $startTimes[$day] = ['open' => '1', 'times' => ['09:00', '12:00', '18:00']];
         }
 
         return array_replace_recursive([
@@ -51,7 +52,7 @@ class BoatListingTest extends TestCase
             'cleaning_fee' => '150', 'captain_rate' => '85', 'crew_count' => '1', 'cancellation_policy' => 'moderate', 'advance_notice_minutes' => '0',
             'buffer_minutes' => '0', 'allow_multiple_bookings' => '0', 'captain_source' => 'platform', 'renter_operated_allowed' => '0',
             'fishing_charter' => '0', 'is_featured' => '1', 'sort' => '0', 'reviews_count' => '312', 'booking_enabled' => '1', 'extensions_enabled' => '1',
-            'hours' => $hours,
+            'start_times' => $startTimes,
         ], $overrides);
     }
 
@@ -166,6 +167,37 @@ class BoatListingTest extends TestCase
             ->put($update, $this->azureForm(['hourly_rate' => '', 'photos' => [UploadedFile::fake()->image('a.jpg', 900, 600)]]))
             ->assertOk()->assertSee('The photo you chose was not uploaded because of the errors on this page.');
         $this->assertSame(29, $azure->photos()->count());
+    }
+
+    public function test_the_boat_form_sets_start_times_per_weekday_and_the_weekend_rate_on_fixed_prices(): void
+    {
+        $this->actingAs($this->admin);
+
+        // Add a boat: every day open, departures every half hour 8 AM – 6 PM (Boatsetter's default).
+        $create = $this->get('/admin/boats/create')->assertOk()->assertSee('Every day 8 AM – 6 PM');
+        $this->assertSame(7, substr_count($create->getContent(), 'checked class="h-4 w-4 accent-navy-950" data-start-open'));
+        $this->assertSame(7 * 21, substr_count($create->getContent(), 'checked class="h-3.5 w-3.5'));
+        $this->assertSame(7, substr_count($create->getContent(), '>8:00 AM – 6:00 PM<'));
+
+        // The client's boat (seeded as 08:00–21:00) and a demo boat that has no start times yet (all days closed).
+        $this->seed(ClientBoatSeeder::class);
+        $client = Boat::query()->where('slug', ClientBoatSeeder::SLUG)->sole();
+        $this->assertSame(StartTimes::between('08:00', '21:00'), $client->availabilityRules()->where('weekday', 3)->first()->start_times);
+        $this->get("/admin/boats/{$client->ulid}/edit")->assertSee('>8:00 AM – 9:00 PM<', false);
+        $azure = Boat::query()->where('slug', 'azure')->sole();
+        $this->assertSame(0, substr_count($this->get("/admin/boats/{$azure->ulid}/edit")->getContent(), 'checked class="h-4 w-4 accent-navy-950" data-start-open'));
+
+        // Save: Sunday off (its times are kept for later), Saturday two departures; fixed prices get the weekend rate.
+        $times = $this->azureForm()['start_times'];
+        $times[0] = ['open' => '0', 'times' => ['10:00', '10:30', '10:30']]; // three entries: the helper merges lists by index
+        $times[6] = ['open' => '1', 'times' => ['17:30', '10:00', '10:00']];
+        $this->put("/admin/boats/{$azure->ulid}", $this->azureForm(['start_times' => $times, 'weekend_fixed_prices' => '1']))->assertSessionHasNoErrors();
+
+        $rules = $azure->availabilityRules()->get()->keyBy('weekday');
+        $this->assertSame([false, ['10:00', '10:30'], []], [$rules[0]->is_open, $rules[0]->start_times, $rules[0]->openTimes()]);
+        $this->assertSame(['10:00', '17:30'], $rules[6]->openTimes(), 'sorted, each time once');
+        $this->assertTrue($azure->fresh()->weekend_fixed_prices);
+        $this->get("/admin/boats/{$azure->ulid}/edit")->assertSee('>10:00 AM, 5:30 PM<', false)->assertSee('>Closed<', false);
     }
 
     public function test_the_checklist_shows_what_is_missing_and_the_coast_guard_warning(): void

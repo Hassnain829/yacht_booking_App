@@ -248,7 +248,7 @@ Our Phase 1 wizard already follows this flow: insurance type → location → ti
 2. **Insurance:**
    - The client will arrange Buoy, or find an alternative later.
    - We build the same questions (owner + boat, plus the commercial self-certification) and store the answers for the insurer.
-3. **Availability:** start times (every 30 min) vs opening hours. Explained to the user; **answer pending**. It affects 4.2.
+3. **Availability: start times like Boatsetter** (answered 2026-11-24, built in 4.2). Per weekday, the half-hours a boat can depart at (5 AM – 10 PM grid), default 8 AM – 6 PM.
 4. **Owner add-ons: like Boatsetter.**
    - Owners create add-ons per boat: a type from a list, a price per passenger / per hour / per booking, a max quantity and a description. They are paid out to the owner separately.
    - The admin's platform add-ons stay for house boats.

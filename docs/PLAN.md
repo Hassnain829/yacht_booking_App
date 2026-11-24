@@ -288,7 +288,7 @@ If someone opens another user's record, the app returns **404, not 403**, so att
   - **Display:** badge, is_featured, sort, rating_avg, reviews_count. These are entered by the admin until reviews are added.
   - **Listing workflow:** wizard_step, submitted_at, reviewed_at, review_notes, pending_changes (json), published_at, timestamps, deleted_at.
 - **amenities:** id, ulid, name, group (feature|cabin|galley|bathroom|deck|extra|navigation; `highlight` only for a rollback — 3.7), icon. Pivot **amenity_boat**. Specs also have **engine_model** (3.7).
-- **boat_availability_rules:** boat_id, weekday (0–6), is_open, opens_at, closes_at.
+- **boat_availability_rules:** boat_id, weekday (0–6), is_open, **start_times** (json "HH:MM" list, Chicago time; replaced opens_at / closes_at in 4.2, Boatsetter-style). No row for a weekday = closed. Boats also have **weekend_fixed_prices** (bool, 4.2).
 - **boat_blocks:** boat_id? (null = all boats), starts_at, ends_at, type (owner_block|maintenance|blackout|weather), reason, created_by.
 - **boat_insurances:**
   - boat_id, insurance_type (recreational|commercial), owner_answers (json), boat_answers (json), boat_value_cents.
@@ -415,7 +415,7 @@ The JS only *shows* prices it gets back from the server. The server ignores any 
 A slot is free only if all of these hold:
 
 - The boat is `published` and `booking_enabled`.
-- The slot is inside the boat's weekly hours.
+- The start is one of the boat's **start times** that weekday (every half hour 5 AM – 10 PM on the grid, Chicago time; the trip may end later), and, with an experience, also one of the experience's start times.
 - It doesn't overlap a block, a blackout or the end of the season.
 - The experience allows that weekday and season.
 - It is at least `advance_notice` ahead of now.
@@ -1295,7 +1295,60 @@ There are also in-app notifications (bell icon) for customers, owners, captains 
       - Every price line, the hourly rate and the subtotal match **to the cent**.
       - The discount, tax and gratuity match to the dollar, and the totals within $2: the mockup rounds those to whole dollars, while checkout keeps cents.
       - One case is a mockup float artifact: 1650 × 1.15 = 1897.4999… in JS, so the mockup shows $1,897/hr for an exact $1,897.50 that rounds to $1,898. That case is noted in the fixture and answered by the same mockup code without the float noise.
-4.2 `AvailabilityService`: rules, blocks, bookings + buffer, advance notice, weekdays and season, guest limits. Built around one "busy intervals" method for boats (and later captains), so trip offers and extensions (Phase 8) reuse it (§7.2).
+4.2 `AvailabilityService`: rules, blocks, bookings + buffer, advance notice, weekdays and season, guest limits. Built around one "busy intervals" method for boats (and later captains), so trip offers and extensions (Phase 8) reuse it (§7.2). ✅ done 2026-11-24.
+  - **User decision (2026-11-24): start times instead of opening hours (Boatsetter's way).**
+    - A boat ticks the half-hours it can **depart** at each weekday, on a grid from 5:00 AM to 10:00 PM (`App\Support\StartTimes`). Only the start must be ticked.
+    - A new boat starts with every day on, 8 AM – 6 PM (Boatsetter's default).
+    - Experience start times must sit on the same grid (ExperienceRequest), so the two always meet.
+  - **Migrations:**
+    - `create_bookings_tables`: bookings (every §6.5 column, including the Phase 8 captain fields), booking_items, booking_status_history.
+      - Created now because availability reads the trips already on a boat.
+      - Foreign keys for `promo_code_id` and `booking_extension_id` come with their tables.
+    - `switch_boat_hours_to_start_times`:
+      - Converts every opening-hours row into start times every half hour from opening up to closing minus the boat's minimum trip (08:00–23:00 with 2 h → 08:00 … 21:00); a short day keeps its first start.
+      - Drops opens_at / closes_at. Rollback rebuilds them (first start → last start + minimum).
+      - Adds `boats.weekend_fixed_prices`.
+      - Checked forward, back and forward on a temp DB with real rows.
+  - **Models:**
+    - `Booking` (ulid in URLs, a `reference` like CYB-7K3P9Q without 0 / O / 1 / I / L, the `takingTime()` scope), `BookingItem`, `BookingStatusHistory`. Only the customer's own words are fillable.
+    - Enums `BookingStatus` (hold, requested, confirmed, completed, cancelled, expired, declined, no_show; `requested` = request to book for owner boats) and `PaymentStatus`.
+    - `BookingFactory` with `at()`, `hold()`, `requested()`, `cancelled()`.
+    - `Boat::offering(Experience)` is shared by QuoteService and AvailabilityService.
+  - **AvailabilityService:**
+    - `slots(boat, date, hours, experience, guests)`: each start time, free or taken with a reason (notice / booked / blocked / one_a_day).
+    - `calendar(boat, "YYYY-MM", …)`: past / unavailable / soldout / limited / available per day, in 4 queries for the whole month.
+    - `problem()` / `ensureFree()`: one exact trip, giving a 422 `AvailabilityException` on time, guests, hours, experience or boat. For holds in 4.4, inside the boat-row lock; `ignore:` re-checks a trip's own hold.
+    - `busyIntervals()`: trips widened by the boat's buffer, plus blocks (the boat's and fleet-wide). It is the one source of busy time.
+    - What counts:
+      - A trip takes the boat's time while confirmed / completed / no-show, or while a hold / request hasn't run out. Cancelled, expired and declined free it.
+      - A boat that takes one trip a day is busy all day once a trip starts that day.
+      - Notice and the past are checked on every slot.
+      - Chicago time throughout, so DST moves the UTC time, not the local start.
+  - **Admin:**
+    - The boat form's **Start times** card (one line per weekday): an on / off toggle, a live summary ("8:00 AM – 6:00 PM", "Closed"), and "Edit times" opening the 35 half-hour boxes.
+    - "Every day 8 AM – 6 PM" and "Copy …'s times to every day".
+    - A saved boat with no row shows its days closed.
+    - The live checklist item became "Start times".
+    - The audit log keeps "08:00–18:00 (21)" per day.
+    - Pricing has **"Add the weekend rate to fixed prices too"** (user decision 2026-11-24): QuoteService then puts the weekend multiplier on a fixed price (whole dollars) on Fri–Sun, with "· weekend rate" in its line and `weekend_fixed_prices` in the snapshot.
+  - **Booking records protect what they point at** (PLAN §8.5):
+    - a boat can't go to the Trash with upcoming trips;
+    - boats, experiences, add-ons and captains with bookings or booking lines can't be deleted for good.
+  - The client's boat seeder now gives 08:00–21:00 every day. Demo boats have no start times (closed; they carry the Unavailable tag).
+  - **QA:**
+    - 528 PHP tests, all passing. New:
+      - Phase4/AvailabilityServiceTest (12): start times in Chicago time, DST, experience times / days / season, notice, buffer, holds / requests / cancelled, blocks, one a day, whole-day rules, exact check + 422, calendar statuses + query count, busy intervals;
+      - BookingRecordsTest (4);
+      - Unit/StartTimesTest (3);
+      - a weekend-on-fixed-price quote test;
+      - the start-time form test (Add defaults, client boat, closed days keep their times, save);
+      - the experience grid test;
+      - the 422 for an open day without times and for off-grid times.
+    - 44 JS tests (+1 summary / labels); Pint clean; build OK.
+    - Browser (isolated server):
+      - Add / the client's boat / The Azure at 390 / 768 / 1280 / 1440, with a day's grid open: no overflow.
+      - On a demo boat, all days closed → preset (checklist green) → tick 7:30 PM (summary follows) → copy to every day → all off (amber). A save gave "Changes saved." with Saturday 8 AM – 8 PM and the weekend switch on.
+  - **User runs:** `php artisan migrate`. The client boat's 08:00–23:00 becomes start times 08:00–21:00.
 4.3 Booking wizard JS ⇄ JSON endpoints (`availability`, `quote`, `hold`); deep links (`?yacht=`, `?experience=`, `?date=`).
 4.4 Hold + checkout: bookings, line items, status history, hold expiry, **double-booking lock**, inline login/register, promo codes + redemptions.
   - *2026-11-24, request to book:* owner boats are booked by request, and the owner approves first (Boatsetter-style, "Instant book" off by default). The booking statuses leave room for it (a request waiting for the owner, then accepted / declined / expired). The owner side is built in Phase 6. House boats are booked at once.

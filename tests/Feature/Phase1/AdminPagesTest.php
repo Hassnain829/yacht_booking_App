@@ -33,7 +33,7 @@ class AdminPagesTest extends TestCase
             'bookings' => ['/admin/bookings', 'Bookings', 'House + owner boats'],
             'booking' => ['/admin/bookings/CYB-K8D2PZ', 'Bookings', 'Notes for captain'],
             'boats' => ['/admin/boats', 'Boats', 'Add a house boat'],
-            'add boat' => ['/admin/boats/create', 'Boats', 'Weekly opening hours'],
+            'add boat' => ['/admin/boats/create', 'Boats', 'Start times'],
             'amenities' => ['/admin/amenities', 'Amenities', 'Water toys'],
             'add amenity' => ['/admin/amenities/create', 'Amenities', 'Add an amenity'],
             'cancellation policies' => ['/admin/cancellation-policies', 'Cancellation policies', 'How much guests get back'],

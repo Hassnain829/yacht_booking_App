@@ -33,7 +33,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'harbor_id', 'location_type', 'street', 'city', 'state', 'zip', 'country', 'lat', 'lng',
     'cancellation_policy_id', 'rules', 'advance_notice_minutes', 'allow_multiple_bookings', 'buffer_minutes', 'extensions_enabled',
     'renter_operated_allowed', 'captain_source', 'fishing_charter', 'fuel_policy',
-    'hourly_rate_cents', 'weekend_multiplier_bp', 'min_hours', 'durations', 'duration_prices',
+    'hourly_rate_cents', 'weekend_multiplier_bp', 'min_hours', 'durations', 'duration_prices', 'weekend_fixed_prices',
     'cleaning_fee_cents', 'captain_rate_cents', 'crew_count',
     'badge', 'is_featured', 'sort', 'rating_avg', 'reviews_count',
     'booking_enabled', 'unavailable_reason', 'wizard_step',
@@ -93,10 +93,29 @@ class Boat extends Model implements Trashable
         return $this->belongsToMany(Experience::class)->withPivot(['package_fee_override_cents', 'is_active'])->withTimestamps();
     }
 
-    /** @return HasMany<BoatAvailabilityRule, $this> */
+    /**
+     * The experience as this boat offers it (with the pivot, e.g. its package fee override), or null when the boat
+     * doesn't offer it: not attached, switched off on the boat, or hidden. Uses the loaded `experiences` if any.
+     */
+    public function offering(Experience $experience): ?Experience
+    {
+        $offered = $this->relationLoaded('experiences')
+            ? $this->experiences->firstWhere('id', $experience->getKey())
+            : $this->experiences()->whereKey($experience->getKey())->first();
+
+        return $offered instanceof Experience && $offered->is_active && (bool) $offered->pivot->is_active ? $offered : null;
+    }
+
+    /** Weekly start times, one row per weekday (4.2). @return HasMany<BoatAvailabilityRule, $this> */
     public function availabilityRules(): HasMany
     {
         return $this->hasMany(BoatAvailabilityRule::class)->orderBy('weekday');
+    }
+
+    /** @return HasMany<Booking, $this> */
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(Booking::class);
     }
 
     /** @return HasMany<BoatBlock, $this> */
@@ -149,16 +168,26 @@ class Boat extends Model implements Trashable
         return $this->title;
     }
 
-    /** Phase 4 adds: upcoming confirmed trips (cancel or move them first). */
+    /** Upcoming trips (confirmed, or a hold / request still open) must be cancelled or moved first. */
     public function trashBlockers(): array
     {
-        return [];
+        $upcoming = $this->bookings()->takingTime()->where('ends_at', '>', now())->count();
+
+        return $upcoming === 0 ? [] : [trans_choice(
+            '{1} 1 upcoming trip is booked on this boat. Cancel or move it first, or switch off "Bookable" instead.|[2,*] :count upcoming trips are booked on this boat. Cancel or move them first, or switch off "Bookable" instead.',
+            $upcoming,
+        )];
     }
 
-    /** Phase 4 adds: any booking or payment of this boat (financial records are kept, PLAN §8.5). */
+    /** Every booking is a financial record that is kept (PLAN §8.5), so a boat with bookings is never deleted. */
     public function permanentDeleteBlockers(): array
     {
-        return [];
+        $bookings = $this->bookings()->count();
+
+        return $bookings === 0 ? [] : [trans_choice(
+            '{1} 1 booking belongs to this boat and is kept for the records.|[2,*] :count bookings belong to this boat and are kept for the records.',
+            $bookings,
+        )];
     }
 
     /** Photos are `media` rows (TrashService deletes them); opening hours, blocks and pivots cascade in the database. */
@@ -188,6 +217,7 @@ class Boat extends Model implements Trashable
             'highlights' => 'array', // the boat's own selling points, shown on its page (3.7)
             'durations' => 'array',
             'duration_prices' => 'array',
+            'weekend_fixed_prices' => 'boolean', // the weekend rate applies to the fixed prices too (4.2)
             'pending_changes' => 'array',
             'lat' => 'decimal:6',
             'lng' => 'decimal:6',

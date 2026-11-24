@@ -55,7 +55,7 @@ class CatalogModelsTest extends TestCase
         $sunset = Experience::factory()->create();
         $boat->experiences()->attach($sunset, ['package_fee_override_cents' => 5000]);
         $boat->amenities()->attach(Amenity::factory()->highlight()->create(['name' => 'Flybridge sun lounge']));
-        $boat->availabilityRules()->create(['weekday' => 6, 'is_open' => true, 'opens_at' => '09:00', 'closes_at' => '21:00']);
+        $boat->availabilityRules()->create(['weekday' => 6, 'is_open' => true, 'start_times' => ['09:00', '09:30']]);
         $boat->photos()->create(['collection' => 'photos', 'disk' => 'public', 'path' => 'boats/a.jpg', 'mime' => 'image/jpeg', 'size_bytes' => 1000, 'sort' => 1]);
         $boat->photos()->create(['collection' => 'photos', 'disk' => 'public', 'path' => 'boats/cover.jpg', 'mime' => 'image/jpeg', 'size_bytes' => 1000, 'sort' => 0]);
 

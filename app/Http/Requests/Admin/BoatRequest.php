@@ -16,6 +16,7 @@ use App\Rules\SafeUpload;
 use App\Services\BoatPhotoService;
 use App\Support\Admin\BoatOptions;
 use App\Support\Money;
+use App\Support\StartTimes;
 use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\UploadedFile;
@@ -112,6 +113,7 @@ class BoatRequest extends FormRequest
             // Pricing
             'hourly_rate' => ['required', 'numeric', 'decimal:0,2', 'min:'.config('listing.pricing.hourly_min_cents') / 100, 'max:'.config('listing.pricing.hourly_max_cents') / 100],
             'weekend_markup' => ['nullable', Rule::in(array_keys(BoatOptions::weekendMarkups()))],
+            'weekend_fixed_prices' => ['nullable', 'boolean'],
             'min_hours' => ['required', 'integer', 'between:1,12'],
             'durations' => ['nullable', 'array', 'max:'.count(BoatOptions::DURATIONS)],
             'durations.*' => ['integer', 'distinct', Rule::in(BoatOptions::DURATIONS)],
@@ -154,11 +156,12 @@ class BoatRequest extends FormRequest
             'experiences.*' => ['array:offered,fee'],
             'experiences.*.offered' => ['nullable', 'boolean'],
             'experiences.*.fee' => ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:100000'],
-            'hours' => ['required', 'array:0,1,2,3,4,5,6'],
-            'hours.*' => ['array:open,opens,closes'],
-            'hours.*.open' => ['nullable', 'boolean'],
-            'hours.*.opens' => ['nullable', 'date_format:H:i'],
-            'hours.*.closes' => ['nullable', 'date_format:H:i'],
+            // Weekly start times (4.2, Boatsetter-style): per weekday, on or off + the half-hours it departs at
+            'start_times' => ['required', 'array:0,1,2,3,4,5,6'],
+            'start_times.*' => ['array:open,times'],
+            'start_times.*.open' => ['nullable', 'boolean'],
+            'start_times.*.times' => ['nullable', 'array', 'max:'.count(StartTimes::grid())],
+            'start_times.*.times.*' => ['string', Rule::in(StartTimes::grid())], // no `distinct`: it would compare across days; normalize() drops repeats
             // Photos, added after the save (same limits as the photo upload — config/listing.php)
             'photos' => ['nullable', 'array', 'max:10'],
             'photos.*' => ['required', SafeUpload::image(maxKb: (int) config('listing.rules_engine.max_photo_mb') * 1024)],
@@ -191,14 +194,9 @@ class BoatRequest extends FormRequest
                 }
             }
 
-            foreach ((array) $this->input('hours', []) as $day => $hours) {
-                if (! filter_var($hours['open'] ?? false, FILTER_VALIDATE_BOOL)) {
-                    continue;
-                }
-                if (blank($hours['opens'] ?? null) || blank($hours['closes'] ?? null)) {
-                    $validator->errors()->add("hours.{$day}.opens", 'Enter the opening and closing time, or untick the day.');
-                } elseif ($hours['closes'] <= $hours['opens']) {
-                    $validator->errors()->add("hours.{$day}.closes", 'Closing time must be after opening time.');
+            foreach ((array) $this->input('start_times', []) as $day => $row) {
+                if (filter_var($row['open'] ?? false, FILTER_VALIDATE_BOOL) && empty($row['times'])) {
+                    $validator->errors()->add("start_times.{$day}.times", 'Pick at least one start time, or turn the day off.');
                 }
             }
 
@@ -261,7 +259,7 @@ class BoatRequest extends FormRequest
             'type', 'category', 'make', 'model', 'year', 'length_ft', 'max_guests', 'staterooms', 'sleeps', 'beds', 'heads',
             'engine_count', 'engine_type', 'engine_model', 'horsepower', 'engine_year', 'uscg_inspected', 'registration_no',
             'street', 'city', 'state', 'zip', 'lat', 'lng',
-            'min_hours', 'crew_count', 'advance_notice_minutes', 'buffer_minutes', 'allow_multiple_bookings',
+            'min_hours', 'weekend_fixed_prices', 'crew_count', 'advance_notice_minutes', 'buffer_minutes', 'allow_multiple_bookings',
             'captain_source', 'renter_operated_allowed', 'fishing_charter', 'fuel_policy',
             'is_featured', 'sort', 'rating_avg', 'reviews_count', 'booking_enabled', 'unavailable_reason', 'extensions_enabled',
         ]);
@@ -291,9 +289,9 @@ class BoatRequest extends FormRequest
     }
 
     /**
-     * Amenity ids (the form sends ulids) + new item names per group, offered experiences (id => package fee override in cents or null) and the 7 opening-hour rows.
+     * Amenity ids (the form sends ulids) + new item names per group, offered experiences (id => package fee override in cents or null) and the 7 weekday start-time rows.
      *
-     * @return array{amenities: list<int>, new_amenities: array<string, list<string>>, experiences: array<int, ?int>, hours: list<array{weekday: int, is_open: bool, opens_at: ?string, closes_at: ?string}>}
+     * @return array{amenities: list<int>, new_amenities: array<string, list<string>>, experiences: array<int, ?int>, start_times: list<array{weekday: int, is_open: bool, start_times: list<string>}>}
      */
     public function relationData(): array
     {
@@ -304,12 +302,11 @@ class BoatRequest extends FormRequest
             'amenities' => Amenity::query()->whereIn('ulid', $this->validated('amenities') ?? [])->pluck('id')->map(fn ($id) => (int) $id)->all(),
             'new_amenities' => collect($this->validated('new_amenity_names') ?? [])->filter()->all(),
             'experiences' => $chosen->mapWithKeys(fn (array $row, string $slug) => [$ids[$slug] => Money::toCents($row['fee'] ?? null)])->all(),
-            'hours' => collect(range(0, 6))->map(function (int $day) {
-                $row = $this->validated('hours')[$day] ?? [];
-                $open = filter_var($row['open'] ?? false, FILTER_VALIDATE_BOOL);
+            'start_times' => collect(range(0, 6))->map(function (int $day) {
+                $row = $this->validated('start_times')[$day] ?? [];
 
-                // Stored as HH:MM:SS, the same on MySQL / MariaDB (TIME) and SQLite (tests).
-                return ['weekday' => $day, 'is_open' => $open, 'opens_at' => $open ? $row['opens'].':00' : null, 'closes_at' => $open ? $row['closes'].':00' : null];
+                // A closed day keeps its times, so turning it on again restores them.
+                return ['weekday' => $day, 'is_open' => filter_var($row['open'] ?? false, FILTER_VALIDATE_BOOL), 'start_times' => StartTimes::normalize($row['times'] ?? [])];
             })->all(),
         ];
     }

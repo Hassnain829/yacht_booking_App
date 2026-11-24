@@ -9,6 +9,7 @@ use App\Rules\PlainText;
 use App\Rules\SafeUpload;
 use App\Support\IconNames;
 use App\Support\Money;
+use App\Support\StartTimes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -64,7 +65,7 @@ class ExperienceRequest extends FormRequest
             'durations.*' => ['integer', 'distinct', Rule::in(self::DURATIONS)],
             'time_slots_text' => ['nullable', 'string', 'max:400'],
             'time_slots' => ['required', 'array', 'min:1', 'max:24'],
-            'time_slots.*' => ['date_format:H:i', 'distinct'],
+            'time_slots.*' => ['date_format:H:i', 'distinct', Rule::in(StartTimes::grid())], // the boats' start-time grid (4.2)
             'weekdays' => ['nullable', 'array', 'max:7'],
             'weekdays.*' => ['integer', 'distinct', 'between:0,6'],
             'season_starts_on' => ['nullable', 'required_with:season_ends_on', 'date_format:Y-m-d'],
@@ -90,6 +91,7 @@ class ExperienceRequest extends FormRequest
             'time_slots.required' => 'Enter at least one start time, e.g. 17:30.',
             'time_slots.*.date_format' => 'Start times use the 24-hour format, e.g. 09:00 or 17:30.',
             'time_slots.*.distinct' => 'Each start time can be listed once.',
+            'time_slots.*.in' => 'Start times are on the hour or half hour, from 05:00 to 22:00 (the times boats depart at).',
             'includes.max' => 'List at most 12 included items.',
             'includes.*.max' => 'Each included item can be at most 120 characters.',
             'season_ends_on.after_or_equal' => 'The season must end on or after its first day.',

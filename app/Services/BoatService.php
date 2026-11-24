@@ -30,7 +30,7 @@ class BoatService
 
     /**
      * @param  array<string, mixed>  $data  BoatRequest::boatData()
-     * @param  array{amenities: list<int>, experiences: array<int, ?int>, hours: list<array<string, mixed>>}  $relations
+     * @param  array{amenities: list<int>, experiences: array<int, ?int>, start_times: list<array<string, mixed>>}  $relations
      */
     public function save(Boat $boat, array $data, array $relations, User $actor, bool $publish = false): Boat
     {
@@ -117,7 +117,7 @@ class BoatService
     }
 
     /**
-     * @param  array{amenities: list<int>, new_amenities?: array<string, list<string>>, experiences: array<int, ?int>, hours: list<array<string, mixed>>}  $relations
+     * @param  array{amenities: list<int>, new_amenities?: array<string, list<string>>, experiences: array<int, ?int>, start_times: list<array<string, mixed>>}  $relations
      * @return array{0: array<string, mixed>, 1: array<string, mixed>} [before, after] of what changed
      */
     private function syncRelations(Boat $boat, array $relations): array
@@ -151,14 +151,17 @@ class BoatService
             [$before['experiences'], $after['experiences']] = [$oldOffers, $newOffers];
         }
 
-        $hours = fn () => $boat->availabilityRules()->get()->mapWithKeys(fn ($rule) => [$rule->weekday => $rule->is_open ? substr((string) $rule->opens_at, 0, 5).'–'.substr((string) $rule->closes_at, 0, 5) : 'closed'])->all();
-        $oldHours = $hours();
-        foreach ($relations['hours'] as $row) {
+        // Weekly start times (4.2): the audit log keeps a short summary per weekday, e.g. "08:00–18:00 (21)".
+        $startTimes = fn () => $boat->availabilityRules()->get()->mapWithKeys(fn ($rule) => [$rule->weekday => $rule->openTimes() === []
+            ? 'closed'
+            : $rule->openTimes()[0].'–'.last($rule->openTimes()).' ('.count($rule->openTimes()).')'])->all();
+        $oldStartTimes = $startTimes();
+        foreach ($relations['start_times'] ?? [] as $row) {
             $boat->availabilityRules()->updateOrCreate(['weekday' => $row['weekday']], $row);
         }
-        $newHours = $hours();
-        if ($oldHours !== $newHours) {
-            [$before['hours'], $after['hours']] = [$oldHours, $newHours];
+        $newStartTimes = $startTimes();
+        if ($oldStartTimes !== $newStartTimes) {
+            [$before['start_times'], $after['start_times']] = [$oldStartTimes, $newStartTimes];
         }
 
         return [$before, $after];

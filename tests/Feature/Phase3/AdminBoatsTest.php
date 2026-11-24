@@ -43,9 +43,9 @@ class AdminBoatsTest extends TestCase
     /** @return array<string, mixed> */
     private function fields(array $overrides = []): array
     {
-        $hours = [];
+        $startTimes = [];
         foreach (range(0, 6) as $day) {
-            $hours[$day] = ['open' => $day === 1 ? '0' : '1', 'opens' => '09:00', 'closes' => '22:00'];
+            $startTimes[$day] = ['open' => $day === 1 ? '0' : '1', 'times' => ['09:00', '09:30', '18:00']];
         }
 
         return array_replace_recursive([
@@ -61,7 +61,7 @@ class AdminBoatsTest extends TestCase
             'captain_source' => 'platform', 'renter_operated_allowed' => '0', 'fishing_charter' => '0', 'fuel_policy' => 'Included',
             'is_featured' => '1', 'sort' => '2', 'rating_avg' => '4.9', 'reviews_count' => '120',
             'booking_enabled' => '1', 'unavailable_reason' => '', 'extensions_enabled' => '1', 'publish' => '1',
-            'hours' => $hours,
+            'start_times' => $startTimes,
         ], $overrides);
     }
 
@@ -104,7 +104,7 @@ class AdminBoatsTest extends TestCase
         $sunset = Experience::factory()->create(['slug' => 'sunset', 'name' => 'Sunset']);
         Experience::factory()->create(['slug' => 'fireworks', 'name' => 'Fireworks']);
         $wifi = Amenity::factory()->create(['name' => 'WiFi', 'group' => AmenityGroup::Feature]);
-        $this->actingAs($this->admin)->get('/admin/boats/create')->assertOk()->assertSee('Weekly opening hours');
+        $this->actingAs($this->admin)->get('/admin/boats/create')->assertOk()->assertSee('Start times')->assertSee('Every day 8 AM – 6 PM');
 
         $response = $this->post('/admin/boats', $this->fields([
             'amenities' => [$wifi->ulid],
@@ -125,7 +125,7 @@ class AdminBoatsTest extends TestCase
         $this->assertSame(['WiFi'], $boat->amenities->pluck('name')->all());
         $this->assertSame([$sunset->id => 2500], $boat->experiences->mapWithKeys(fn ($e) => [$e->id => $e->pivot->package_fee_override_cents])->all());
         $this->assertSame([true, false, true], $boat->availabilityRules()->pluck('is_open')->take(3)->all());
-        $this->assertSame('09:00:00', (string) $boat->availabilityRules()->where('weekday', 0)->value('opens_at'));
+        $this->assertSame(['09:00', '09:30', '18:00'], $boat->availabilityRules()->where('weekday', 0)->first()->start_times);
 
         $log = AuditLog::query()->where('action', 'boat.created')->sole();
         $this->assertSame(['WiFi'], $log->after['amenities']);
@@ -168,8 +168,10 @@ class AdminBoatsTest extends TestCase
 
         $this->postJson('/admin/boats', $this->fields(['length_ft' => '40', 'renter_operated_allowed' => '1']))
             ->assertUnprocessable()->assertJsonValidationErrors(['renter_operated_allowed']);
-        $this->postJson('/admin/boats', $this->fields(['hours' => [2 => ['open' => '1', 'opens' => '20:00', 'closes' => '18:00']]]))
-            ->assertUnprocessable()->assertJsonValidationErrors(['hours.2.closes']);
+        $this->postJson('/admin/boats', $this->fields(['start_times' => [2 => ['open' => '1', 'times' => null]]]))
+            ->assertUnprocessable()->assertJsonValidationErrors(['start_times.2.times' => 'Pick at least one start time']);
+        $this->postJson('/admin/boats', $this->fields(['start_times' => [3 => ['open' => '1', 'times' => ['09:15', '23:00', '04:30']]]]))
+            ->assertUnprocessable()->assertJsonValidationErrors(['start_times.3.times.0', 'start_times.3.times.1', 'start_times.3.times.2']);
         $this->postJson('/admin/boats', $this->fields(['experiences' => ['no-such-thing' => ['offered' => '1', 'fee' => '']]]))
             ->assertUnprocessable()->assertJsonValidationErrors(['experiences']);
 
@@ -188,13 +190,13 @@ class AdminBoatsTest extends TestCase
         $this->put("/admin/boats/{$boat->ulid}", $this->fields([
             'hourly_rate' => '700',
             'experiences' => ['sunset' => ['offered' => '0', 'fee' => '']],
-            'hours' => [1 => ['open' => '1', 'opens' => '10:00', 'closes' => '20:00']],
+            'start_times' => [1 => ['open' => '1', 'times' => ['10:00', '10:30', '11:00']]],
         ]))->assertRedirect("/admin/boats/{$boat->ulid}/edit");
 
         $log = AuditLog::query()->where('action', 'boat.updated')->sole();
-        $this->assertSame(['hourly_rate_cents', 'experiences', 'hours'], array_keys($log->after));
+        $this->assertSame(['hourly_rate_cents', 'experiences', 'start_times'], array_keys($log->after));
         $this->assertSame([65000, 70000], [$log->before['hourly_rate_cents'], $log->after['hourly_rate_cents']]);
-        $this->assertSame(['closed', '10:00–20:00'], [$log->before['hours'][1], $log->after['hours'][1]]);
+        $this->assertSame(['closed', '10:00–11:00 (3)'], [$log->before['start_times'][1], $log->after['start_times'][1]]);
         $this->assertSame(0, $boat->experiences()->count());
         $this->assertTrue($sunset->exists);
     }

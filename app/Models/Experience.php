@@ -63,10 +63,15 @@ class Experience extends Model implements Trashable
         return [];
     }
 
-    /** Phase 4 adds: bookings of this experience (they keep a snapshot, but the record stays for history). */
+    /** Bookings of this experience keep a snapshot, but the record stays for their history. */
     public function permanentDeleteBlockers(): array
     {
-        return [];
+        $bookings = Booking::query()->where('experience_id', $this->getKey())->count();
+
+        return $bookings === 0 ? [] : [trans_choice(
+            '{1} 1 booking is for this experience and keeps it for the records. Keep it hidden instead.|[2,*] :count bookings are for this experience and keep it for the records. Keep it hidden instead.',
+            $bookings,
+        )];
     }
 
     public function ownFiles(): array

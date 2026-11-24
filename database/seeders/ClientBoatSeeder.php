@@ -10,7 +10,7 @@ use App\Enums\CaptainSource;
 use App\Models\Amenity;
 use App\Models\Boat;
 use App\Services\PublicCatalog;
-use App\Support\Admin\BoatOptions;
+use App\Support\StartTimes;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -102,7 +102,8 @@ class ClientBoatSeeder extends Seeder
             $boat->amenities()->sync($ids);
 
             foreach (range(0, 6) as $day) {
-                $boat->availabilityRules()->create(['weekday' => $day, 'is_open' => true, 'opens_at' => BoatOptions::OPENS.':00', 'closes_at' => BoatOptions::CLOSES.':00']);
+                // Departures every half hour 8 AM – 9 PM: a 2-hour trip is back by 11 PM (4.2 start times).
+                $boat->availabilityRules()->create(['weekday' => $day, 'is_open' => true, 'start_times' => StartTimes::between('08:00', '21:00')]);
             }
         });
 

@@ -46,10 +46,15 @@ class Addon extends Model implements Trashable
         return [];
     }
 
-    /** Phase 4 adds: booking lines that point at this add-on. */
+    /** Booking lines that point at this add-on keep it for the records. */
     public function permanentDeleteBlockers(): array
     {
-        return [];
+        $lines = BookingItem::query()->where('addon_id', $this->getKey())->count();
+
+        return $lines === 0 ? [] : [trans_choice(
+            '{1} 1 booking line is for this add-on and keeps it for the records. Keep it hidden instead.|[2,*] :count booking lines are for this add-on and keep it for the records. Keep it hidden instead.',
+            $lines,
+        )];
     }
 
     public function ownFiles(): array

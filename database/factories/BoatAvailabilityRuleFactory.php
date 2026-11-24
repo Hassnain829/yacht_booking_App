@@ -4,10 +4,11 @@ namespace Database\Factories;
 
 use App\Models\Boat;
 use App\Models\BoatAvailabilityRule;
+use App\Support\StartTimes;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * Open 9:00–21:00 on the given weekday (Chicago time).
+ * Departures every half hour 8:00 AM – 6:00 PM on the given weekday (Chicago time).
  *
  * @extends Factory<BoatAvailabilityRule>
  */
@@ -19,8 +20,7 @@ class BoatAvailabilityRuleFactory extends Factory
             'boat_id' => Boat::factory(),
             'weekday' => 6,
             'is_open' => true,
-            'opens_at' => '09:00',
-            'closes_at' => '21:00',
+            'start_times' => StartTimes::defaults(),
         ];
     }
 }

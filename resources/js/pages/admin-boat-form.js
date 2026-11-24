@@ -20,10 +20,13 @@ export const RULES = {
     policy: (form) => filled(form, 'cancellation_policy'),
     photos: (form, card) => Number(card.dataset.photoCount ?? 0) + chosenPhotos(form) >= Number(card.dataset.minPhotos ?? 4),
     experiences: (form) => anyTicked(form, /^experiences\[[^\]]+\]\[offered\]$/),
-    hours: (form) => anyTicked(form, /^hours\[\d\]\[open\]$/),
+    // Start times (4.2): a day that is on and has at least one start time ticked.
+    hours: (form) => [...form.querySelectorAll('[data-start-day]')].some((day) => day.querySelector('[data-start-open]')?.checked && day.querySelector('input[name$="[times][]"]:checked') !== null),
 };
 
 export default function adminBoatForm() {
+    startTimes();
+
     const card = document.querySelector('[data-checklist]');
     const form = card?.closest('form');
     if (!(card instanceof HTMLElement) || !(form instanceof HTMLFormElement)) return;
@@ -32,6 +35,82 @@ export default function adminBoatForm() {
     form.addEventListener('input', refresh);
     form.addEventListener('change', refresh);
     refresh(); // a form that came back with errors shows what was typed, so check that, not the saved boat
+}
+
+/* ------------------------------------------------------------------ */
+/* Start times card (4.2)                                              */
+/* ------------------------------------------------------------------ */
+
+/** The half-hours 8:00 AM – 6:00 PM, the default set (App\Support\StartTimes::defaults()). */
+const DEFAULT_TIMES = Array.from({ length: 21 }, (_, i) => `${String(8 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
+
+/**
+ * Each weekday row keeps its summary ("8:00 AM – 6:00 PM", "Closed") in step with its boxes. "Every day 8 AM –
+ * 6 PM" sets the default on all days; "Copy …'s times to every day" copies one day to the others.
+ */
+function startTimes() {
+    const box = document.querySelector('[data-start-times]');
+    if (!(box instanceof HTMLElement)) return;
+    const days = [...box.querySelectorAll('[data-start-day]')];
+    const summarise = (day) => {
+        const open = day.querySelector('[data-start-open]')?.checked;
+        const times = [...day.querySelectorAll('input[name$="[times][]"]:checked')].map((input) => input.value);
+        const label = day.querySelector('[data-start-summary]');
+        if (label) label.textContent = open ? startTimesSummary(times) || 'No start times yet' : 'Closed';
+    };
+    const set = (day, open, times) => {
+        const toggle = day.querySelector('[data-start-open]');
+        if (toggle) toggle.checked = open;
+        for (const input of day.querySelectorAll('input[name$="[times][]"]')) input.checked = times.includes(input.value);
+        summarise(day);
+    };
+    const changed = () => box.querySelector('input[type=checkbox]')?.dispatchEvent(new Event('change', { bubbles: true })); // checklist + unsaved guard
+
+    box.addEventListener('change', (event) => {
+        const day = event.target instanceof Element ? event.target.closest('[data-start-day]') : null;
+        if (day) summarise(day);
+    });
+    box.addEventListener('click', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        if (target?.closest('[data-start-preset]')) {
+            for (const day of days) set(day, true, DEFAULT_TIMES);
+            changed();
+        }
+        const copy = target?.closest('[data-start-copy]');
+        if (copy) {
+            const from = copy.closest('[data-start-day]');
+            const open = Boolean(from?.querySelector('[data-start-open]')?.checked);
+            const times = [...(from?.querySelectorAll('input[name$="[times][]"]:checked') ?? [])].map((input) => input.value);
+            for (const day of days) set(day, open, times);
+            changed();
+        }
+    });
+}
+
+/**
+ * "18:30" → "6:30 PM".
+ *
+ * @param {string} time
+ */
+export function timeLabel(time) {
+    const [hours, minutes] = time.split(':').map(Number);
+    return `${((hours + 11) % 12) + 1}:${String(minutes).padStart(2, '0')} ${hours >= 12 ? 'PM' : 'AM'}`;
+}
+
+/**
+ * Back-to-back half hours as ranges, like StartTimes::summary(): "8:00 AM – 6:00 PM", "10:00 AM, 5:30 PM – 7:00 PM".
+ *
+ * @param {string[]} times "HH:MM"
+ */
+export function startTimesSummary(times) {
+    const minutes = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+    const ranges = [];
+    for (const time of [...new Set(times)].sort()) {
+        const last = ranges.at(-1);
+        if (last && minutes(time) - minutes(last.at(-1)) === 30) last.push(time);
+        else ranges.push([time]);
+    }
+    return ranges.map((range) => (range.length === 1 ? timeLabel(range[0]) : `${timeLabel(range[0])} – ${timeLabel(range.at(-1))}`)).join(', ');
 }
 
 /**

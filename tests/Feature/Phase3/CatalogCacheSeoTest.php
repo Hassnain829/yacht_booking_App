@@ -79,7 +79,7 @@ class CatalogCacheSeoTest extends TestCase
 
         // an amenity deleted from every boat (ticked on The Azure through the boat form's service)
         $table = Amenity::query()->create(['group' => 'deck', 'name' => 'Teak cockpit table', 'sort' => 1]);
-        app(BoatService::class)->save($azure->fresh(), [], ['amenities' => [$table->id], 'experiences' => $azure->experiences()->pluck('experiences.id')->mapWithKeys(fn ($id) => [$id => null])->all(), 'hours' => []], $this->admin);
+        app(BoatService::class)->save($azure->fresh(), [], ['amenities' => [$table->id], 'experiences' => $azure->experiences()->pluck('experiences.id')->mapWithKeys(fn ($id) => [$id => null])->all(), 'start_times' => []], $this->admin);
         $this->get('/yachts/azure')->assertSee('Teak cockpit table');
         $this->delete("/admin/amenities/{$table->ulid}", ['reason' => 'Not on the boat any more.', 'dialog' => 'destroy-record'])->assertRedirect();
         $this->get('/yachts/azure')->assertDontSee('Teak cockpit table');
@@ -101,7 +101,7 @@ class CatalogCacheSeoTest extends TestCase
         $this->get('/yachts/azure')->assertSee('Generator'); // build the cache
 
         $this->actingAs($this->admin)->get("/admin/boats/{$azure->ulid}/edit")->assertOk();
-        app(BoatService::class)->save($azure->fresh(), [], ['amenities' => [], 'experiences' => [], 'hours' => []], $this->admin);
+        app(BoatService::class)->save($azure->fresh(), [], ['amenities' => [], 'experiences' => [], 'start_times' => []], $this->admin);
 
         $this->get('/yachts/azure')->assertDontSee('>Generator<', false)->assertSee('Flybridge sun lounge'); // a highlight line stays
         $this->assertSame([], app(PublicCatalog::class)->yacht('azure')->experiences);

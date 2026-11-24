@@ -3,6 +3,7 @@
 @use('App\Enums\BoatStatus')
 @use('App\Support\Admin\BoatOptions')
 @use('App\Support\Money')
+@use('App\Support\StartTimes')
 
 @php
     $editing = $boat->exists;
@@ -68,7 +69,7 @@
     @else
         {{-- Jump to a section (3.7): the form is long, so each card has an anchor. --}}
         <nav class="sticky top-16 z-20 -mx-4 mt-6 flex gap-2 overflow-x-auto border-b border-navy-100 bg-shell/95 px-4 py-3 backdrop-blur md:-mx-8 md:px-8" aria-label="Boat form sections">
-            @foreach (['details' => 'Details', 'specs' => 'Specs', 'location' => 'Location', 'pricing' => 'Pricing', 'rules' => 'Rules', 'features' => 'Features', 'experiences' => 'Experiences', 'hours' => 'Hours', 'photos' => 'Photos'] + ($editing ? ['blocks' => 'Blocked times'] : []) as $anchor => $label)
+            @foreach (['details' => 'Details', 'specs' => 'Specs', 'location' => 'Location', 'pricing' => 'Pricing', 'rules' => 'Rules', 'features' => 'Features', 'experiences' => 'Experiences', 'hours' => 'Start times', 'photos' => 'Photos'] + ($editing ? ['blocks' => 'Blocked times'] : []) as $anchor => $label)
                 <a href="#{{ $anchor }}" class="shrink-0 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-navy-600 ring-1 ring-navy-100 hover:text-navy-950 hover:ring-navy-300">{{ $label }}</a>
             @endforeach
         </nav>
@@ -155,6 +156,7 @@
                             @foreach (['durations', 'durations.*', 'duration_prices.*'] as $key)
                                 @if ($errors->first($key))<p data-field-error class="mt-1.5 text-xs font-semibold text-red-600">{{ $errors->first($key) }}</p>@break @endif
                             @endforeach
+                            <x-form.checkbox name="weekend_fixed_prices" hidden-zero :checked="(bool) $boat->weekend_fixed_prices" class="mt-4">Add the weekend rate to fixed prices too<span class="block text-xs text-navy-500">Fri–Sun, a fixed price gets the same markup as the hourly rate. Off: fixed prices are the same every day.</span></x-form.checkbox>
                         </fieldset>
                     </div>
                 </x-admin.card>
@@ -238,27 +240,39 @@
                     </div>
                 </x-admin.card>
 
-                <x-admin.card title="Weekly opening hours" id="hours" class="scroll-mt-32">
-                    <p class="mb-4 text-xs text-navy-500">Chicago time. Trips must start and end inside these hours.</p>
+                {{-- Start times (4.2, Boatsetter-style): the half-hours a trip can depart at each weekday; it may end later. --}}
+                <x-admin.card title="Start times" id="hours" class="scroll-mt-32" data-start-times>
+                    <x-slot:actions>
+                        <button type="button" data-start-preset class="rounded-lg px-3 py-1.5 text-xs font-bold text-navy-700 ring-1 ring-navy-200 hover:bg-navy-50">Every day 8 AM – 6 PM</button>
+                    </x-slot:actions>
+                    <p class="mb-3 text-xs leading-relaxed text-navy-500">Chicago time. Tick the times a trip can <strong>depart</strong> each day; it may end later. An experience only uses the times on its own schedule too.</p>
                     <div class="divide-y divide-navy-100">
                         @foreach ($days as $number => $day)
                             @php
                                 $rule = $rules->get($number);
-                                $open = $submitted ? (bool) old('hours.'.$number.'.open') : ($rule ? $rule->is_open : true);
-                                $opens = old('hours.'.$number.'.opens', $rule && $rule->opens_at ? substr((string) $rule->opens_at, 0, 5) : BoatOptions::OPENS);
-                                $closes = old('hours.'.$number.'.closes', $rule && $rule->closes_at ? substr((string) $rule->closes_at, 0, 5) : BoatOptions::CLOSES);
-                                $dayError = $errors->first('hours.'.$number.'.opens') ?: $errors->first('hours.'.$number.'.closes');
+                                $open = $submitted ? (bool) old('start_times.'.$number.'.open') : ($rule ? $rule->is_open : ! $editing); // a new boat starts open 8–6; a saved one without a row is closed
+                                $times = $submitted ? StartTimes::normalize((array) old('start_times.'.$number.'.times', [])) : ($rule ? StartTimes::normalize($rule->start_times ?? []) : StartTimes::defaults());
+                                $dayError = $errors->first('start_times.'.$number.'.times') ?: $errors->first('start_times.'.$number.'.times.*');
                             @endphp
-                            <div class="flex flex-wrap items-center gap-3 py-2.5">
-                                <label class="flex w-36 items-center gap-2 text-sm font-semibold text-navy-900">
-                                    <input type="hidden" name="hours[{{ $number }}][open]" value="0">
-                                    <input type="checkbox" name="hours[{{ $number }}][open]" value="1" @checked($open) class="h-4 w-4 accent-navy-950">{{ $day }}
+                            <div class="flex flex-wrap items-start gap-x-3 gap-y-2 py-2.5" data-start-day="{{ $number }}">
+                                <label class="flex w-32 shrink-0 items-center gap-2 pt-0.5 text-sm font-semibold text-navy-900">
+                                    <input type="hidden" name="start_times[{{ $number }}][open]" value="0">
+                                    <input type="checkbox" name="start_times[{{ $number }}][open]" value="1" @checked($open) class="h-4 w-4 accent-navy-950" data-start-open>{{ $day }}
                                 </label>
-                                <label for="opens-{{ $number }}" class="sr-only">{{ $day }} opens</label>
-                                <input id="opens-{{ $number }}" type="time" name="hours[{{ $number }}][opens]" value="{{ $opens }}" class="rounded-lg border border-navy-200 px-2 py-1.5 text-sm focus:border-navy-950 focus:outline-hidden">
-                                <span class="text-navy-400">–</span>
-                                <label for="closes-{{ $number }}" class="sr-only">{{ $day }} closes</label>
-                                <input id="closes-{{ $number }}" type="time" name="hours[{{ $number }}][closes]" value="{{ $closes }}" class="rounded-lg border border-navy-200 px-2 py-1.5 text-sm focus:border-navy-950 focus:outline-hidden">
+                                <details class="group min-w-0 flex-1 basis-56" @if ($dayError) open @endif>
+                                    <summary class="flex cursor-pointer list-none items-center gap-2 rounded-lg py-0.5 text-xs text-navy-600 hover:text-navy-950">
+                                        <span class="min-w-0 flex-1" data-start-summary>{{ $open ? (StartTimes::summary($times) ?: 'No start times yet') : 'Closed' }}</span>
+                                        <span class="inline-flex shrink-0 items-center gap-1 font-bold">Edit times<i data-lucide="chevron-down" class="h-4 w-4 transition group-open:rotate-180"></i></span>
+                                    </summary>
+                                    <div class="mt-3 grid grid-cols-[repeat(auto-fill,minmax(5.75rem,1fr))] gap-1.5">
+                                        @foreach (StartTimes::grid() as $time)
+                                            <label class="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-navy-700 ring-1 ring-navy-200 has-[:checked]:bg-navy-950 has-[:checked]:text-white has-[:checked]:ring-navy-950">
+                                                <input type="checkbox" name="start_times[{{ $number }}][times][]" value="{{ $time }}" @checked(in_array($time, $times, true)) class="h-3.5 w-3.5 accent-brass-400">{{ StartTimes::label($time) }}
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                    <button type="button" data-start-copy class="mt-2 text-xs font-bold text-navy-600 underline-offset-2 hover:underline">Copy {{ $day }}'s times to every day</button>
+                                </details>
                                 @if ($dayError)<p data-field-error class="w-full text-xs font-semibold text-red-600">{{ $dayError }}</p>@endif
                             </div>
                         @endforeach

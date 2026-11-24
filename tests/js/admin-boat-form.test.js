@@ -1,6 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { amount, lineCount, RULES } from '../../resources/js/pages/admin-boat-form.js';
+import { amount, lineCount, RULES, startTimesSummary, timeLabel } from '../../resources/js/pages/admin-boat-form.js';
+
+test('start times read like the server summary (StartTimes::summary)', () => {
+    assert.equal(timeLabel('05:00'), '5:00 AM');
+    assert.equal(timeLabel('12:30'), '12:30 PM');
+    assert.equal(timeLabel('22:00'), '10:00 PM');
+    assert.equal(startTimesSummary(['08:00', '08:30', '09:00']), '8:00 AM – 9:00 AM');
+    assert.equal(startTimesSummary(['17:30', '10:00', '18:00', '18:30']), '10:00 AM, 5:30 PM – 6:30 PM');
+    assert.equal(startTimesSummary([]), '');
+});
 
 test('lineCount counts the non-empty lines, like the server one-per-line lists', () => {
     assert.equal(lineCount(''), 0);

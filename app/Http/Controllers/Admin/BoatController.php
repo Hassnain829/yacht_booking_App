@@ -263,7 +263,7 @@ class BoatController extends Controller
                 'policy' => [$boat->cancellation_policy_id !== null, 'Cancellation policy', 'Flexible, moderate or strict.'],
                 'photos' => [$boat->photos->count() >= $minPhotos, "{$minPhotos}+ photos", 'Clear, bright photos of this boat: outside, deck and cabin.'],
                 'experiences' => [$boat->experiences->isNotEmpty(), 'Experiences offered', 'At least one, e.g. Sunset Cruise.'],
-                'hours' => [$boat->availabilityRules->where('is_open', true)->isNotEmpty(), 'Opening hours', 'The days and hours trips can run.'],
+                'hours' => [$boat->availabilityRules->contains(fn ($rule) => $rule->openTimes() !== []), 'Start times', 'The days and times trips can depart.'],
             ],
             // A captained charter without a Coast Guard COI may carry at most 6 passengers.
             'coi_warning' => ! $boat->uscg_inspected && $boat->max_guests > 6,
