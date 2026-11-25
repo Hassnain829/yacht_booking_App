@@ -110,7 +110,7 @@
                 @endif
             </div>
 
-            <aside class="space-y-6 lg:sticky lg:top-28">
+            <aside class="space-y-6 lg:self-start lg:sticky lg:top-28 lg:-mx-4 lg:-mt-4 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto lg:px-4 lg:pt-4 lg:pb-4 no-scrollbar" data-sticky-panel>
                 {{-- Payment --}}
                 <section class="rounded-3xl bg-white p-6 shadow-card ring-1 ring-navy-100 md:p-7" aria-labelledby="payment-title">
                     <h2 id="payment-title" class="text-lg font-extrabold text-navy-950">Payment</h2>

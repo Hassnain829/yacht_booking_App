@@ -197,7 +197,7 @@
             </div>
 
             <div class="mt-24 grid gap-12 lg:grid-cols-[1fr_1.4fr] lg:gap-20">
-                <div class="reveal lg:sticky lg:top-32 lg:self-start">
+                <div class="reveal lg:sticky lg:top-32 lg:self-start" data-sticky-panel="release">
                     <p class="text-xs font-bold uppercase tracking-[0.3em] text-brass-300">Your Chicago Moment</p>
                     <h3 class="mt-4 font-display text-4xl leading-tight">Whatever you're celebrating, there's a yacht for it.</h3>
                     <p class="mt-4 text-white/65">Tell us the occasion and we'll handle the details — décor, catering, playlists and the perfect route.</p>

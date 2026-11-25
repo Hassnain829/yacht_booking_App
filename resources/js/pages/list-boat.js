@@ -283,7 +283,7 @@ export default function listBoat() {
             }
         }
         return html`
-            <div class="relative mt-5 overflow-x-auto">
+            <div class="no-scrollbar relative mt-5 overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead class="text-[11px] uppercase tracking-wider text-white/50"><tr><th scope="col" class="pb-2 font-bold">Trip</th><th scope="col" class="pb-2 text-right font-bold">Your price</th><th scope="col" class="pb-2 text-right font-bold">You earn</th></tr></thead>
                     <tbody class="divide-y divide-white/10">${rows}</tbody>
@@ -872,7 +872,7 @@ export default function listBoat() {
                 <img src="${safeUrl(data.images.wake)}" alt="" class="absolute inset-0 -z-20 h-full w-full object-cover opacity-15">
                 <div class="absolute inset-0 -z-10 bg-gradient-to-br from-navy-950 via-navy-950/95 to-navy-800/90"></div>
                 <div class="pointer-events-none absolute -bottom-32 -right-32 -z-10 h-96 w-96 rounded-full bg-brass-400/15 blur-3xl"></div>
-                <div class="flex h-full flex-col justify-center overflow-y-auto px-6 py-10 sm:px-10 md:py-14 xl:px-20">
+                <div class="no-scrollbar flex h-full flex-col justify-center overflow-y-auto px-6 py-10 sm:px-10 md:py-14 xl:px-20">
                     ${eyebrow ? html`<p class="flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.25em] text-brass-300"><span class="h-px w-8 bg-brass-400"></span>${eyebrow}</p>` : ''}
                     <h1 class="mt-4 font-display text-3xl leading-tight md:text-5xl md:leading-none">${L.title}</h1>
                     ${L.text ? html`<div class="mt-5 max-w-lg text-sm leading-relaxed text-white/70 md:text-base md:leading-6">${L.text}</div>` : ''}

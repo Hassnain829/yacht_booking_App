@@ -141,6 +141,9 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
   - lg = px-7 py-3.5
   - xl = px-8 py-4
   - block = full width, px-6 py-4
+- **Sticky side panels and scrollbars (user, 2026-11-26):**
+  - A sticky panel that can be taller than the screen gets `data-sticky-panel` (`resources/js/ui/sticky-panels.js` fits it to the screen; it scrolls on its own) plus `lg:overflow-y-auto` and a CSS `max-h-[calc(100dvh-…)]` fallback. A decorative block uses `data-sticky-panel="release"`.
+  - No visible inner scrollbars: every inner scroller gets `no-scrollbar`. The page's own scrollbar stays.
 - **Scroll containers:** an `overflow-x-auto` wrapper that holds `sr-only` or absolutely positioned elements must also be `relative`. Otherwise those elements escape the clip and widen the whole page on mobile. Found in the 1.2 QA: the fleet page became 671px wide at 390.
 - **Fonts:** the Google provider (variable fonts) gives the same glyph widths as the mockup. Bunny's static files wrapped text differently.
 - **Prices on marketing pages** (estimates, examples) show whole dollars (`money($c, 'never')`, `formatCents(c, {cents: 'never'})`). Checkout and receipts show exact cents.

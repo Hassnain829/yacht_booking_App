@@ -20,7 +20,7 @@
     $detailsUrl = route('yachts.show', [$yacht->slug, ...array_filter([...$query, 'experience' => $query['experience'] ?? $experience])]);
     $bookUrl = $detailsUrl.'#book';
     $lengths = $yacht->lengths ?? [$yacht->min_hours];
-    $lengthsLabel = count($lengths) > 1 ? $lengths[0].'–'.last($lengths).' hrs' : $lengths[0].' hrs';
+    $lengthsLabel = count($lengths) > 1 ? $lengths[0].'–'.last($lengths).' hrs' : $lengths[0].' '.Str::plural('hr', $lengths[0]);
 @endphp
 
 <article {{ $attributes->class('reveal group flex flex-col overflow-hidden rounded-3xl bg-white shadow-card ring-1 ring-navy-100/60 transition duration-500 hover:-translate-y-1.5') }} @if ($delay) data-delay="{{ $delay }}" @endif>

@@ -240,7 +240,8 @@
         transform: rotate(45deg);
     }
 
-    /* Horizontal scrollers */
+    /* Inner scrollers without a visible bar (user, 2026-11-26: no scrollbars in the UI; the page's own stays).
+       They still scroll with the wheel, a trackpad, touch and the keyboard. */
     .no-scrollbar {
         scrollbar-width: none;
     }

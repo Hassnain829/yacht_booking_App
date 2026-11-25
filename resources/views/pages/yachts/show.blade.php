@@ -15,7 +15,7 @@
     $captainLabel = $yacht->crew_count > 1 ? 'Captain & crew' : 'Captain';
     $policy = $yacht->policy;
     $lengths = $yacht->lengths;
-    $lengthsLabel = count($lengths) > 1 ? $lengths[0].' – '.last($lengths).' hours' : $lengths[0].' hours';
+    $lengthsLabel = count($lengths) > 1 ? $lengths[0].' – '.last($lengths).' hours' : $lengths[0].' '.Str::plural('hour', $lengths[0]);
     $specs = [
         ['ruler', 'Length', $yacht->length_ft.' ft'],
         ['users', 'Guests', 'Up to '.$yacht->max_guests],
@@ -242,11 +242,12 @@
             {{-- Booking card (4.3, D21): the trip is picked right here, as on Boatsetter, in our design. Rows open
                  panels (calendar, lengths, start times) filled from the availability endpoint; the price comes from
                  the quote endpoint. On phones the card is a full-screen sheet opened from the bottom bar
-                 (resources/js/pages/yacht.js). --}}
+                 (resources/js/pages/yacht.js). On large screens it follows the page and, when taller than the
+                 screen, scrolls on its own (data-sticky-panel, resources/js/ui/sticky-panels.js). --}}
             <aside id="book" class="scroll-mt-28">
-                <div class="lg:sticky lg:top-28">
+                <div class="lg:sticky lg:top-28 lg:-mx-4 lg:-mt-4 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto lg:px-4 lg:pt-4 lg:pb-4 no-scrollbar" data-sticky-panel>
                     @if ($available)
-                        <div id="booking-sheet" data-booking-sheet class="max-lg:hidden">
+                        <div id="booking-sheet" data-booking-sheet class="no-scrollbar max-lg:hidden">
                             <div class="mb-4 flex items-center justify-between gap-4 lg:hidden">
                                 <p class="font-display text-2xl text-navy-950">Book {{ $yacht->title }}</p>
                                 <button type="button" data-sheet-close class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-navy-950 ring-1 ring-navy-100" aria-label="Close the booking card"><i data-lucide="x" class="h-5 w-5"></i></button>
@@ -286,7 +287,7 @@
                                             <i data-lucide="calendar-days" class="h-4 w-4 shrink-0 text-navy-400"></i>
                                         </button>
                                         <button type="button" data-row="hours" aria-expanded="false" aria-controls="panel-hours" class="{{ $rowClass }}">
-                                            <span class="min-w-0"><span class="{{ $rowLabel }}">Duration</span><span data-value="hours" class="mt-0.5 block truncate text-sm font-bold text-navy-950">{{ $initial['hours'] }} hours</span></span>
+                                            <span class="min-w-0"><span class="{{ $rowLabel }}">Duration</span><span data-value="hours" class="mt-0.5 block truncate text-sm font-bold text-navy-950">{{ $initial['hours'] }} {{ Str::plural('hour', $initial['hours']) }}</span></span>
                                             <i data-lucide="clock" class="h-4 w-4 shrink-0 text-navy-400"></i>
                                         </button>
                                     </div>
@@ -372,7 +373,7 @@
     <div id="mobile-book-bar" class="fixed inset-x-0 bottom-0 z-40 border-t border-navy-100 bg-white/95 p-4 backdrop-blur lg:hidden">
         <div class="flex items-center justify-between gap-4">
             @if ($available)
-                <div class="min-w-0"><p class="truncate text-xs text-navy-400" data-bar="summary">{{ $initial['hours'] }} hrs · {{ $initial['date'] ? 'total' : 'weekday price' }}</p><p class="text-xl font-extrabold text-navy-950" data-bar="total">{{ $estimate ? money($estimate->totalCents, 'never') : money($yacht->hourly_rate_cents).'/hr' }}</p></div>
+                <div class="min-w-0"><p class="truncate text-xs text-navy-400" data-bar="summary">{{ $initial['hours'] }} {{ Str::plural('hr', $initial['hours']) }} · {{ $initial['date'] ? 'total' : 'weekday price' }}</p><p class="text-xl font-extrabold text-navy-950" data-bar="total">{{ $estimate ? money($estimate->totalCents, 'never') : money($yacht->hourly_rate_cents).'/hr' }}</p></div>
                 <a href="#book" data-sheet-open class="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-brass-400 px-7 py-3 text-sm font-bold text-navy-950 shadow-glow transition hover:bg-brass-300">Book now</a>
             @else
                 <div><p class="text-xs text-navy-400">{{ $yacht->title }}</p><p class="text-base font-extrabold text-navy-950">Currently unavailable</p></div>

@@ -190,7 +190,7 @@
 
             {{-- Order summary --}}
             <aside class="order-first lg:order-none">
-                <div class="lg:sticky lg:top-28">
+                <div class="lg:sticky lg:top-28 lg:-mx-4 lg:-mt-4 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto lg:px-4 lg:pt-4 lg:pb-4 no-scrollbar" data-sticky-panel>
                     <div class="overflow-hidden rounded-[2rem] bg-white shadow-card ring-1 ring-navy-100" aria-live="polite">
                         <div class="relative h-40 overflow-hidden">
                             <img src="{{ asset($yacht->cover) }}" alt="{{ $yacht->title }}" class="h-full w-full object-cover">

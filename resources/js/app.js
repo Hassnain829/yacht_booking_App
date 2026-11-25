@@ -25,6 +25,7 @@ import { initPasswordToggles } from './ui/password-toggle.js';
 import { initDemoForms } from './ui/demo-forms.js';
 import { initAdmin } from './ui/admin.js';
 import { initAccountMenu } from './ui/account-menu.js';
+import { initStickyPanels } from './ui/sticky-panels.js';
 
 renderIcons();
 initHeader();
@@ -42,6 +43,7 @@ initPasswordToggles();
 initDemoForms();
 initAdmin();
 initAccountMenu();
+initStickyPanels();
 revealAll();
 
 const pages = import.meta.glob('./pages/*.js');

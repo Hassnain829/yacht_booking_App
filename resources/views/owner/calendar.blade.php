@@ -41,7 +41,7 @@
                         </noscript>
                     </div>
                 </section>
-                <aside class="rounded-3xl bg-white p-5 shadow-xs ring-1 ring-navy-100 sm:p-6 lg:sticky lg:top-28" data-cal-day aria-live="polite"></aside>
+                <aside class="rounded-3xl bg-white p-5 shadow-xs ring-1 ring-navy-100 sm:p-6 lg:sticky lg:top-28 lg:max-h-[calc(100dvh-8rem)] lg:self-start lg:overflow-y-auto no-scrollbar" data-cal-day data-sticky-panel aria-live="polite"></aside>
             </div>
         @endif
     </x-owner.shell>

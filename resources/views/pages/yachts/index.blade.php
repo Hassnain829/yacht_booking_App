@@ -177,7 +177,7 @@
                     </div>
                     <a href="{{ route('pricing') }}" class="inline-flex items-center gap-2 text-sm font-bold text-brass-600 hover:text-brass-700">Full pricing details <i data-lucide="arrow-right" class="h-4 w-4"></i></a>
                 </div>
-                <div class="relative overflow-x-auto">
+                <div class="no-scrollbar relative overflow-x-auto">
                     <table class="w-full min-w-[720px] text-left text-sm">
                         <caption class="sr-only">Fleet comparison: type, capacity, harbor and hourly rates</caption>
                         <thead class="bg-navy-50 text-[11px] font-bold uppercase tracking-[0.18em] text-navy-500">

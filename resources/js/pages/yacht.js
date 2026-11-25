@@ -102,6 +102,11 @@ function bookingCard(form) {
         open = name;
         paintPanels();
     };
+    // The opened panel comes into view inside the card, which scrolls on its own when taller than the screen
+    // (the sticky panel on lg+, the sheet on phones); 'nearest' leaves it alone when it is already visible.
+    const reveal = (name) => {
+        if (open === name) panels[name].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    };
     const paintPanels = () => {
         for (const [key, panel] of Object.entries(panels)) {
             panel.hidden = key !== open;
@@ -110,12 +115,13 @@ function bookingCard(form) {
         if (open === 'date') renderCalendar();
         if (open === 'hours') renderHours();
         if (open === 'time') renderTimes();
+        if (open) requestAnimationFrame(() => reveal(open));
     };
     for (const [name, row] of Object.entries(rows)) row.addEventListener('click', () => setOpen(name));
 
     const paintRows = () => {
         $('[data-value="date"]').textContent = state.date ? formatDate(state.date, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Pick a date';
-        $('[data-value="hours"]').textContent = `${state.hours} hours`;
+        $('[data-value="hours"]').textContent = hoursLabel(state.hours);
         $('[data-value="time"]').textContent = state.time ? formatTimeLabel(state.time) : state.date ? 'Pick a time' : 'Pick a date first';
         form.elements.date.value = state.date;
         form.elements.time.value = state.time;
@@ -153,7 +159,10 @@ function bookingCard(form) {
             try {
                 const { data } = await http.get(config.urls.availability, { params: { month: state.month, ...baseParams() } });
                 calendars.set(key, data.days);
-                if (open === 'date' && calendarKey() === key) renderCalendar();
+                if (open === 'date' && calendarKey() === key) {
+                    renderCalendar();
+                    requestAnimationFrame(() => reveal('date'));
+                }
             } catch (err) {
                 setHtml(panel, html`${head}<p class="py-8 text-center text-xs font-semibold text-red-700">${failure(err)}</p>`);
                 renderIcons(panel);
@@ -203,7 +212,7 @@ function bookingCard(form) {
         setHtml(
             panels.hours,
             html`<p class="text-xs font-semibold text-navy-500">Trip length</p><div class="mt-2 flex flex-wrap gap-2">${lengths().map(
-                (h) => html`<button type="button" data-hours="${h}" aria-pressed="${String(h === state.hours)}" class="rounded-full px-4 py-2 text-sm font-bold transition ${h === state.hours ? 'bg-navy-950 text-white' : 'border border-navy-200 text-navy-700 hover:border-navy-950'}">${h} hours</button>`,
+                (h) => html`<button type="button" data-hours="${h}" aria-pressed="${String(h === state.hours)}" class="rounded-full px-4 py-2 text-sm font-bold transition ${h === state.hours ? 'bg-navy-950 text-white' : 'border border-navy-200 text-navy-700 hover:border-navy-950'}">${hoursLabel(h)}</button>`,
             )}</div>`,
         );
     }
@@ -247,6 +256,7 @@ function bookingCard(form) {
                                 class="rounded-xl px-2 py-2.5 text-center text-sm font-bold transition ${slot.time === state.time ? 'bg-navy-950 text-white' : slot.available ? 'border border-navy-200 text-navy-900 hover:border-navy-950' : 'cursor-not-allowed bg-navy-50 text-navy-300'}">${slot.label}${slot.available ? '' : html`<span class="block text-[10px] font-semibold">${slot.reason}</span>`}</button>`,
                         )}</div>`,
             );
+            requestAnimationFrame(() => reveal('time'));
         } catch (err) {
             setHtml(panel, html`<p class="py-2 text-center text-xs font-semibold text-red-700">${failure(err)}</p>`);
         }
@@ -335,7 +345,7 @@ function bookingCard(form) {
         else if (state.date && state.time) cancellation.textContent = `Too close for a free cancellation · ${quote.policy?.name ?? 'cancellation'} policy`;
         else cancellation.textContent = cancellation.dataset.default;
         if (bar) {
-            bar.querySelector('[data-bar="summary"]').textContent = `${quote.hours} hrs · ${quote.estimate ? 'weekday price' : state.time ? formatTimeLabel(state.time) : 'total'}`;
+            bar.querySelector('[data-bar="summary"]').textContent = `${quote.hours} ${quote.hours === 1 ? 'hr' : 'hrs'} · ${quote.estimate ? 'weekday price' : state.time ? formatTimeLabel(state.time) : 'total'}`;
             bar.querySelector('[data-bar="total"]').textContent = formatCents(quote.total_cents, { cents: 'never' });
         }
     }
@@ -399,6 +409,11 @@ function bookingCard(form) {
     paintRows();
     if (state.date || startProblem) loadQuote();
     if (window.location.hash === '#book' && !desktop.matches) openSheet();
+}
+
+/** 1 → '1 hour', 3 → '3 hours'. */
+function hoursLabel(hours) {
+    return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
 }
 
 /** '17:30' → '5:30 PM' (the server sends labels too; this is for the chosen time). */

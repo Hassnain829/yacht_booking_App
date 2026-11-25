@@ -35,7 +35,7 @@ export default function pricingPage() {
         const yacht = yachts[form.yacht.value];
         const previous = Number(form.hours.value);
         const list = yacht.lengths; // the boat's, the same with any experience
-        setHtml(form.hours, html`${list.map((h) => html`<option value="${h}">${h} hours</option>`)}`);
+        setHtml(form.hours, html`${list.map((h) => html`<option value="${h}">${h} ${h === 1 ? 'hour' : 'hours'}</option>`)}`);
         if (list.includes(previous)) form.hours.value = String(previous);
     };
 

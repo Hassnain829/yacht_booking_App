@@ -68,7 +68,7 @@
         </div>
     @else
         {{-- Jump to a section (3.7): the form is long, so each card has an anchor. --}}
-        <nav class="sticky top-16 z-20 -mx-4 mt-6 flex gap-2 overflow-x-auto border-b border-navy-100 bg-shell/95 px-4 py-3 backdrop-blur md:-mx-8 md:px-8" aria-label="Boat form sections">
+        <nav class="no-scrollbar sticky top-16 z-20 -mx-4 mt-6 flex gap-2 overflow-x-auto border-b border-navy-100 bg-shell/95 px-4 py-3 backdrop-blur md:-mx-8 md:px-8" aria-label="Boat form sections">
             @foreach (['details' => 'Details', 'specs' => 'Specs', 'location' => 'Location', 'pricing' => 'Pricing', 'rules' => 'Rules', 'features' => 'Features', 'experiences' => 'Experiences', 'hours' => 'Start times', 'photos' => 'Photos'] + ($editing ? ['blocks' => 'Blocked times'] : []) as $anchor => $label)
                 <a href="#{{ $anchor }}" class="shrink-0 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-navy-600 ring-1 ring-navy-100 hover:text-navy-950 hover:ring-navy-300">{{ $label }}</a>
             @endforeach

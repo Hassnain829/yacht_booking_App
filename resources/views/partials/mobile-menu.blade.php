@@ -3,7 +3,7 @@
 
 <div id="mobile-menu" class="fixed inset-0 z-[60] xl:hidden" aria-hidden="true" inert>
     <div data-close class="absolute inset-0 bg-navy-950/60 backdrop-blur-xs"></div>
-    <aside class="drawer absolute inset-y-0 right-0 flex w-full max-w-sm flex-col overflow-y-auto bg-navy-950 p-6 text-white shadow-2xl"
+    <aside class="drawer no-scrollbar absolute inset-y-0 right-0 flex w-full max-w-sm flex-col overflow-y-auto bg-navy-950 p-6 text-white shadow-2xl"
            role="dialog" aria-modal="true" aria-label="Menu">
         <div class="flex items-center justify-between">
             <x-logo />

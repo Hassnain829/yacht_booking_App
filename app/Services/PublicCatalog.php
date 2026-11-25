@@ -41,7 +41,11 @@ class PublicCatalog
 {
     public const PLACEHOLDER = 'images/placeholder-boat.svg';
 
-    public const CACHE_KEY = 'catalog.public';
+    /**
+     * Versioned: bump it whenever the payload's shape changes, so a deploy never reads a payload built by the old
+     * code (found in the user's QA, 2026-11-26: the booking card showed "departs null" until the cache expired).
+     */
+    public const CACHE_KEY = 'catalog.public.v2';
 
     /** @var array{harbors: list<array<string, mixed>>, experiences: list<array<string, mixed>>, addons: list<array<string, mixed>>, yachts: list<array<string, mixed>>}|null */
     private ?array $payload = null;

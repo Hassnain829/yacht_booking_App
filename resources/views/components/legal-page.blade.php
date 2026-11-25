@@ -13,7 +13,7 @@
 <section class="bg-white py-16 md:py-24">
     <div class="container grid max-w-5xl gap-12 lg:grid-cols-[14rem_minmax(0,1fr)]">
         <nav class="hidden lg:block" aria-label="On this page">
-            <div class="sticky top-28">
+            <div class="sticky top-28 max-h-[calc(100dvh-8rem)] overflow-y-auto no-scrollbar" data-sticky-panel>
                 <p class="text-xs font-bold uppercase tracking-[0.2em] text-navy-400">On this page</p>
                 <ul class="mt-4 space-y-2 border-l border-navy-100 text-sm">
                     @foreach ($toc as $anchor => $label)

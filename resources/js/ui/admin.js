@@ -55,36 +55,7 @@ export function initAdmin() {
     });
 
     guardUnsavedChanges();
-    fitFormAside();
-}
-
-/**
- * lg+: the record form's right-hand column (x-admin.form-aside) is never taller than the screen space below its
- * top. Its CSS max height assumes it is already stuck under the top bar; before that (top of the page) the
- * column sits lower and its Save buttons would start below the fold. Set through CSSOM (allowed by the CSP).
- */
-function fitFormAside() {
-    const aside = document.querySelector('[data-form-aside]');
-    if (!(aside instanceof HTMLElement)) return;
-
-    const wide = window.matchMedia('(min-width: 64rem)');
-    let frame = 0;
-    const fit = () => {
-        frame = 0;
-        if (!wide.matches) {
-            aside.style.removeProperty('max-height');
-            return;
-        }
-        const stuckAt = Number.parseFloat(getComputedStyle(aside).top) || 0;
-        const top = Math.max(aside.getBoundingClientRect().top, stuckAt);
-        aside.style.maxHeight = `${Math.max(240, Math.floor(window.innerHeight - top - 16))}px`;
-    };
-    const queue = () => {
-        if (!frame) frame = requestAnimationFrame(fit);
-    };
-    window.addEventListener('scroll', queue, { passive: true });
-    window.addEventListener('resize', queue);
-    fit();
+    // The record form's right-hand column (x-admin.form-aside) fits the screen through ui/sticky-panels.js.
 }
 
 /**

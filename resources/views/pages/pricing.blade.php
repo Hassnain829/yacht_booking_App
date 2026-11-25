@@ -113,7 +113,7 @@
                         <label class="block"><span class="text-[11px] font-bold uppercase tracking-[0.18em] text-navy-400">Duration</span>
                             <select name="hours" class="{{ $fieldClass }}">
                                 @foreach ($est['durations'] as $hours)
-                                    <option value="{{ $hours }}">{{ $hours }} hours</option>
+                                    <option value="{{ $hours }}">{{ $hours }} {{ Str::plural('hour', $hours) }}</option>
                                 @endforeach
                             </select></label>
                         <label class="block"><span class="text-[11px] font-bold uppercase tracking-[0.18em] text-navy-400">Guests</span>
@@ -139,7 +139,7 @@
                 </form>
             </div>
             <div class="reveal" data-delay="1">
-                <div class="sticky top-28 overflow-hidden rounded-3xl bg-navy-950 text-white shadow-2xl" aria-live="polite">
+                <div class="sticky top-28 overflow-hidden rounded-3xl bg-navy-950 text-white shadow-2xl lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto no-scrollbar" data-sticky-panel aria-live="polite">
                     <div class="relative h-44 overflow-hidden">
                         <img id="est-image" src="{{ asset($estYacht->cover) }}" alt="" class="h-full w-full object-cover opacity-70">
                         <div class="absolute inset-0 bg-gradient-to-t from-navy-950 to-transparent"></div>
@@ -175,7 +175,7 @@
                 <x-section-heading eyebrow="Rate card" :tight="false">Yacht rates</x-section-heading>
                 <p class="text-sm text-navy-500">All rates in USD. Fuel for standard routes included.</p>
             </div>
-            <div class="reveal relative mt-10 overflow-x-auto rounded-3xl bg-white shadow-card ring-1 ring-navy-100">
+            <div class="reveal no-scrollbar relative mt-10 overflow-x-auto rounded-3xl bg-white shadow-card ring-1 ring-navy-100">
                 <table class="w-full min-w-[860px] text-left text-sm">
                     <caption class="sr-only">Hourly rates, captain fees and starting prices for every yacht</caption>
                     <thead class="bg-navy-950 text-[11px] font-bold uppercase tracking-[0.18em] text-white/70">
