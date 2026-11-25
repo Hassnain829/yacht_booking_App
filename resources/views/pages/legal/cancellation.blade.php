@@ -32,13 +32,12 @@
         </ul>
 
         <h2 id="how">How your refund is calculated</h2>
-        <p>Most trips are booked with a {{ \App\Support\Money::percent($pricing['deposit_bp']) }} deposit, and the balance is charged automatically {{ $pricing['balance_due_days'] }} days before the trip. When you cancel:</p>
+        <p>Every trip is paid in full at checkout. When you cancel:</p>
         <ul>
-            <li>We work out how much of the trip price you are owed back under the policy (for example 100% or 50%). Gratuity is always included in full.</li>
-            <li>If you have paid more than you owe, we refund the difference to your card.</li>
-            <li>Any balance that hasn't been charged yet is cancelled and never charged.</li>
+            <li>We work out how much of the trip price comes back to you under the boat's policy (for example 100% or 50%). Gratuity is always refunded in full.</li>
+            <li>The refund goes back to the card you paid with.</li>
         </ul>
-        <p><strong>Example:</strong> a trip costs $1,000 and you paid a $500 deposit. If you cancel in the 50% window, you owe $500 — which you have already paid — so nothing more is charged and no refund is due. If you cancel in the full-refund window, your $500 deposit comes back to you.</p>
+        <p><strong>Example:</strong> a trip costs $1,000 and you paid the $1,000 at checkout. If you cancel in the 50% window, $500 comes back to you. If you cancel in the full-refund window, all $1,000 comes back.</p>
 
         <h2 id="weather">Weather and safety</h2>
         <p>Your captain has the final say on safety. If the captain or our team cancels a trip because of weather, water conditions or any other safety reason, you choose between a <strong>full refund</strong> of everything you paid or a <strong>free new date</strong>. We'll contact you as early as possible — usually the day before.</p>

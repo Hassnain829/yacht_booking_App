@@ -31,7 +31,7 @@
                         <h2 class="mt-6 font-display text-4xl text-navy-950">Message received!</h2>
                         <p class="mx-auto mt-3 max-w-md text-navy-500">Thanks <span id="cs-name"></span> — a charter expert will reply within the hour. Want to lock in a date right now?</p>
                         <div class="mt-8 flex justify-center gap-3">
-                            <a href="{{ route('booking.create') }}" class="inline-flex items-center gap-2 rounded-full bg-brass-400 px-7 py-3.5 text-sm font-bold text-navy-950 hover:bg-brass-300">Book online</a>
+                            <a href="{{ route('yachts.index') }}" class="inline-flex items-center gap-2 rounded-full bg-brass-400 px-7 py-3.5 text-sm font-bold text-navy-950 hover:bg-brass-300">Book online</a>
                             <button type="button" id="cs-again" class="rounded-full border border-navy-200 px-7 py-3.5 text-sm font-bold hover:border-navy-950">Send another</button>
                         </div>
                     </div>

@@ -239,6 +239,10 @@ So our eight experiences (Sunset Skyline, Playpen, River Architecture, Navy Pier
 
 **Not adopted:** Boatsetter's renter service fee (13 % + $20). Our platform earns from the owner's share (PLAN §7.5), so no service fee line is added unless the client asks.
 
+**Changed later on 2026-11-25 (user):**
+- **Experiences are free**, as on Boatsetter. Each Chicago experience keeps its own start times (a sunset cruise and the fireworks run at different times). If the admin adds something to an experience (party décor, a photographer, any facility), the admin sets its price (PLAN D21, built in 4.3). *Refined after the user's QA the same day:* the experience has no trip length of its own (the boat is booked by the hour), it departs inside its own window (the guest picks a start time inside it and is told when a time or day doesn't fit), and its extras are optional add-ons suggested at checkout, charged only when ticked.
+- **B5 tightened: direct checkout only.** No deposit and **no request to book** either, owner boats included: every booking is paid in full at checkout and confirmed (PLAN D22).
+
 ## 12. New Phase 4 order (agreed 2026-11-25)
 
 Before: 4.3 wizard ⇄ endpoints · 4.4 hold + checkout · 4.5 confirmation · 4.6 My trips · 4.7 admin bookings.
@@ -251,13 +255,13 @@ Now (8 steps, two are done):
 | 4.2 ✅ | AvailabilityService + start times + booking tables |
 | **4.3** | **Boat page booking card**: date / duration / start-time popovers, optional experience, captain switch, guests, live price lines. JSON endpoints `availability` (month calendar + a day's start times) and `quote`. Phone bottom bar → full-screen sheet. `/book` redirects to the boat page. **Full payment only:** `QuoteService` drops the deposit (B5). |
 | **4.4** | **Fleet + Experiences**: fleet filter bar (date, guests, chips, more filters), card additions, "free on this date". Experiences page as Chicago categories, each listing its boats. |
-| 4.5 | **Hold or request + checkout:** one page in our design (inline login / register, add-ons, details, occasion + note, gratuity, promo, terms), double-booking lock, hold expiry, promo redemptions. Instant book → `hold` → pay (stubbed until Phase 5). Request → `requested`. |
-| 4.6 | Confirmation page + email + .ics ("waiting for the owner" for requests). |
+| 4.5 | **Hold + checkout:** one page in our design (inline login / register, add-ons, details, occasion + note, gratuity, promo, terms), double-booking lock, hold expiry, promo redemptions. Book now → `hold` → pay in full (stubbed until Phase 5). *(No request to book since the later 2026-11-25 decision.)* |
+| 4.6 | Confirmation page + email + .ics. |
 | 4.7 | My trips + trip detail. |
 | 4.8 | Admin: bookings (list, calendar, detail, status, notes) + promo codes. |
 
 **B5 also changes Phase 5:**
-- 5.1 takes the full amount. A request uses a manual-capture authorisation, captured when the owner accepts. Card authorisations last about 7 days, so the owner's answer window must be shorter (e.g. 24 h).
+- 5.1 takes the full amount at checkout (no request to book, so no manual-capture authorisation).
 - 5.3 has no automatic balance charge.
 - §7.4 refunds have no deposit-only cases.
 - Settings lose deposit % and balance days.

@@ -42,7 +42,7 @@ class AvailabilityServiceTest extends TestCase
             $this->boat->availabilityRules()->create(['weekday' => $day, 'is_open' => true, 'start_times' => StartTimes::defaults()]);
         }
         $this->boat->availabilityRules()->create(['weekday' => 0, 'is_open' => false, 'start_times' => StartTimes::defaults()]);
-        $this->sunset = Experience::factory()->create(['name' => 'Sunset Cruise', 'durations' => [2, 3], 'time_slots' => ['17:30', '18:00', '18:30'], 'allowed_weekdays' => null]);
+        $this->sunset = Experience::factory()->create(['name' => 'Sunset Cruise', 'time_slots' => ['17:30', '18:00', '18:30'], 'allowed_weekdays' => null]);
         $this->boat->experiences()->attach($this->sunset);
     }
 
@@ -105,6 +105,23 @@ class AvailabilityServiceTest extends TestCase
         $this->assertSame([], $this->states('2027-05-15', 3, $this->sunset), 'the boat stopped offering it');
     }
 
+    public function test_a_time_outside_the_experiences_window_says_when_it_departs(): void
+    {
+        $at = fn (string $time) => CarbonImmutable::createFromFormat('Y-m-d H:i', "2027-05-10 {$time}", 'America/Chicago')->utc();
+
+        $morning = $this->availability->problem($this->boat(), $at('10:00'), 4, $this->sunset);
+        $this->assertSame(['time', "Sunset Cruise isn't available at 10:00 AM: it departs 5:30 PM – 6:30 PM. Pick a start time inside that window, or just book the boat."], [$morning['field'], $morning['message']]);
+        $this->assertNull($this->availability->problem($this->boat(), $at('10:00'), 4), 'just the boat: fine at 10:00 AM');
+        $this->assertNull($this->availability->problem($this->boat(), $at('17:30'), 4, $this->sunset), 'any of the boat\'s lengths: no length of its own');
+
+        // The boat departs 8:00 AM – 6:00 PM: a fireworks window at night never meets it.
+        $fireworks = Experience::factory()->create(['name' => 'Fireworks', 'time_slots' => ['20:00', '20:30', '21:00']]);
+        $this->boat->experiences()->attach($fireworks);
+        $this->assertSame([], $this->states('2027-05-10', 3, $fireworks));
+        $night = $this->availability->problem($this->boat(), $at('18:00'), 3, $fireworks);
+        $this->assertSame(['time', "Fireworks departs 8:00 PM – 9:00 PM, and the boat doesn't depart then on Monday, May 10. Pick another day or just book the boat."], [$night['field'], $night['message']]);
+    }
+
     public function test_advance_notice_and_the_past(): void
     {
         $today = $this->states('2027-05-03', 2); // now: 10:00 AM, 1 hour's notice → 11:00 AM at the earliest
@@ -132,11 +149,11 @@ class AvailabilityServiceTest extends TestCase
         $this->assertNull($this->states('2027-05-10', 3)['09:00'], 'no buffer: back at 12:00 is fine');
     }
 
-    public function test_holds_and_requests_count_until_they_run_out_and_cancelled_trips_never(): void
+    public function test_holds_count_until_they_run_out_and_cancelled_trips_never(): void
     {
         $hold = $this->trip('2027-05-10', '08:00', 2)->hold()->create();
         $this->trip('2027-05-10', '11:00', 2)->hold(CarbonImmutable::now()->subMinute())->create(); // ran out
-        $this->trip('2027-05-10', '14:00', 2)->requested()->create(); // waiting for the owner
+        $this->trip('2027-05-10', '14:00', 2)->create(); // confirmed (paid in full, D22)
         $this->trip('2027-05-10', '16:30', 2)->cancelled()->create();
         $states = $this->states('2027-05-10', 2);
 

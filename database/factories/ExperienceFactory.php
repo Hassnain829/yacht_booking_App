@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Experience;
+use App\Support\StartTimes;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -23,9 +24,7 @@ class ExperienceFactory extends Factory
             'tagline' => fake()->sentence(),
             'description' => fake()->paragraph(),
             'includes' => ['Ice, water & cups', 'Bluetooth playlist'],
-            'durations' => [2, 3, 4],
-            'time_slots' => ['10:00', '14:00', '18:00'],
-            'package_fee_cents' => 0,
+            'time_slots' => StartTimes::between('10:00', '18:00'), // its departure window
             'is_active' => true,
         ];
     }

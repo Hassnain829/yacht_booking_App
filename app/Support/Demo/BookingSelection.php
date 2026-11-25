@@ -3,6 +3,7 @@
 namespace App\Support\Demo;
 
 use App\Services\PublicCatalog;
+use App\Support\StartTimes;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Fluent;
 
@@ -11,8 +12,11 @@ use Illuminate\Support\Fluent;
  * cleaned from untrusted input (query string or hidden form fields).
  *
  * Every value is checked against the catalog; anything unknown, out of range or inconsistent is
- * dropped. Values are never echoed back unchecked. Same rules as the mockup's normalize().
- * Phase 4: availability (holds/bookings) is also checked here, by AvailabilityService.
+ * dropped. Values are never echoed back unchecked. Since 4.3 the choices come from the boat page's booking card:
+ * the experience is optional (D21) and free, the lengths are the boat's (PublicCatalog `lengths`; an experience has
+ * none of its own), and a start time must be on the start-time grid and inside the experience's departure window.
+ * Add-ons are optional and picked at checkout (2026-11-25). 4.5 replaces this with a real hold, checked by
+ * AvailabilityService inside the boat-row lock.
  */
 class BookingSelection
 {
@@ -69,14 +73,15 @@ class BookingSelection
             $selection->guests = $yacht->max_guests; // cap guests rather than dropping the boat
         }
 
-        if ($yacht && $experience) {
-            $durations = DemoQuote::durations($yacht, $experience);
+        if ($yacht) {
+            $durations = $yacht->lengths;
             $hours = filter_var($str('hours'), FILTER_VALIDATE_INT);
             $selection->hours = in_array($hours, $durations, true) ? $hours : $durations[0];
 
             $selection->date = self::validDate($str('date'), $experience);
             $time = $str('time');
-            $selection->time = $selection->date && in_array($time, $experience->time_slots, true) && self::hasNotice($selection->date, $time) ? $time : null;
+            $times = $experience ? StartTimes::normalize($experience->time_slots) : StartTimes::grid();
+            $selection->time = $selection->date && in_array($time, $times, true) && self::hasNotice($selection->date, $time) ? $time : null;
         }
 
         $addons = $input['addons'] ?? [];
@@ -95,7 +100,7 @@ class BookingSelection
     }
 
     /** A real calendar date, today or later (Chicago time), within the booking window, on an allowed weekday. */
-    public static function validDate(?string $date, Fluent $experience): ?string
+    public static function validDate(?string $date, ?Fluent $experience): ?string
     {
         if (! $date || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             return null;
@@ -112,7 +117,7 @@ class BookingSelection
         if ($day->lt($today) || $day->gt($today->addMonths(self::MAX_MONTHS_AHEAD))) {
             return null;
         }
-        if ($experience->allowed_weekdays && ! in_array($day->dayOfWeek, $experience->allowed_weekdays, true)) {
+        if ($experience?->allowed_weekdays && ! in_array($day->dayOfWeek, $experience->allowed_weekdays, true)) {
             return null;
         }
 
@@ -120,8 +125,8 @@ class BookingSelection
     }
 
     /**
-     * Same-day departures need more than MIN_NOTICE_HOURS' notice (Chicago time), matching
-     * slots() in resources/js/lib/demo-availability.js. Phase 4: per-boat advance notice.
+     * Same-day departures need more than MIN_NOTICE_HOURS' notice (Chicago time). 4.5: the boat's own advance
+     * notice, through AvailabilityService.
      */
     public static function hasNotice(string $date, string $time): bool
     {
@@ -133,10 +138,10 @@ class BookingSelection
         return (int) substr($time, 0, 2) > $now->hour + self::MIN_NOTICE_HOURS;
     }
 
-    /** Experience, yacht, date, time and duration are all chosen. */
+    /** Yacht, date, start time and length are chosen (the experience is optional, D21). */
     public function isComplete(): bool
     {
-        return $this->experience && $this->yacht && $this->date && $this->time && $this->hours;
+        return $this->yacht && $this->date && $this->time && $this->hours;
     }
 
     public function yachtModel(): ?Fluent
@@ -155,7 +160,7 @@ class BookingSelection
         return $this->catalog->addons()->whereIn('slug', $this->addons)->values()->all();
     }
 
-    /** @return array<string, mixed> Query string for /book or /checkout (empty values dropped). */
+    /** @return array<string, mixed> Query string for the boat page or /checkout (empty values dropped). */
     public function toQuery(): array
     {
         return array_filter([

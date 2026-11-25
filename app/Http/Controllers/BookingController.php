@@ -3,72 +3,40 @@
 namespace App\Http\Controllers;
 
 use App\Services\PublicCatalog;
-use App\Support\Demo\BookingSelection;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Fluent;
-use Illuminate\View\View;
 
+/**
+ * GET /book — the old booking-wizard address (retired in 4.3, D21: a trip is picked on the boat page, like on
+ * Boatsetter). Old links, the home page search and bookmarks keep working:
+ *
+ *   /book?yacht=azure&experience=sunset&date=2027-06-04&hours=3&guests=6  →  /yachts/azure?…#book
+ *   /book?experience=sunset&date=2027-06-04&guests=6                     →  /yachts?… (the fleet, filtered)
+ *
+ * Only values in the expected shape are passed on (unknown boats and experiences, bad dates, numbers out of
+ * range are dropped); the page they land on checks them again.
+ */
 class BookingController extends Controller
 {
-    /**
-     * The 4-step booking wizard (rendered by resources/js/pages/booking.js).
-     * Deep links like /book?yacht=azure&experience=sunset are cleaned by BookingSelection first.
-     *
-     * Phase 1: catalog + demo availability run in the browser.
-     * Phase 4: GET /book/availability and POST /book/quote JSON endpoints, then POST /book/hold.
-     */
-    public function create(Request $request, PublicCatalog $catalog): View
+    public function __invoke(Request $request, PublicCatalog $catalog): RedirectResponse
     {
-        $selection = BookingSelection::from($request->query(), $catalog);
-        $pricing = $catalog->pricing();
+        $text = fn (string $key, string $pattern) => is_string($value = $request->query($key)) && preg_match($pattern, $value) ? $value : null;
+        $number = fn (string $key, int $max) => ($value = filter_var($request->query($key), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => $max]])) === false ? null : $value;
 
-        return view('booking.create', [
-            'wizard' => [
-                'initial' => [
-                    'experience' => $selection->experience,
-                    'yacht' => $selection->yacht,
-                    'guests' => $selection->guests,
-                    'date' => $selection->date,
-                    'time' => $selection->time,
-                    'hours' => $selection->hours,
-                    'addons' => $selection->addons,
-                    'occasion' => $selection->occasion ?? '',
-                ],
-                'yachts' => $catalog->yachts()->map(fn (Fluent $y) => [
-                    'slug' => $y->slug,
-                    'title' => $y->title,
-                    'category' => $y->category,
-                    'length_ft' => $y->length_ft,
-                    'max_guests' => $y->max_guests,
-                    'min_hours' => $y->min_hours,
-                    'hourly_rate_cents' => $y->hourly_rate_cents,
-                    'captain_rate_cents' => $y->captain_rate_cents,
-                    'crew_count' => $y->crew_count,
-                    'cleaning_fee_cents' => $y->cleaning_fee_cents,
-                    'rating_avg' => $y->rating_avg,
-                    'reviews_count' => $y->reviews_count,
-                    'harbor' => $y->harbor?->name,
-                    'experiences' => $y->experiences,
-                    'booking_enabled' => (bool) $y->booking_enabled,
-                    'cover' => asset($y->cover),
-                    'url' => route('yachts.show', $y->slug),
-                ])->values(),
-                'experiences' => $catalog->experiences()->map(fn (Fluent $e) => [
-                    'slug' => $e->slug,
-                    'name' => $e->name,
-                    'icon' => $e->icon,
-                    'tagline' => $e->tagline,
-                    'image' => asset($e->image),
-                    'durations' => $e->durations,
-                    'time_slots' => $e->time_slots,
-                    'package_fee_cents' => $e->package_fee_cents,
-                    'allowed_weekdays' => $e->allowed_weekdays,
-                ])->values(),
-                'addons' => $catalog->addons()->map(fn (Fluent $a) => collect($a->toArray())->only(['slug', 'name', 'description', 'price_cents', 'unit', 'icon']))->values(),
-                'pricing' => collect($pricing)->only(['weekend_multiplier_bp', 'tax_rate_bp', 'deposit_bp']),
-                'occasions' => BookingSelection::OCCASIONS,
-                'checkoutUrl' => route('checkout.create'),
-            ],
-        ]);
+        $yacht = $catalog->yacht((string) $text('yacht', '/^[a-z0-9-]{1,80}$/'));
+        $experience = $catalog->experience((string) $text('experience', '/^[a-z0-9-]{1,80}$/'))?->slug;
+        $choices = array_filter([
+            'experience' => $yacht === null || in_array($experience, $yacht->experiences, true) ? $experience : null,
+            'date' => $text('date', '/^\d{4}-\d{2}-\d{2}$/'),
+            'guests' => $number('guests', 500),
+        ], fn ($value) => $value !== null);
+
+        if ($yacht === null) {
+            return redirect()->route('yachts.index', $choices);
+        }
+
+        $hours = $number('hours', 24);
+
+        return redirect()->to(route('yachts.show', [$yacht->slug, ...$choices, ...($hours ? ['hours' => $hours] : [])]).'#book');
     }
 }

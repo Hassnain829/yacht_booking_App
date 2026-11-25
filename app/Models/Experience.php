@@ -13,11 +13,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
 
-/** A package guests book, e.g. Sunset Skyline Cruise (PLAN §6.3). URLs use the slug; managed in Admin → Experiences (3.4.2). */
+/**
+ * A Chicago trip theme guests can pick, e.g. Sunset Skyline Cruise (PLAN §6.3), with its departure window, days
+ * and season. URLs use the slug; managed in Admin → Experiences (3.4.2).
+ *
+ * User decisions 2026-11-25: the experience is free (as on Boatsetter) and has no trip length of its own (the guest
+ * books the boat by the hour). `time_slots` is its departure window, every half hour of it on the StartTimes grid
+ * (a sunset cruise departs in the evening, the fireworks at night). Its `extras` are add-ons suggested with it at
+ * checkout: optional, charged only when the guest ticks them.
+ */
 #[Fillable([
     'slug', 'name', 'category', 'icon', 'image_path', 'tagline', 'description', 'includes',
-    'durations', 'time_slots', 'allowed_weekdays', 'season_starts_on', 'season_ends_on',
-    'package_fee_cents', 'is_active', 'is_featured', 'sort', 'seo_title', 'seo_description',
+    'time_slots', 'allowed_weekdays', 'season_starts_on', 'season_ends_on',
+    'is_active', 'is_featured', 'sort', 'seo_title', 'seo_description',
 ])]
 #[Hidden(['id'])]
 class Experience extends Model implements Trashable
@@ -33,7 +41,13 @@ class Experience extends Model implements Trashable
     /** @return BelongsToMany<Boat, $this> */
     public function boats(): BelongsToMany
     {
-        return $this->belongsToMany(Boat::class)->withPivot(['package_fee_override_cents', 'is_active'])->withTimestamps();
+        return $this->belongsToMany(Boat::class)->withPivot(['is_active'])->withTimestamps();
+    }
+
+    /** Add-ons suggested with this experience at checkout (optional), in the admin's order. @return BelongsToMany<Addon, $this> */
+    public function extras(): BelongsToMany
+    {
+        return $this->belongsToMany(Addon::class)->withPivot(['sort'])->withTimestamps()->orderByPivot('sort')->orderBy('addons.name');
     }
 
     /** @param Builder<self> $query */
@@ -86,7 +100,6 @@ class Experience extends Model implements Trashable
     {
         return [
             'includes' => 'array',
-            'durations' => 'array',
             'time_slots' => 'array',
             'allowed_weekdays' => 'array',
             'season_starts_on' => 'date',

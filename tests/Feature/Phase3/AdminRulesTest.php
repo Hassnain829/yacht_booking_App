@@ -34,7 +34,7 @@ class AdminRulesTest extends TestCase
     private function settings(array $overrides = []): array
     {
         return array_merge([
-            'tax_rate' => '10.25', 'deposit' => '40', 'balance_due_days' => '10', 'weekend_markup' => '20', 'hold_minutes' => '20',
+            'tax_rate' => '10.25', 'weekend_markup' => '20', 'hold_minutes' => '20',
             'gratuity_options' => ['20', '0', '15'], 'default_gratuity' => '15',
             'commission' => '22.5', 'payout_delay_hours' => '72', 'complaint_window_hours' => '48', 'min_withdrawal' => '75',
             'captain_offer_hours' => '24', 'captain_release_hours' => '48', 'captain_ack_reminder_hours' => '12', 'captain_turnaround_minutes' => '30',
@@ -57,7 +57,7 @@ class AdminRulesTest extends TestCase
         $this->put('/admin/settings', $this->settings())->assertRedirect('/admin/settings');
 
         $this->assertSame(1025, $settings->get('tax_rate_bp'));
-        $this->assertSame(4000, $settings->get('deposit_bp'));
+        $this->assertSame(20, $settings->get('hold_minutes'));
         $this->assertSame(12000, $settings->get('weekend_multiplier_bp'));
         $this->assertSame([0, 15, 20], $settings->get('gratuity_options'));
         $this->assertSame(2250, $settings->get('commission_bp'));
@@ -92,9 +92,9 @@ class AdminRulesTest extends TestCase
 
         $this->putJson('/admin/settings', $this->settings(['reason' => '', 'password' => 'nope']))->assertUnprocessable()->assertJsonValidationErrors(['reason', 'password']);
         $this->putJson('/admin/settings', $this->settings([
-            'tax_rate' => '99', 'deposit' => '5', 'gratuity_options' => ['17'], 'default_gratuity' => '25',
+            'tax_rate' => '99', 'hold_minutes' => '1', 'gratuity_options' => ['17'], 'default_gratuity' => '25',
             'business_email' => 'not-an-email', 'business_name' => '<script>x</script>', 'extension_max_trip_hours' => '100',
-        ]))->assertUnprocessable()->assertJsonValidationErrors(['tax_rate', 'deposit', 'gratuity_options.0', 'default_gratuity', 'business_email', 'business_name', 'extension_max_trip_hours']);
+        ]))->assertUnprocessable()->assertJsonValidationErrors(['tax_rate', 'hold_minutes', 'gratuity_options.0', 'default_gratuity', 'business_email', 'business_name', 'extension_max_trip_hours']);
 
         $this->assertSame(0, Setting::query()->count());
         $this->assertSame(0, AuditLog::query()->count());

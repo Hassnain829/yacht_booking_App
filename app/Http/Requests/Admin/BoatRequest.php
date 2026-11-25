@@ -153,9 +153,8 @@ class BoatRequest extends FormRequest
             'new_amenity_names.*' => ['array', 'max:10'],
             'new_amenity_names.*.*' => ['string', 'max:80', new PlainText],
             'experiences' => ['nullable', 'array', 'max:100'],
-            'experiences.*' => ['array:offered,fee'],
+            'experiences.*' => ['array:offered'],
             'experiences.*.offered' => ['nullable', 'boolean'],
-            'experiences.*.fee' => ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:100000'],
             // Weekly start times (4.2, Boatsetter-style): per weekday, on or off + the half-hours it departs at
             'start_times' => ['required', 'array:0,1,2,3,4,5,6'],
             'start_times.*' => ['array:open,times'],
@@ -289,9 +288,9 @@ class BoatRequest extends FormRequest
     }
 
     /**
-     * Amenity ids (the form sends ulids) + new item names per group, offered experiences (id => package fee override in cents or null) and the 7 weekday start-time rows.
+     * Amenity ids (the form sends ulids) + new item names per group, the ids of the offered experiences and the 7 weekday start-time rows.
      *
-     * @return array{amenities: list<int>, new_amenities: array<string, list<string>>, experiences: array<int, ?int>, start_times: list<array{weekday: int, is_open: bool, start_times: list<string>}>}
+     * @return array{amenities: list<int>, new_amenities: array<string, list<string>>, experiences: list<int>, start_times: list<array{weekday: int, is_open: bool, start_times: list<string>}>}
      */
     public function relationData(): array
     {
@@ -301,7 +300,7 @@ class BoatRequest extends FormRequest
         return [
             'amenities' => Amenity::query()->whereIn('ulid', $this->validated('amenities') ?? [])->pluck('id')->map(fn ($id) => (int) $id)->all(),
             'new_amenities' => collect($this->validated('new_amenity_names') ?? [])->filter()->all(),
-            'experiences' => $chosen->mapWithKeys(fn (array $row, string $slug) => [$ids[$slug] => Money::toCents($row['fee'] ?? null)])->all(),
+            'experiences' => $chosen->keys()->map(fn (string $slug) => (int) $ids[$slug])->values()->all(),
             'start_times' => collect(range(0, 6))->map(function (int $day) {
                 $row = $this->validated('start_times')[$day] ?? [];
 

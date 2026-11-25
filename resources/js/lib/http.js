@@ -71,7 +71,7 @@ function messageFor(status, body) {
  * @param {string} url     a path on our own site, e.g. '/book/quote'
  * @param {object} [options]
  * @param {object|FormData} [options.data]  request body (JSON-encoded unless FormData)
- * @param {object} [options.params]         query string values (empty values are skipped)
+ * @param {object} [options.params]         query string values (empty values are skipped; an array is sent as key[])
  * @param {string} [options.idempotencyKey] sent as the Idempotency-Key header
  * @param {number} [options.timeout=15000]  milliseconds
  * @param {AbortSignal} [options.signal]    lets the caller cancel (e.g. a newer search started)
@@ -85,7 +85,11 @@ export async function request(method, url, { data, params, idempotencyKey, timeo
     }
 
     for (const [key, value] of Object.entries(params ?? {})) {
-        if (value !== undefined && value !== null && value !== '') target.searchParams.set(key, String(value));
+        if (Array.isArray(value)) {
+            for (const item of value) target.searchParams.append(`${key}[]`, String(item)); // addons: [a, b] → addons[]=a&addons[]=b
+        } else if (value !== undefined && value !== null && value !== '') {
+            target.searchParams.set(key, String(value));
+        }
     }
 
     const headers = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' };

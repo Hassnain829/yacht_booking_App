@@ -2,24 +2,18 @@
  * PHASE 1 DEMO price estimate (port of the mockup's CYB.quote, in cents).
  * Must match app/Support/Demo/DemoQuote.php exactly (tests/js/demo-quote.test.js).
  *
- * Only for showing an instant estimate in the browser. Phase 4 replaces this with the server
- * endpoint POST /book/quote, and the server ALWAYS recalculates at checkout.
+ * Only for the demo checkout's instant totals until 4.5 (the boat page and the pricing page ask the quote
+ * endpoint since 4.3). The server ALWAYS recalculates at checkout. Paid in full (D22): no deposit. The experience
+ * is free and adds nothing; add-ons only when picked (2026-11-25).
  */
 import { formatCents } from './money.js';
 import { isIsoDate, isWeekend } from './dates.js';
 
-/** Durations offered for a boat + experience (never shorter than the boat minimum). */
-export function durationsFor(yacht, experience) {
-    if (!experience) return [yacht.min_hours];
-    const list = experience.durations.filter((h) => h >= yacht.min_hours);
-    return list.length ? list : [yacht.min_hours];
-}
-
 /**
  * @param {object} yacht   { hourly_rate_cents, captain_rate_cents, crew_count, cleaning_fee_cents, min_hours }
- * @param {object|null} experience { name, package_fee_cents }
- * @param {object} pricing { weekend_multiplier_bp, tax_rate_bp, deposit_bp, promos: [{code,type,value}] }
- * @param {object} options { date, hours, guests, addons: [{slug,name,price_cents,unit}], promo, gratuity, plan }
+ * @param {object|null} experience { slug, name } (free: it adds no line)
+ * @param {object} pricing { weekend_multiplier_bp, tax_rate_bp, promos: [{code,type,value}] }
+ * @param {object} options { date, hours, guests, addons: [{slug,name,price_cents,unit}], promo, gratuity }
  */
 export function quote(yacht, experience, pricing, options = {}) {
     const hours = Number(options.hours) || yacht.min_hours;
@@ -39,9 +33,6 @@ export function quote(yacht, experience, pricing, options = {}) {
             amount: captain,
         },
     ];
-    if (experience && experience.package_fee_cents > 0) {
-        lines.push({ key: 'package', label: `${experience.name} package`, sub: 'Experience extras', amount: experience.package_fee_cents });
-    }
     for (const addon of options.addons ?? []) {
         const perGuest = addon.unit === 'per_guest';
         lines.push({
@@ -64,8 +55,6 @@ export function quote(yacht, experience, pricing, options = {}) {
     const gratuityPct = Number(options.gratuity) || 0;
     const gratuity = Math.round(((charter + captain) * gratuityPct) / 100);
     const total = taxable + tax + gratuity;
-    const deposit = Math.round((total * pricing.deposit_bp) / 10000);
-    const dueNow = options.plan === 'full' ? total : deposit;
 
-    return { hours, guests, weekend, rate, charter, captain, lines, subtotal, discount, promo, tax, gratuity, gratuityPct, total, deposit, dueNow, balance: total - dueNow };
+    return { hours, guests, weekend, rate, charter, captain, lines, subtotal, discount, promo, tax, gratuity, gratuityPct, total };
 }

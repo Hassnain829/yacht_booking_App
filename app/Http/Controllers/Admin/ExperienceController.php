@@ -6,20 +6,23 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\ExperienceController as PublicExperienceController;
 use App\Http\Requests\Admin\ExperienceRequest;
 use App\Http\Requests\Admin\RecordLifecycleRequest;
+use App\Models\Addon;
 use App\Models\Experience;
+use App\Services\PublicCatalog;
 use App\Services\RecordWriter;
 use App\Services\TrashService;
 use App\Support\Admin\ListQuery;
 use App\Support\IconNames;
+use App\Support\StartTimes;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
-/** Admin → Experiences (PLAN 3.4.2): list, add, edit, image, show / hide, featured, Trash. */
+/** Admin → Experiences (PLAN 3.4.2): list, add, edit, image, paid extras (4.3), show / hide, featured, Trash. */
 class ExperienceController extends Controller
 {
-    private const SORTS = ['sort' => 'sort', 'name' => 'name', 'fee' => 'package_fee_cents', 'boats' => 'boats_count', 'updated' => 'updated_at'];
+    private const SORTS = ['sort' => 'sort', 'name' => 'name', 'extras' => 'extras_count', 'boats' => 'boats_count', 'updated' => 'updated_at'];
 
     public function index(Request $request): View
     {
@@ -33,7 +36,8 @@ class ExperienceController extends Controller
 
         $experiences = Experience::query()
             ->when($inTrash, fn ($query) => $query->onlyTrashed())
-            ->withCount('boats')
+            ->withCount(['boats', 'extras'])
+            ->with('extras')
             ->when($category, fn ($query) => $query->where('category', $category))
             ->when($q !== '', fn ($query) => $query->where(fn ($where) => $where
                 ->where('name', 'like', '%'.addcslashes($q, '%_\\').'%')
@@ -64,9 +68,7 @@ class ExperienceController extends Controller
             'is_featured' => false,
             'icon' => 'sunset',
             'category' => 'sightseeing',
-            'durations' => [2, 3, 4],
-            'time_slots' => [],
-            'package_fee_cents' => 0,
+            'time_slots' => StartTimes::between('10:00', '18:00'), // a daytime window to start from
             'sort' => Experience::withTrashed()->max('sort') + 1,
         ]));
     }
@@ -74,7 +76,7 @@ class ExperienceController extends Controller
     public function store(ExperienceRequest $request, RecordWriter $writer): RedirectResponse
     {
         $experience = new Experience;
-        $writer->save($experience, $request->experienceData(), $request->user(), ['file' => $request->file('image'), 'directory' => 'experiences']);
+        $writer->save($experience, $request->experienceData(), $request->user(), ['file' => $request->file('image'), 'directory' => 'experiences'], relations: $this->syncExtras($request));
 
         return redirect()->route('admin.experiences.edit', $experience)->with('status', "{$experience->name} was added.");
     }
@@ -89,7 +91,7 @@ class ExperienceController extends Controller
 
     public function update(ExperienceRequest $request, Experience $experience, RecordWriter $writer): RedirectResponse
     {
-        $writer->save($experience, $request->experienceData(), $request->user(), ['file' => $request->file('image'), 'remove' => $request->boolean('remove_image'), 'directory' => 'experiences']);
+        $writer->save($experience, $request->experienceData(), $request->user(), ['file' => $request->file('image'), 'remove' => $request->boolean('remove_image'), 'directory' => 'experiences'], relations: $this->syncExtras($request));
 
         return redirect()->route('admin.experiences.edit', $experience)->with('status', 'Changes saved.');
     }
@@ -115,13 +117,36 @@ class ExperienceController extends Controller
         return redirect()->route('admin.experiences.index', ['view' => 'trash'])->with('status', "{$experience->name} was deleted permanently.");
     }
 
+    /**
+     * Saves the paid extras in the same transaction; the audit log keeps their names when they change. A pivot sync
+     * fires no model events, so the public catalog cache is cleared here (CLAUDE.md).
+     *
+     * @return callable(Experience): array{0: array<string, mixed>, 1: array<string, mixed>}
+     */
+    private function syncExtras(ExperienceRequest $request): callable
+    {
+        return function (Experience $experience) use ($request): array {
+            $names = fn () => $experience->extras()->pluck('addons.name')->all();
+            $before = $names();
+            $experience->extras()->sync($request->extras());
+            $after = $names();
+            PublicCatalog::flushAfterCommit();
+
+            return $before === $after ? [[], []] : [['extras' => $before], ['extras' => $after]];
+        };
+    }
+
     private function form(Experience $experience): View
     {
+        $chosen = $experience->exists ? $experience->extras->pluck('slug')->all() : [];
+
         return view('admin.experiences.form', [
             'experience' => $experience,
+            'addons' => Addon::query()->orderBy('sort')->orderBy('name')->get(),
+            'chosenExtras' => old('extras', $chosen),
             'categories' => $this->categories(),
             'icons' => IconNames::options(),
-            'durations' => ExperienceRequest::DURATIONS,
+            'startTimes' => collect(StartTimes::grid())->mapWithKeys(fn (string $time) => [$time => StartTimes::label($time)])->all(),
             'trashBlockers' => $experience->exists && ! $experience->trashed() ? $experience->trashBlockers() : [],
             'deleteBlockers' => $experience->trashed() ? $experience->permanentDeleteBlockers() : [],
         ]);

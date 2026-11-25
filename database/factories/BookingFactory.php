@@ -40,11 +40,6 @@ class BookingFactory extends Factory
         return $this->state(['status' => BookingStatus::Hold, 'confirmed_at' => null, 'hold_expires_at' => $expiresAt ?? CarbonImmutable::now()->addMinutes(15)]);
     }
 
-    public function requested(?CarbonImmutable $expiresAt = null): static
-    {
-        return $this->state(['status' => BookingStatus::Requested, 'confirmed_at' => null, 'hold_expires_at' => $expiresAt ?? CarbonImmutable::now()->addDay()]);
-    }
-
     public function cancelled(): static
     {
         return $this->state(['status' => BookingStatus::Cancelled, 'cancelled_at' => CarbonImmutable::now(), 'cancelled_by_role' => 'customer']);

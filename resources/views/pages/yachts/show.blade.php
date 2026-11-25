@@ -13,22 +13,46 @@
     $gallery = $yacht->gallery;
     $weekendRate = (int) round($yacht->hourly_rate_cents * $pricing['weekend_multiplier_bp'] / 10000 / 100) * 100;
     $captainLabel = $yacht->crew_count > 1 ? 'Captain & crew' : 'Captain';
-    $firstExperience = $experiences->first();
-    $fieldClass = 'mt-1.5 w-full rounded-xl border border-navy-200 bg-white text-sm font-semibold focus:border-navy-950 focus:outline-hidden';
+    $policy = $yacht->policy;
+    $lengths = $yacht->lengths;
+    $lengthsLabel = count($lengths) > 1 ? $lengths[0].' – '.last($lengths).' hours' : $lengths[0].' hours';
     $specs = [
         ['ruler', 'Length', $yacht->length_ft.' ft'],
         ['users', 'Guests', 'Up to '.$yacht->max_guests],
-        ['clock', 'Minimum', $yacht->min_hours.' hours'],
+        ['clock', 'Trip length', $lengthsLabel],
         ['bed-double', 'Cabins', $yacht->staterooms ?: '—'],
         ['bath', 'Restrooms', $yacht->heads],
         ['calendar-check', 'Year', $yacht->year],
     ];
-    // Data for the live estimate (resources/js/pages/yacht.js). Prices only DISPLAYED in the browser.
-    $quoteData = [
-        'yacht' => collect($yacht->toArray())->only(['slug', 'min_hours', 'max_guests', 'hourly_rate_cents', 'captain_rate_cents', 'crew_count', 'cleaning_fee_cents']),
-        'experiences' => $experiences->map(fn ($e) => ['slug' => $e->slug, 'name' => $e->name, 'package_fee_cents' => $e->package_fee_cents, 'durations' => $e->durations])->values(),
-        'pricing' => collect($pricing)->only(['weekend_multiplier_bp', 'tax_rate_bp', 'deposit_bp']),
+    // Quick facts under the title (Boatsetter-style, our design): what the guest should know at a glance.
+    $facts = array_values(array_filter([
+        ['ship-wheel', $yacht->crew_count > 1 ? 'Captain & '.($yacht->crew_count - 1).' crew included' : 'Captain included'],
+        ['zap', 'Instant confirmation'],
+        $policy ? ['calendar-x', $policy['name'].' cancellation'] : null,
+        $harbor ? ['map-pin', 'Departs '.$harbor->name] : null,
+    ]));
+    // The booking card's data (resources/js/pages/yacht.js): choices and URLs only. Every price comes from the
+    // quote endpoint (QuoteService); the browser never adds anything up. An experience brings its departure window
+    // (`times`), days and season, so the card can tell the guest when a chosen date or time doesn't fit it.
+    $card = [
+        'urls' => ['availability' => route('yachts.availability', $yacht->slug), 'quote' => route('yachts.quote', $yacht->slug)],
+        'maxGuests' => (int) $yacht->max_guests,
+        'lengths' => $lengths,
+        'experiences' => $experiences->mapWithKeys(fn ($e) => [$e->slug => [
+            'name' => $e->name,
+            'window' => $e->departs_label,
+            'times' => $e->time_slots,
+            'days' => $e->days_label,
+            'weekdays' => $e->allowed_weekdays,
+            'season' => $e->season_starts_on && $e->season_ends_on ? [$e->season_starts_on, $e->season_ends_on] : null,
+            'extras' => $e->extras_label,
+        ]])->all(),
+        'initial' => $initial,
+        'months' => [App\Http\Requests\BookingCard\AvailabilityRequest::months()[0], last(App\Http\Requests\BookingCard\AvailabilityRequest::months())],
+        'freeHours' => $policy['free_hours'] ?? null,
     ];
+    $rowClass = 'flex w-full items-center justify-between gap-3 rounded-xl border border-navy-200 bg-white px-4 py-3 text-left transition hover:border-navy-950 aria-expanded:border-navy-950 aria-expanded:ring-1 aria-expanded:ring-navy-950';
+    $rowLabel = 'block text-[10px] font-bold uppercase tracking-[0.18em] text-navy-400';
 @endphp
 
 @section('content')
@@ -92,14 +116,22 @@
     <section class="py-14 md:py-20">
         <div class="container grid gap-12 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-16">
             <div class="min-w-0 space-y-14">
-                <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    @foreach ($specs as [$icon, $label, $value])
-                        <div class="rounded-2xl border border-navy-100 bg-white p-5">
-                            <i data-lucide="{{ $icon }}" class="h-5 w-5 text-brass-500"></i>
-                            <p class="mt-3 text-[11px] font-bold uppercase tracking-[0.18em] text-navy-400">{{ $label }}</p>
-                            <p class="mt-1 text-lg font-extrabold text-navy-950">{{ $value }}</p>
-                        </div>
-                    @endforeach
+                <div class="space-y-4">
+                    <ul class="flex flex-wrap gap-2" aria-label="Quick facts">
+                        @foreach ($facts as [$icon, $text])
+                            <li class="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-navy-800 ring-1 ring-navy-100"><i data-lucide="{{ $icon }}" class="h-4 w-4 text-brass-500"></i>{{ $text }}</li>
+                        @endforeach
+                    </ul>
+
+                    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                        @foreach ($specs as [$icon, $label, $value])
+                            <div class="rounded-2xl border border-navy-100 bg-white p-5">
+                                <i data-lucide="{{ $icon }}" class="h-5 w-5 text-brass-500"></i>
+                                <p class="mt-3 text-[11px] font-bold uppercase tracking-[0.18em] text-navy-400">{{ $label }}</p>
+                                <p class="mt-1 text-lg font-extrabold text-navy-950">{{ $value }}</p>
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
 
                 <div>
@@ -122,16 +154,16 @@
 
                 <div>
                     <h2 class="font-display text-3xl text-navy-950">Experiences on this yacht</h2>
-                    <p class="mt-2 text-navy-500">Choose an experience at booking — each one sets the route, timing and extras.</p>
+                    <p class="mt-2 text-navy-500">Optional and free. Each one departs in its own time window: pick it in the booking card for as many hours as you book — or just book the boat.</p>
                     <div class="mt-6 grid gap-4 sm:grid-cols-2">
                         @foreach ($experiences as $experience)
                             {{-- Unavailable boats never link to booking: the card opens the experience details instead. --}}
-                            <a href="{{ $available ? route('booking.create', ['yacht' => $yacht->slug, 'experience' => $experience->slug]) : route('experiences.index').'#'.$experience->slug }}" class="group flex items-center gap-4 rounded-2xl bg-white p-3 pr-5 ring-1 ring-navy-100 transition hover:ring-brass-400">
+                            <a href="{{ $available ? route('yachts.show', [$yacht->slug, 'experience' => $experience->slug]).'#book' : route('experiences.index').'#'.$experience->slug }}" @if ($available) data-pick-experience="{{ $experience->slug }}" @endif class="group flex items-center gap-4 rounded-2xl bg-white p-3 pr-5 ring-1 ring-navy-100 transition hover:ring-brass-400">
                                 <img src="{{ asset($experience->image) }}" alt="" loading="lazy" class="h-20 w-20 shrink-0 rounded-xl object-cover">
                                 <div class="min-w-0 flex-1">
                                     <p class="font-bold text-navy-950 group-hover:text-brass-600">{{ $experience->name }}</p>
-                                    <p class="mt-0.5 text-xs text-navy-500">{{ implode(', ', $experience->offered_durations) }} hrs · {{ $experience->allowed_weekdays ? 'Wed & Sat only' : 'Daily' }}</p>
-                                    <p class="mt-1 text-xs font-bold text-brass-600">{{ $experience->package_fee_cents ? '+'.money($experience->package_fee_cents).' package' : 'No package fee' }}</p>
+                                    <p class="mt-0.5 text-xs text-navy-500">{{ $experience->days_label }} · departs {{ $experience->departs_label }}</p>
+                                    <p class="mt-1 text-xs font-bold text-brass-600">{{ $experience->extras_label }}</p>
                                 </div>
                                 <i data-lucide="arrow-right" class="h-4 w-4 text-navy-300 transition group-hover:translate-x-1 group-hover:text-brass-500"></i>
                             </a>
@@ -147,32 +179,52 @@
                             <div class="p-6"><p class="text-[11px] font-bold uppercase tracking-[0.18em] text-navy-400">Fri – Sun</p><p class="mt-2 text-3xl font-extrabold text-navy-950">{{ money($weekendRate) }}<span class="text-sm font-semibold text-navy-400">/hr</span></p></div>
                             <div class="p-6"><p class="text-[11px] font-bold uppercase tracking-[0.18em] text-navy-400">{{ $yacht->crew_count > 1 ? 'Captain & crew' : 'Captain' }}</p><p class="mt-2 text-3xl font-extrabold text-navy-950">{{ money($yacht->captain_rate_cents) }}<span class="text-sm font-semibold text-navy-400">/hr</span></p></div>
                         </div>
-                        <div class="border-t border-navy-100 bg-navy-50/60 p-6">
-                            <p class="text-sm font-bold text-navy-950">Example: {{ $yacht->min_hours }}-hour weekday private charter, {{ $sample['guests'] }} guests</p>
-                            <dl class="mt-4 space-y-2 text-sm">
-                                @foreach ($sample['lines'] as $line)
-                                    <div class="flex justify-between gap-4"><dt class="text-navy-600">{{ $line['label'] }} <span class="text-navy-400">· {{ $line['sub'] }}</span></dt><dd class="font-semibold text-navy-900">{{ money($line['amount'], 'never') }}</dd></div>
-                                @endforeach
-                                <div class="flex justify-between gap-4"><dt class="text-navy-600">Taxes (est. {{ App\Support\Money::percent($pricing['tax_rate_bp']) }})</dt><dd class="font-semibold text-navy-900">{{ money($sample['tax'], 'never') }}</dd></div>
-                                <div class="flex justify-between gap-4 border-t border-navy-200 pt-3 text-base"><dt class="font-bold text-navy-950">Estimated total</dt><dd class="font-extrabold text-navy-950">{{ money($sample['total'], 'never') }}</dd></div>
-                            </dl>
-                            <p class="mt-3 text-xs text-navy-400">Gratuity optional, added at checkout. {{ App\Support\Money::percent($pricing['deposit_bp']) }} deposit secures your date.</p>
-                        </div>
+                        @if ($sample)
+                            <div class="border-t border-navy-100 bg-navy-50/60 p-6">
+                                <p class="text-sm font-bold text-navy-950">Example: {{ $sample->hours }}-hour weekday charter, {{ $sampleGuests }} {{ Str::plural('guest', $sampleGuests) }}</p>
+                                <dl class="mt-4 space-y-2 text-sm">
+                                    @foreach ($sample->lines as $line)
+                                        <div class="flex justify-between gap-4"><dt class="text-navy-600">{{ $line->label }} <span class="text-navy-400">· {{ $line->description }}</span></dt><dd class="font-semibold text-navy-900">{{ money($line->amountCents, 'never') }}</dd></div>
+                                    @endforeach
+                                    <div class="flex justify-between gap-4"><dt class="text-navy-600">Taxes ({{ App\Support\Money::percent($pricing['tax_rate_bp']) }})</dt><dd class="font-semibold text-navy-900">{{ money($sample->taxCents, 'never') }}</dd></div>
+                                    <div class="flex justify-between gap-4 border-t border-navy-200 pt-3 text-base"><dt class="font-bold text-navy-950">Total</dt><dd class="font-extrabold text-navy-950">{{ money($sample->totalCents, 'never') }}</dd></div>
+                                </dl>
+                                <p class="mt-3 text-xs text-navy-400">Paid in full at checkout. Crew gratuity is optional and added at checkout.</p>
+                            </div>
+                        @endif
                     </div>
                 </div>
 
-                <div class="grid gap-6 sm:grid-cols-2">
-                    <div class="rounded-3xl bg-white p-6 ring-1 ring-navy-100">
-                        <h3 class="flex items-center gap-2 text-lg font-bold text-navy-950"><i data-lucide="circle-check" class="h-5 w-5 text-emerald-600"></i>Included</h3>
-                        <ul class="mt-4 space-y-2.5 text-sm text-navy-600">
-                            <li>Licensed USCG captain{{ $yacht->crew_count > 1 ? ' & crew' : '' }}</li><li>Fuel for standard routes</li><li>Life jackets &amp; safety gear</li><li>Ice, water &amp; cups</li><li>Bluetooth sound system</li>
-                        </ul>
-                    </div>
-                    <div class="rounded-3xl bg-white p-6 ring-1 ring-navy-100">
-                        <h3 class="flex items-center gap-2 text-lg font-bold text-navy-950"><i data-lucide="info" class="h-5 w-5 text-brass-500"></i>Good to know</h3>
-                        <ul class="mt-4 space-y-2.5 text-sm text-navy-600">
-                            <li>BYOB welcome (21+), no glass</li><li>Arrive 20 minutes before departure</li><li>Soft-soled shoes on deck</li><li>Free weather rescheduling</li><li>Crew gratuity not included</li>
-                        </ul>
+                <div>
+                    <h2 class="font-display text-3xl text-navy-950">Things to know</h2>
+                    <div class="mt-6 grid gap-6 md:grid-cols-3">
+                        <div class="rounded-3xl bg-white p-6 ring-1 ring-navy-100">
+                            <h3 class="flex items-center gap-2 text-lg font-bold text-navy-950"><i data-lucide="circle-check" class="h-5 w-5 text-emerald-600"></i>Included</h3>
+                            <ul class="mt-4 space-y-2.5 text-sm text-navy-600">
+                                <li>Licensed USCG captain{{ $yacht->crew_count > 1 ? ' & crew' : '' }}</li><li>Fuel for standard routes</li><li>Life jackets &amp; safety gear</li><li>Ice, water &amp; cups</li><li>Bluetooth sound system</li>
+                            </ul>
+                        </div>
+                        <div class="rounded-3xl bg-white p-6 ring-1 ring-navy-100">
+                            <h3 class="flex items-center gap-2 text-lg font-bold text-navy-950"><i data-lucide="info" class="h-5 w-5 text-brass-500"></i>On board</h3>
+                            <ul class="mt-4 space-y-2.5 text-sm text-navy-600">
+                                @foreach ($yacht->rules as $rule)
+                                    <li>No {{ Str::lower($rule) }}</li>
+                                @endforeach
+                                <li>Arrive 20 minutes before departure</li><li>BYOB welcome (21+)</li><li>Crew gratuity not included</li>
+                            </ul>
+                        </div>
+                        <div class="rounded-3xl bg-white p-6 ring-1 ring-navy-100">
+                            <h3 class="flex items-center gap-2 text-lg font-bold text-navy-950"><i data-lucide="calendar-x" class="h-5 w-5 text-brass-500"></i>{{ $policy ? $policy['name'].' cancellation' : 'Cancellation' }}</h3>
+                            <ul class="mt-4 space-y-2.5 text-sm text-navy-600">
+                                @forelse ($policy['points'] ?? [] as $point)
+                                    <li>{{ $point }}</li>
+                                @empty
+                                    <li>See the cancellation policy before you pay.</li>
+                                @endforelse
+                                <li>Weather cancellations by the captain: free reschedule or a full refund</li>
+                            </ul>
+                            <a href="{{ route('legal.cancellation') }}" class="mt-4 inline-flex items-center gap-1.5 text-sm font-bold text-brass-600 hover:text-brass-700">Full policy <i data-lucide="arrow-right" class="h-4 w-4"></i></a>
+                        </div>
                     </div>
                 </div>
 
@@ -187,59 +239,97 @@
                 @endif
             </div>
 
-            {{-- Booking card --}}
-            <aside>
+            {{-- Booking card (4.3, D21): the trip is picked right here, as on Boatsetter, in our design. Rows open
+                 panels (calendar, lengths, start times) filled from the availability endpoint; the price comes from
+                 the quote endpoint. On phones the card is a full-screen sheet opened from the bottom bar
+                 (resources/js/pages/yacht.js). --}}
+            <aside id="book" class="scroll-mt-28">
                 <div class="lg:sticky lg:top-28">
                     @if ($available)
-                        <form id="y-book-form" action="{{ route('booking.create') }}" method="get" data-quote="{{ json_encode($quoteData) }}" class="overflow-hidden rounded-3xl bg-white shadow-card ring-1 ring-navy-100">
-                            <input type="hidden" name="yacht" value="{{ $yacht->slug }}">
-                            <div class="bg-navy-950 p-6 text-white">
-                                <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-brass-300">Starting from</p>
-                                <p class="mt-1 text-4xl font-extrabold">{{ money($yacht->hourly_rate_cents) }}<span class="text-base font-semibold text-white/50">/hr</span></p>
-                                <p class="mt-1 text-xs text-white/60">{{ $yacht->min_hours }}-hour minimum · captain fee {{ money($yacht->captain_rate_cents) }}/hr</p>
+                        <div id="booking-sheet" data-booking-sheet class="max-lg:hidden">
+                            <div class="mb-4 flex items-center justify-between gap-4 lg:hidden">
+                                <p class="font-display text-2xl text-navy-950">Book {{ $yacht->title }}</p>
+                                <button type="button" data-sheet-close class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-navy-950 ring-1 ring-navy-100" aria-label="Close the booking card"><i data-lucide="x" class="h-5 w-5"></i></button>
                             </div>
-                            <div class="space-y-4 p-6">
-                                <label class="block">
-                                    <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-navy-400">Experience</span>
-                                    <select name="experience" class="{{ $fieldClass }} px-4 py-3">
-                                        @foreach ($experiences as $experience)
-                                            <option value="{{ $experience->slug }}">{{ $experience->name }}</option>
-                                        @endforeach
-                                    </select>
-                                </label>
-                                <div class="grid grid-cols-2 gap-3">
-                                    <label class="block">
-                                        <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-navy-400">Date</span>
-                                        <input type="date" name="date" min="{{ $today }}" class="{{ $fieldClass }} px-3 py-3">
-                                    </label>
-                                    <label class="block">
-                                        <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-navy-400">Duration</span>
-                                        <select name="hours" class="{{ $fieldClass }} px-3 py-3">
-                                            @foreach ($firstExperience?->offered_durations ?? [$yacht->min_hours] as $hours)
-                                                <option value="{{ $hours }}">{{ $hours }} hours</option>
-                                            @endforeach
-                                        </select>
-                                    </label>
+                            <form id="booking-card" action="{{ route('checkout.create') }}" method="get" novalidate data-booking-card="{{ json_encode($card) }}" class="overflow-hidden rounded-3xl bg-white shadow-card ring-1 ring-navy-100">
+                                <input type="hidden" name="yacht" value="{{ $yacht->slug }}">
+                                <input type="hidden" name="date" value="{{ $initial['date'] }}">
+                                <input type="hidden" name="time" value="">
+                                <input type="hidden" name="hours" value="{{ $initial['hours'] }}">
+                                <input type="hidden" name="addons" value="{{ implode(',', $initial['addons']) }}">
+                                <div class="bg-navy-950 p-6 text-white">
+                                    <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-brass-300">From</p>
+                                    <p class="mt-1 text-4xl font-extrabold">{{ money($yacht->hourly_rate_cents) }}<span class="text-base font-semibold text-white/50">/hr</span></p>
+                                    <p class="mt-1 text-xs text-white/60">{{ $lengthsLabel }} · {{ $captainLabel }} {{ money($yacht->captain_rate_cents) }}/hr, its own line</p>
                                 </div>
-                                <div>
-                                    <span id="guests-label" class="text-[11px] font-bold uppercase tracking-[0.18em] text-navy-400">Guests</span>
-                                    <div class="mt-1.5 flex items-center justify-between rounded-xl border border-navy-200 px-2 py-1.5">
-                                        <button type="button" data-guests-step="-1" class="grid h-9 w-9 place-items-center rounded-lg hover:bg-navy-50" aria-label="Fewer guests"><i data-lucide="minus" class="h-4 w-4"></i></button>
-                                        <input name="guests" type="number" min="1" max="{{ $yacht->max_guests }}" value="{{ $defaultGuests }}" inputmode="numeric" class="w-16 text-center text-sm font-bold focus:outline-hidden" aria-labelledby="guests-label">
-                                        <button type="button" data-guests-step="1" class="grid h-9 w-9 place-items-center rounded-lg hover:bg-navy-50" aria-label="More guests"><i data-lucide="plus" class="h-4 w-4"></i></button>
+                                <div class="space-y-3 p-6">
+                                    @if ($experiences->isNotEmpty())
+                                        <label class="block">
+                                            <span class="{{ $rowLabel }}">Experience · optional</span>
+                                            <span class="relative mt-1.5 block">
+                                                <select name="experience" class="w-full appearance-none rounded-xl border border-navy-200 bg-white py-3 pl-4 pr-10 text-sm font-semibold text-navy-950 focus:border-navy-950 focus:outline-hidden">
+                                                    <option value="">Just the boat</option>
+                                                    @foreach ($experiences as $experience)
+                                                        <option value="{{ $experience->slug }}" @selected($initial['experience'] === $experience->slug)>{{ $experience->name }} · {{ $experience->departs_label }}</option>
+                                                    @endforeach
+                                                </select>
+                                                <i data-lucide="chevron-down" class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-400"></i>
+                                            </span>
+                                            <span data-card="experience-note" class="mt-1.5 block text-xs text-navy-500"></span>
+                                        </label>
+                                        <p data-card="notice" hidden role="status" class="rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 ring-1 ring-amber-200"></p>
+                                    @endif
+
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <button type="button" data-row="date" aria-expanded="false" aria-controls="panel-date" class="{{ $rowClass }}">
+                                            <span class="min-w-0"><span class="{{ $rowLabel }}">Date</span><span data-value="date" class="mt-0.5 block truncate text-sm font-bold text-navy-950">{{ $initial['date'] ? Carbon\CarbonImmutable::parse($initial['date'])->format('D, M j') : 'Pick a date' }}</span></span>
+                                            <i data-lucide="calendar-days" class="h-4 w-4 shrink-0 text-navy-400"></i>
+                                        </button>
+                                        <button type="button" data-row="hours" aria-expanded="false" aria-controls="panel-hours" class="{{ $rowClass }}">
+                                            <span class="min-w-0"><span class="{{ $rowLabel }}">Duration</span><span data-value="hours" class="mt-0.5 block truncate text-sm font-bold text-navy-950">{{ $initial['hours'] }} hours</span></span>
+                                            <i data-lucide="clock" class="h-4 w-4 shrink-0 text-navy-400"></i>
+                                        </button>
                                     </div>
-                                    <p class="mt-1 text-xs text-navy-400">Maximum {{ $yacht->max_guests }} guests (USCG limit)</p>
+                                    <div id="panel-date" data-panel="date" hidden class="rounded-2xl border border-navy-100 p-3"></div>
+                                    <div id="panel-hours" data-panel="hours" hidden class="rounded-2xl border border-navy-100 p-3"></div>
+
+                                    <button type="button" data-row="time" aria-expanded="false" aria-controls="panel-time" class="{{ $rowClass }}">
+                                        <span class="min-w-0"><span class="{{ $rowLabel }}">Start time</span><span data-value="time" class="mt-0.5 block truncate text-sm font-bold text-navy-950">Pick a date first</span></span>
+                                        <i data-lucide="timer" class="h-4 w-4 shrink-0 text-navy-400"></i>
+                                    </button>
+                                    <div id="panel-time" data-panel="time" hidden class="rounded-2xl border border-navy-100 p-3"></div>
+
+                                    <div>
+                                        <span id="guests-label" class="{{ $rowLabel }}">Guests</span>
+                                        <div class="mt-1.5 flex items-center justify-between rounded-xl border border-navy-200 px-2 py-1.5">
+                                            <button type="button" data-guests-step="-1" class="grid h-9 w-9 place-items-center rounded-lg hover:bg-navy-50" aria-label="Fewer guests"><i data-lucide="minus" class="h-4 w-4"></i></button>
+                                            <input name="guests" type="number" min="1" max="{{ $yacht->max_guests }}" value="{{ $initial['guests'] }}" inputmode="numeric" class="w-16 text-center text-sm font-bold focus:outline-hidden" aria-labelledby="guests-label">
+                                            <button type="button" data-guests-step="1" class="grid h-9 w-9 place-items-center rounded-lg hover:bg-navy-50" aria-label="More guests"><i data-lucide="plus" class="h-4 w-4"></i></button>
+                                        </div>
+                                        <p class="mt-1 text-xs text-navy-400">Up to {{ $yacht->max_guests }} guests (USCG limit)</p>
+                                    </div>
+
+                                    <p class="flex items-center gap-2.5 rounded-xl bg-brass-50 px-4 py-3 text-sm font-semibold text-navy-800 ring-1 ring-brass-200"><i data-lucide="ship-wheel" class="h-4 w-4 shrink-0 text-brass-600"></i>{{ $yacht->crew_count > 1 ? 'Captained · captain + '.($yacht->crew_count - 1).' crew' : 'Captained · licensed USCG captain' }}</p>
+
+                                    <div id="card-price" class="rounded-2xl bg-navy-50 p-4 text-sm" aria-live="polite">
+                                        <dl data-card="lines" class="space-y-2">
+                                            @if ($estimate)
+                                                @foreach ([...$estimate->lines, ...$estimate->adjustments] as $line)
+                                                    <div class="flex justify-between gap-4"><dt class="min-w-0 text-navy-600">{{ $line->label }}<span class="block text-xs text-navy-400">{{ $line->description }}</span></dt><dd class="shrink-0 font-semibold text-navy-900">{{ money($line->amountCents) }}</dd></div>
+                                                @endforeach
+                                            @endif
+                                        </dl>
+                                        <div class="mt-3 flex items-end justify-between gap-4 border-t border-navy-200 pt-3"><span class="font-bold text-navy-950">Total</span><span data-card="total" class="text-lg font-extrabold text-navy-950">{{ $estimate ? money($estimate->totalCents) : '—' }}</span></div>
+                                        <p data-card="note" class="mt-2 text-xs text-navy-500">{{ $initial['date'] ? 'Paid in full at checkout.' : 'Weekday price. Pick a date for yours.' }}</p>
+                                    </div>
+                                    <p data-card="error" @unless (session('booking_card_error')) hidden @endunless class="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">{{ session('booking_card_error') }}</p>
+
+                                    <x-button type="submit" icon="arrow-right" size="block">Book now</x-button>
+                                    <p data-card="cancellation" class="flex items-center justify-center gap-2 text-center text-xs font-semibold text-emerald-700"><i data-lucide="calendar-check" class="h-3.5 w-3.5"></i><span data-card="cancellation-text">{{ $policy && $policy['free_hours'] ? 'Free cancellation up to '.($policy['free_hours'] % 24 === 0 ? ($policy['free_hours'] / 24).' '.Str::plural('day', $policy['free_hours'] / 24) : $policy['free_hours'].' hours').' before' : ($policy ? $policy['name'].' cancellation policy' : 'Cancellation policy shown at checkout') }}</span></p>
+                                    <p class="flex items-center justify-center gap-2 text-xs text-navy-400"><i data-lucide="lock" class="h-3.5 w-3.5"></i>You won't be charged yet</p>
                                 </div>
-                                <div id="y-estimate" class="rounded-2xl bg-navy-50 p-4 text-sm" aria-live="polite">
-                                    <div class="flex justify-between"><span class="text-navy-500">Charter + captain</span><span class="font-semibold" data-est="base">{{ money($estimate['charter'] + $estimate['captain'], 'never') }}</span></div>
-                                    <div class="mt-1 flex justify-between"><span class="text-navy-500">Package, fees &amp; tax</span><span class="font-semibold" data-est="extras">{{ money($estimate['total'] - $estimate['charter'] - $estimate['captain'], 'never') }}</span></div>
-                                    <div class="mt-2 flex justify-between border-t border-navy-200 pt-2"><span class="font-bold text-navy-950">Estimated total</span><span class="font-extrabold text-navy-950" data-est="total">{{ money($estimate['total'], 'never') }}</span></div>
-                                    <p class="mt-2 hidden text-xs font-semibold text-brass-700" data-est="weekend">Weekend rate applied</p>
-                                </div>
-                                <x-button type="submit" icon="arrow-right" size="block">Check Availability</x-button>
-                                <p class="flex items-center justify-center gap-2 text-xs text-navy-400"><i data-lucide="lock" class="h-3.5 w-3.5"></i>No charge until checkout</p>
-                            </div>
-                        </form>
+                            </form>
+                        </div>
                     @else
                         <div class="overflow-hidden rounded-3xl bg-white shadow-card ring-1 ring-navy-100">
                             <div class="bg-navy-950 p-6 text-white">
@@ -282,8 +372,8 @@
     <div id="mobile-book-bar" class="fixed inset-x-0 bottom-0 z-40 border-t border-navy-100 bg-white/95 p-4 backdrop-blur lg:hidden">
         <div class="flex items-center justify-between gap-4">
             @if ($available)
-                <div><p class="text-xs text-navy-400">Est. total · <span data-bar="hours">{{ $estimate['hours'] }}</span> hrs</p><p class="text-xl font-extrabold text-navy-950" data-bar="total">{{ money($estimate['total'], 'never') }}</p></div>
-                <a href="{{ route('booking.create', ['yacht' => $yacht->slug]) }}" data-bar="link" class="inline-flex items-center justify-center gap-2 rounded-full bg-brass-400 px-7 py-3 text-sm font-bold text-navy-950 shadow-glow transition hover:bg-brass-300">Book Now</a>
+                <div class="min-w-0"><p class="truncate text-xs text-navy-400" data-bar="summary">{{ $initial['hours'] }} hrs · {{ $initial['date'] ? 'total' : 'weekday price' }}</p><p class="text-xl font-extrabold text-navy-950" data-bar="total">{{ $estimate ? money($estimate->totalCents, 'never') : money($yacht->hourly_rate_cents).'/hr' }}</p></div>
+                <a href="#book" data-sheet-open class="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-brass-400 px-7 py-3 text-sm font-bold text-navy-950 shadow-glow transition hover:bg-brass-300">Book now</a>
             @else
                 <div><p class="text-xs text-navy-400">{{ $yacht->title }}</p><p class="text-base font-extrabold text-navy-950">Currently unavailable</p></div>
                 <a href="{{ route('yachts.index') }}" class="inline-flex items-center justify-center gap-2 rounded-full bg-navy-950 px-6 py-3 text-sm font-bold text-white">See yachts</a>

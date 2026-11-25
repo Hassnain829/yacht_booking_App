@@ -12,7 +12,7 @@
 
 @section('content')
     <x-page-hero image="images/exp-party.jpg" crumb="Experiences" image-class="opacity-50"
-                 intro="Every experience is a ready-made package — route, timing and extras planned by our captains. Pick one, choose your yacht, and we handle the rest.">
+                 intro="Chicago's favourite ways to spend a few hours on the water — each with its own route and departure times, planned by our captains. Pick one, choose your yacht and how many hours, and we handle the rest.">
         Experiences <em>&amp; Events</em>
     </x-page-hero>
 
@@ -39,9 +39,9 @@
                     <div data-flip-media @class(['reveal relative', 'lg:order-2' => $flip])>
                         <div class="overflow-hidden rounded-[2rem]"><img src="{{ asset($experience->image) }}" alt="{{ $experience->name }}" loading="lazy" class="aspect-[5/4] w-full object-cover transition duration-[1.2s] hover:scale-105"></div>
                         <div data-flip-badge @class(['absolute -bottom-6 rounded-2xl bg-white p-5 shadow-card', 'left-6' => $flip, 'right-6' => ! $flip])>
-                            <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-navy-400">All-in from</p>
+                            <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-navy-400">Trips from</p>
                             @if ($experience->from_cents !== null)
-                                <p class="text-2xl font-extrabold text-navy-950">{{ money($experience->from_cents) }}</p>
+                                <p class="text-2xl font-extrabold text-navy-950">{{ money($experience->from_cents, 'never') }}</p>
                                 <p class="text-xs text-navy-400">incl. captain · before tax</p>
                             @else
                                 <p class="text-2xl font-extrabold text-navy-950">On request</p>
@@ -59,21 +59,39 @@
                             @endforeach
                         </ul>
                         <dl class="mt-7 grid grid-cols-3 divide-x divide-navy-100 rounded-2xl bg-white py-4 ring-1 ring-navy-100">
-                            <div class="px-4"><dt class="text-[10px] font-bold uppercase tracking-[0.18em] text-navy-400">Duration</dt><dd class="mt-1 text-sm font-bold text-navy-950">{{ $experience->durations[0] }}–{{ last($experience->durations) }} hrs</dd></div>
-                            <div class="px-4"><dt class="text-[10px] font-bold uppercase tracking-[0.18em] text-navy-400">Departures</dt><dd class="mt-1 text-sm font-bold text-navy-950">{{ $experience->first_departure }}{{ count($experience->time_slots) > 1 ? ' +'.(count($experience->time_slots) - 1) : '' }}</dd></div>
+                            <div class="px-4"><dt class="text-[10px] font-bold uppercase tracking-[0.18em] text-navy-400">Departs</dt><dd class="mt-1 text-sm font-bold text-navy-950">{{ $experience->departs_label ?: '—' }}</dd></div>
                             <div class="px-4"><dt class="text-[10px] font-bold uppercase tracking-[0.18em] text-navy-400">Available</dt><dd class="mt-1 text-sm font-bold text-navy-950">{{ $experience->days_label }}</dd></div>
+                            <div class="px-4"><dt class="text-[10px] font-bold uppercase tracking-[0.18em] text-navy-400">Trip length</dt><dd class="mt-1 text-sm font-bold text-navy-950">Your choice</dd></div>
                         </dl>
-                        <div class="mt-6 flex items-center gap-3">
-                            <div class="flex -space-x-3">
-                                @foreach ($experience->boats->take(4) as $boat)
-                                    <img src="{{ asset($boat->cover) }}" alt="{{ $boat->title }}" title="{{ $boat->title }}" loading="lazy" class="h-10 w-10 rounded-full object-cover ring-2 ring-shell">
-                                @endforeach
+                        <p class="mt-5 flex items-start gap-2 text-sm text-navy-600"><i data-lucide="{{ $experience->extras_label ? 'gift' : 'circle-check' }}" class="mt-0.5 h-4 w-4 shrink-0 text-brass-500"></i>
+                            @if ($experience->extras_label)
+                                <span>The experience is free: you pay for the yacht and its captain, by the hour. Optional extras at checkout: <strong class="text-navy-900">{{ $experience->extras_label }}</strong>.</span>
+                            @else
+                                <span>The experience is free: you pay only for the yacht and its captain, by the hour.</span>
+                            @endif
+                        </p>
+                        @if ($experience->boats->isNotEmpty())
+                            <div class="mt-6">
+                                <p class="text-xs font-bold uppercase tracking-[0.18em] text-navy-400">{{ trans_choice('{1} 1 yacht offers it|[2,*] :count yachts offer it', $experience->boats->count()) }}</p>
+                                <ul class="mt-3 grid gap-2 sm:grid-cols-2">
+                                    @foreach ($experience->boats->take(4) as $boat)
+                                        <li>
+                                            <a href="{{ route('yachts.show', [$boat->slug, 'experience' => $experience->slug]) }}{{ $boat->booking_enabled ? '#book' : '' }}" class="group flex items-center gap-3 rounded-2xl bg-white p-2 pr-4 ring-1 ring-navy-100 transition hover:ring-brass-400">
+                                                <img src="{{ asset($boat->cover_card ?? $boat->cover) }}" alt="" loading="lazy" @class(['h-12 w-16 shrink-0 rounded-xl object-cover', 'grayscale-[60%]' => ! $boat->booking_enabled])>
+                                                <span class="min-w-0 flex-1">
+                                                    <span class="block truncate text-sm font-bold text-navy-950 group-hover:text-brass-600">{{ $boat->title }}</span>
+                                                    <span class="block text-xs text-navy-500">{{ $boat->booking_enabled ? 'Up to '.$boat->max_guests.' · from '.money($boat->hourly_rate_cents).'/hr' : 'Unavailable' }}</span>
+                                                </span>
+                                                <i data-lucide="arrow-right" class="h-4 w-4 shrink-0 text-navy-300 transition group-hover:translate-x-1 group-hover:text-brass-500"></i>
+                                            </a>
+                                        </li>
+                                    @endforeach
+                                </ul>
                             </div>
-                            <p class="text-xs font-semibold text-navy-500">{{ $experience->boats->count() }} yachts offer this experience</p>
-                        </div>
+                        @endif
                         <div class="mt-8 flex flex-wrap gap-3">
-                            <x-button :href="route('booking.create', ['experience' => $experience->slug])" icon="arrow-right">Book this experience</x-button>
-                            <x-button :href="route('yachts.index')" variant="outline">See yachts</x-button>
+                            <x-button :href="$experience->book_url" icon="arrow-right">Book this experience</x-button>
+                            <x-button :href="route('yachts.index', ['experience' => $experience->slug])" variant="outline">See yachts</x-button>
                         </div>
                     </div>
                 </article>

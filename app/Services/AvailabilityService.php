@@ -16,15 +16,17 @@ use Carbon\CarbonImmutable;
  *
  * A start is free only if all of these hold:
  *  - the boat is published, bookable ("Unavailable" tag off) and not in the Trash;
- *  - the guests fit (1 … max_guests) and the length is one the boat offers for the experience (QuoteService);
+ *  - the guests fit (1 … max_guests) and the length is one the boat offers (QuoteService; an experience has no
+ *    length of its own);
  *  - the boat offers the experience, and the experience runs that weekday and inside its season;
- *  - the time is one of the boat's start times that weekday — and one of the experience's start times;
+ *  - the time is one of the boat's start times that weekday — and inside the experience's departure window
+ *    (a sunset cruise departs in the evening, the fireworks at night);
  *  - it is at least the boat's advance notice ahead of now;
  *  - the trip [start, start + hours) doesn't touch a block (the boat's, or a fleet-wide one), nor another trip
  *    that takes the boat's time (confirmed, or a hold / request that hasn't run out) widened by the boat's buffer;
  *  - and, for a boat that takes one booking a day, no other trip starts that day.
  *
- * busyIntervals() is the one source of the boat's busy time: the booking wizard, holds (4.4), captain offers
+ * busyIntervals() is the one source of the boat's busy time: the booking card, holds (4.5), captain offers
  * and trip extensions (Phase 8) all read it, so they can never disagree. A day or a month needs one query for
  * trips and one for blocks.
  */
@@ -92,8 +94,12 @@ class AvailabilityService
         if (($reason = $this->dayProblem($boat, $day, $hours, $experience, $guests)) !== null) {
             return $reason;
         }
-        if (! in_array($local->format('H:i'), $this->candidates($boat, $day, $experience), true) || $local->second !== 0) {
+        $time = $local->format('H:i');
+        if (! in_array($time, $this->candidates($boat, $day, null), true) || $local->second !== 0) {
             return ['field' => 'time', 'message' => 'The boat doesn\'t depart at that time. Pick one of the start times shown.'];
+        }
+        if ($experience !== null && ! in_array($time, $this->candidates($boat, $day, $experience), true)) {
+            return ['field' => 'time', 'message' => self::outsideWindow($experience, $time)];
         }
 
         $busy = $this->busyIntervals($boat, $day->subDay()->utc(), $day->addDays(2)->utc(), $ignore);
@@ -188,19 +194,22 @@ class AvailabilityService
                 return ['field' => 'time', 'message' => "{$offered->name} runs from ".$offered->season_starts_on->format('M j').' to '.$offered->season_ends_on?->format('M j, Y').'.'];
             }
         }
-        $lengths = $this->quotes->durations($boat, $experience);
+        $lengths = $this->quotes->durations($boat);
         if (! in_array($hours, $lengths, true)) {
             return ['field' => 'hours', 'message' => 'Choose one of the trip lengths offered: '.implode(', ', $lengths).' hours.'];
         }
-        if ($this->candidates($boat, $day, $experience) === []) {
+        if ($this->candidates($boat, $day, null) === []) {
             return ['field' => 'time', 'message' => 'The boat doesn\'t depart on '.$day->format('l, M j').'. Pick another day.'];
+        }
+        if ($experience !== null && $this->candidates($boat, $day, $experience) === []) {
+            return ['field' => 'time', 'message' => "{$experience->name} departs ".StartTimes::summary($experience->time_slots ?? []).', and the boat doesn\'t depart then on '.$day->format('l, M j').'. Pick another day or just book the boat.'];
         }
 
         return null;
     }
 
     /**
-     * The boat's start times that weekday — and, with an experience, only those the experience also starts at.
+     * The boat's start times that weekday — and, with an experience, only those inside its departure window.
      *
      * @return list<string>
      */
@@ -246,6 +255,12 @@ class AvailabilityService
         }
 
         return CarbonImmutable::createFromFormat('!Y-m-d', $date, config('app.display_timezone'));
+    }
+
+    /** "Sunset Skyline Cruise isn't available at 10:00 AM: it departs 5:00 PM – 7:30 PM." */
+    public static function outsideWindow(Experience $experience, string $time): string
+    {
+        return "{$experience->name} isn't available at ".StartTimes::label($time).': it departs '.StartTimes::summary($experience->time_slots ?? []).'. Pick a start time inside that window, or just book the boat.';
     }
 
     /** What the customer reads for a taken start. */

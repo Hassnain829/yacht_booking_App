@@ -2,7 +2,6 @@
 
 namespace App\Support\Pricing;
 
-use App\Enums\PaymentPlan;
 use App\Models\Addon;
 use App\Models\Boat;
 use App\Models\Experience;
@@ -29,12 +28,11 @@ final readonly class QuoteRequest
         public array $addons = [],
         public ?PromoTerms $promo = null,
         public int $gratuityPct = 0,
-        public PaymentPlan $plan = PaymentPlan::Deposit,
     ) {}
 
     /**
-     * A start typed in Chicago time ("2027-06-04" + "18:30") as a UTC instant. Without a time (the wizard before
-     * a time slot is picked) it is the start of that day, which is enough for the weekend rate.
+     * A start typed in Chicago time ("2027-06-04" + "18:30") as a UTC instant. Without a time (the booking card
+     * before a start time is picked) it is the start of that day, which is enough for the weekend rate.
      */
     public static function localStart(string $date, ?string $time = null): CarbonImmutable
     {

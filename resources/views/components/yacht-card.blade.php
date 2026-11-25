@@ -3,21 +3,28 @@
 
     <x-yacht-card :yacht="$yacht" />
     <x-yacht-card :yacht="$yacht" experience="sunset" :delay="2" />
+    <x-yacht-card :yacht="$yacht" :query="['date' => '2027-06-04', 'guests' => 8]" free="Free on Jun 4 · 5 start times" />
 
-    $yacht: slug, title, category, length_ft, max_guests, min_hours, hourly_rate_cents,
+    $yacht: slug, title, category, length_ft, max_guests, lengths, hourly_rate_cents,
             rating_avg, badge, cover (cover_card = the 800 px copy, if any), short, booking_enabled, harbor->name
-    Unavailable boats stay visible (details link works) but cannot be booked.
+    Unavailable boats stay visible (details link works) but cannot be booked. Every link to the boat page carries
+    the fleet's choices (`query`: date, guests, experience, hours), so its booking card opens with them; "Book"
+    also jumps to the card (#book). The fleet's instant filters rewrite these links (`data-yacht-link`,
+    resources/js/pages/yachts.js).
 --}}
-@props(['yacht', 'experience' => null, 'delay' => null])
+@props(['yacht', 'experience' => null, 'delay' => null, 'query' => [], 'free' => null])
 
 @php
     $available = (bool) $yacht->booking_enabled;
-    $detailsUrl = route('yachts.show', $yacht->slug);
-    $bookUrl = route('booking.create', array_filter(['yacht' => $yacht->slug, 'experience' => $experience]));
+    // The fleet's experience stays (a `+` here once dropped it: the left side wins): the prop only fills a gap.
+    $detailsUrl = route('yachts.show', [$yacht->slug, ...array_filter([...$query, 'experience' => $query['experience'] ?? $experience])]);
+    $bookUrl = $detailsUrl.'#book';
+    $lengths = $yacht->lengths ?? [$yacht->min_hours];
+    $lengthsLabel = count($lengths) > 1 ? $lengths[0].'–'.last($lengths).' hrs' : $lengths[0].' hrs';
 @endphp
 
 <article {{ $attributes->class('reveal group flex flex-col overflow-hidden rounded-3xl bg-white shadow-card ring-1 ring-navy-100/60 transition duration-500 hover:-translate-y-1.5') }} @if ($delay) data-delay="{{ $delay }}" @endif>
-    <a href="{{ $detailsUrl }}" class="relative block aspect-[4/3] overflow-hidden" tabindex="-1" aria-hidden="true">
+    <a href="{{ $detailsUrl }}" data-yacht-link="details" class="relative block aspect-[4/3] overflow-hidden" tabindex="-1" aria-hidden="true">
         <img src="{{ asset($yacht->cover_card ?? $yacht->cover) }}" alt="" loading="lazy" decoding="async"
              @class(['h-full w-full object-cover transition duration-[1.2s] group-hover:scale-110', 'grayscale-[60%]' => ! $available])>
         <div class="absolute inset-0 bg-gradient-to-t from-navy-950/60 via-transparent to-transparent"></div>
@@ -38,12 +45,15 @@
         <span class="absolute bottom-4 left-4 inline-flex items-center gap-1.5 text-xs font-semibold text-white">
             <i data-lucide="ship-wheel" class="h-4 w-4 text-brass-300"></i>Captain included
         </span>
+        @if ($free)
+            <span class="absolute bottom-4 right-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-2.5 py-1 text-xs font-bold text-white"><i data-lucide="calendar-check" class="h-3.5 w-3.5"></i>{{ $free }}</span>
+        @endif
     </a>
 
     <div class="flex flex-1 flex-col p-6">
         <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-brass-600">{{ $yacht->category }} · {{ $yacht->length_ft }} ft</p>
         <h3 class="mt-1.5 font-display text-2xl text-navy-950">
-            <a href="{{ $detailsUrl }}" class="hover:text-brass-600">{{ $yacht->title }}</a>
+            <a href="{{ $detailsUrl }}" data-yacht-link="details" class="hover:text-brass-600">{{ $yacht->title }}</a>
         </h3>
         <p class="mt-2 line-clamp-2 text-sm leading-relaxed text-navy-500">{{ $yacht->short }}</p>
         <div class="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs font-semibold text-navy-600">
@@ -51,7 +61,7 @@
             @if ($yacht->harbor)
                 <span class="inline-flex items-center gap-1.5"><i data-lucide="map-pin" class="h-4 w-4 text-navy-400"></i>{{ $yacht->harbor->name }}</span>
             @endif
-            <span class="inline-flex items-center gap-1.5"><i data-lucide="clock" class="h-4 w-4 text-navy-400"></i>{{ $yacht->min_hours }} hr min</span>
+            <span class="inline-flex items-center gap-1.5"><i data-lucide="clock" class="h-4 w-4 text-navy-400"></i>{{ $lengthsLabel }} · Captained</span>
         </div>
 
         <div class="mt-auto pt-6">
@@ -61,11 +71,11 @@
                     <p class="text-2xl font-extrabold text-navy-950">{{ money($yacht->hourly_rate_cents) }}<span class="text-sm font-semibold text-navy-400">/hr</span></p>
                 </div>
                 <div class="flex gap-2">
-                    <a href="{{ $detailsUrl }}" class="grid h-11 w-11 place-items-center rounded-full border border-navy-200 text-navy-700 transition hover:border-navy-950 hover:bg-navy-950 hover:text-white" aria-label="View {{ $yacht->title }} details">
+                    <a href="{{ $detailsUrl }}" data-yacht-link="details" class="grid h-11 w-11 place-items-center rounded-full border border-navy-200 text-navy-700 transition hover:border-navy-950 hover:bg-navy-950 hover:text-white" aria-label="View {{ $yacht->title }} details">
                         <i data-lucide="arrow-up-right" class="h-4 w-4"></i>
                     </a>
                     @if ($available)
-                        <a href="{{ $bookUrl }}" class="inline-flex h-11 items-center gap-2 rounded-full bg-navy-950 px-5 text-sm font-bold text-white transition hover:bg-brass-400 hover:text-navy-950">Book<span class="sr-only"> {{ $yacht->title }}</span></a>
+                        <a href="{{ $bookUrl }}" data-yacht-link="book" class="inline-flex h-11 items-center gap-2 rounded-full bg-navy-950 px-5 text-sm font-bold text-white transition hover:bg-brass-400 hover:text-navy-950">Book<span class="sr-only"> {{ $yacht->title }}</span></a>
                     @else
                         <span class="inline-flex h-11 cursor-not-allowed items-center gap-2 rounded-full bg-navy-100 px-5 text-sm font-bold text-navy-400" aria-disabled="true">Unavailable</span>
                     @endif

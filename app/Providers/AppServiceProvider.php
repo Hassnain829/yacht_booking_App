@@ -49,7 +49,7 @@ class AppServiceProvider extends ServiceProvider
         // The cached public catalog (3.6) is cleared after any catalog change commits. Restoring saves, and a
         // permanent delete fires `deleted`, so these two events cover the Trash too. Changes without model events
         // (pivot syncs, photo order) call PublicCatalog::flushAfterCommit() themselves.
-        foreach ([Boat::class, Harbor::class, Experience::class, Addon::class, Amenity::class, Media::class] as $model) {
+        foreach ([Boat::class, Harbor::class, Experience::class, Addon::class, Amenity::class, Media::class, CancellationPolicy::class] as $model) {
             $model::saved(fn () => PublicCatalog::flushAfterCommit());
             $model::deleted(fn () => PublicCatalog::flushAfterCommit());
         }
@@ -104,6 +104,8 @@ class AppServiceProvider extends ServiceProvider
         $perVisitor = fn (Request $request): string => $request->user() ? 'user:'.$request->user()->getKey() : 'ip:'.$request->ip();
 
         // Booking (Phases 3–5): live price / availability checks, holding a slot, checkout, promo codes.
+        // The boat page's booking card (4.3) asks for a month, a day's start times and a price as the guest picks.
+        RateLimiter::for('availability', fn (Request $request) => Limit::perMinute(120)->by($perVisitor($request)));
         RateLimiter::for('quote', fn (Request $request) => Limit::perMinute(60)->by($perVisitor($request)));
         RateLimiter::for('hold', fn (Request $request) => Limit::perMinute(10)->by($perVisitor($request)));
         RateLimiter::for('checkout', fn (Request $request) => Limit::perMinute(10)->by($perVisitor($request)));

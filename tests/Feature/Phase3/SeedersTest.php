@@ -69,7 +69,7 @@ class SeedersTest extends TestCase
 
         $sunset = Experience::query()->where('slug', 'sunset')->first();
         $harbor = Harbor::query()->where('slug', 'dusable')->first();
-        $this->assertSame(config('demo.experiences.0.time_slots'), $sunset->time_slots);
+        $this->assertSame(['17:00', '17:30', '18:00', '18:30', '19:00', '19:30'], $sunset->time_slots, 'the departure window 17:00 – 19:30, every half hour');
         $this->assertMatchesRegularExpression('#^experiences/'.self::STORED_IMAGE.'$#', $sunset->image_path);
         $this->assertMatchesRegularExpression('#^harbors/'.self::STORED_IMAGE.'$#', $harbor->image_path);
         Storage::disk('public')->assertExists([$sunset->image_path, $harbor->image_path]);

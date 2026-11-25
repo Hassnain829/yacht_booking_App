@@ -94,6 +94,8 @@ return [
         ],
     ],
 
+    // departs: the departure window [first, last] on the start-time grid, Chicago time (the seeder stores every half
+    // hour of it as time_slots). No trip length: the guest books the boat by the hour (user decision 2026-11-25).
     // allowed_weekdays: 0 = Sun … 6 = Sat. null = every day.
     'experiences' => [
         [
@@ -101,56 +103,56 @@ return [
             'tagline' => 'Golden hour over Lake Michigan',
             'description' => 'Watch the city light up as the sun drops behind the skyline. Cruise past Navy Pier, the Lakefront and Museum Campus with a drink in hand and the best seat in Chicago.',
             'includes' => ['Golden-hour departure', 'Skyline photo stop', 'Ice, water & cups', 'Bluetooth playlist'],
-            'durations' => [2, 3, 4], 'time_slots' => ['17:30', '18:00', '18:30', '19:00'], 'package_fee_cents' => 0, 'allowed_weekdays' => null,
+            'departs' => ['17:00', '19:30'], 'allowed_weekdays' => null,
         ],
         [
             'slug' => 'playpen', 'name' => 'Playpen Swim Party', 'category' => 'party', 'icon' => 'waves', 'image' => 'images/exp-swim.jpg',
             'tagline' => "Anchor up at Chicago's favorite floating party",
             'description' => 'Drop anchor at the Playpen, the sheltered swim spot off Ohio Street Beach. Float on the lily pad, swim off the back of the boat and soak up the summer energy.',
             'includes' => ['Anchor at the Playpen', 'Lily pad & pool floats', 'Swim ladder', 'Towels on request'],
-            'durations' => [3, 4, 5], 'time_slots' => ['11:00', '12:00', '13:00', '14:00'], 'package_fee_cents' => 15000, 'allowed_weekdays' => null,
+            'departs' => ['10:00', '15:00'], 'allowed_weekdays' => null,
         ],
         [
             'slug' => 'river', 'name' => 'River Architecture Cruise', 'category' => 'sightseeing', 'icon' => 'building-2', 'image' => 'images/chicago-river-bridges.jpg',
             'tagline' => "Glide past Chicago's iconic architecture",
             'description' => 'Wind through the canyon of skyscrapers on the Chicago River — Marina City, the Wrigley Building and the Riverwalk — then head out to the lake for open-water views.',
             'includes' => ['Main & south branch route', 'Captain-led highlights', 'Lakefront lock passage', 'Ice & water'],
-            'durations' => [2, 3], 'time_slots' => ['10:00', '13:00', '16:00'], 'package_fee_cents' => 7500, 'allowed_weekdays' => null,
+            'departs' => ['09:00', '16:00'], 'allowed_weekdays' => null,
         ],
         [
             'slug' => 'fireworks', 'name' => 'Navy Pier Fireworks', 'category' => 'sightseeing', 'icon' => 'sparkles', 'image' => 'images/exp-fireworks.jpg',
             'tagline' => 'Front-row seats to the summer fireworks',
             'description' => 'Anchor just off Navy Pier for a private, front-row view of the summer fireworks show, then cruise home past a glittering skyline. Available on Wednesday and Saturday nights.',
             'includes' => ['Prime anchoring spot', 'Night-cruise lighting', 'Blankets & ice', 'Skyline night cruise'],
-            'durations' => [2, 3], 'time_slots' => ['20:00', '20:30'], 'package_fee_cents' => 25000, 'allowed_weekdays' => [3, 6],
+            'departs' => ['20:00', '21:00'], 'allowed_weekdays' => [3, 6],
         ],
         [
             'slug' => 'celebration', 'name' => 'Birthdays & Bachelorettes', 'category' => 'party', 'icon' => 'party-popper', 'image' => 'images/exp-friends.jpg',
             'tagline' => 'Celebrate the big day on the water',
             'description' => "Birthdays, bachelorettes, graduations, reunions — we'll set the scene with décor, a curated playlist and a route that hits the Playpen or the skyline at sunset.",
             'includes' => ['Welcome décor & banner', 'Celebration playlist', 'Champagne flutes', 'Photo stop'],
-            'durations' => [3, 4], 'time_slots' => ['11:00', '15:00', '19:00'], 'package_fee_cents' => 17500, 'allowed_weekdays' => null,
+            'departs' => ['10:00', '20:00'], 'allowed_weekdays' => null,
         ],
         [
             'slug' => 'corporate', 'name' => 'Corporate Outings', 'category' => 'private', 'icon' => 'briefcase', 'image' => 'images/exp-toast.jpg',
             'tagline' => 'Team events, client entertaining & offsites',
             'description' => 'Impress clients or reward your team with a private charter. We coordinate catering, branded touches and invoicing, and our crew keeps everything running on schedule.',
             'includes' => ['Dedicated event coordinator', 'Catering coordination', 'Mic & AV on larger yachts', 'Invoice & W-9 on request'],
-            'durations' => [3, 4, 6], 'time_slots' => ['09:00', '12:00', '15:00', '18:00'], 'package_fee_cents' => 0, 'allowed_weekdays' => null,
+            'departs' => ['09:00', '18:00'], 'allowed_weekdays' => null,
         ],
         [
             'slug' => 'proposal', 'name' => 'Proposals & Romance', 'category' => 'private', 'icon' => 'heart', 'image' => 'images/exp-couple.jpg',
             'tagline' => 'The yes you will remember forever',
             'description' => 'A private sunset sail with roses, champagne and a captain who knows exactly when to look the other way. We help plan every detail — including a hidden photographer.',
             'includes' => ['Rose petals & candles', 'Chilled champagne', 'Private sunset route', 'Planning call with our team'],
-            'durations' => [2, 3], 'time_slots' => ['17:30', '18:30'], 'package_fee_cents' => 29500, 'allowed_weekdays' => null,
+            'departs' => ['16:30', '19:30'], 'allowed_weekdays' => null,
         ],
         [
             'slug' => 'private', 'name' => 'Private Day Charter', 'category' => 'private', 'icon' => 'ship-wheel', 'image' => 'images/yacht-aerial.jpg',
             'tagline' => 'Your yacht, your route, your rules',
             'description' => 'Want the lake your way? Book a fully private charter and tell your captain where to go — skyline, beaches, the Playpen or simply open water.',
             'includes' => ['Fully custom route', 'Flexible stops', 'Ice & water', 'Bluetooth sound'],
-            'durations' => [2, 3, 4, 6, 8], 'time_slots' => ['09:00', '12:00', '15:00', '18:00'], 'package_fee_cents' => 0, 'allowed_weekdays' => null,
+            'departs' => ['08:00', '18:00'], 'allowed_weekdays' => null,
         ],
     ],
 
@@ -201,15 +203,15 @@ return [
             ['name' => 'Ana K.', 'initials' => 'AK', 'role' => 'Events & Guest Experience', 'bio' => 'Plans corporate events, weddings and every little surprise.'],
         ],
         'quick_answers' => [
-            ['question' => 'Is the captain included?', 'answer' => 'Yes — every package includes a licensed captain, shown as its own line in your quote.'],
+            ['question' => 'Is the captain included?', 'answer' => 'Yes — every charter includes a licensed captain, shown as its own line in your quote.'],
             ['question' => 'Can I change my date?', 'answer' => 'Date changes are free up to 14 days before your charter, subject to availability.'],
             ['question' => 'Do you offer gift cards?', 'answer' => 'Gift cards are coming soon. Until then, call us and we will set up a custom gift package.'],
         ],
         'faqs' => [
-            ['question' => 'Is the captain included in the price?', 'answer' => "Yes. Every package includes a licensed USCG captain (and crew on larger yachts). The captain fee is shown as its own line in your quote so you always know exactly what you're paying for."],
+            ['question' => 'Is the captain included in the price?', 'answer' => "Yes. Every charter includes a licensed USCG captain (and crew on larger yachts). The captain fee is shown as its own line in your quote so you always know exactly what you're paying for."],
             ['question' => 'Can we bring our own food and drinks?', 'answer' => "Absolutely — most charters are BYOB (21+) and you're welcome to bring food. No glass bottles please. You can also add chef-curated catering or a champagne toast during booking."],
             ['question' => 'What happens if the weather is bad?', 'answer' => 'Safety comes first. If your captain cancels due to weather, you can reschedule for free or receive a full refund of everything you paid.'],
-            ['question' => 'How much do I pay upfront?', 'answer' => 'A 50% deposit secures your date. The remaining balance is charged automatically 7 days before your charter. You can also choose to pay in full at checkout.'],
+            ['question' => 'How much do I pay upfront?', 'answer' => 'You pay the full price at checkout, and your yacht is booked right away. Every line is shown before you pay, and our cancellation policy tells you exactly what comes back if your plans change.'],
             ['question' => 'Where do we board?', 'answer' => "Each yacht departs from one of four harbors: DuSable Harbor, Navy Pier, Belmont Harbor or Burnham Harbor. Your confirmation includes the exact dock, parking tips and your captain's phone number."],
             ['question' => 'How far in advance should I book?', 'answer' => "Summer weekends and fireworks nights often sell out 4–6 weeks ahead. Weekdays are usually available with a few days' notice."],
         ],
@@ -219,8 +221,6 @@ return [
     'pricing' => [
         'weekend_multiplier_bp' => 11500, // Fri, Sat, Sun
         'tax_rate_bp' => 900,
-        'deposit_bp' => 5000,
-        'balance_due_days' => 7,
         'gratuity_options' => [0, 15, 18, 20],
         'default_gratuity' => 18,
         'promos' => [

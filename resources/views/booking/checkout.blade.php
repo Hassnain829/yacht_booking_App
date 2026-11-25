@@ -16,12 +16,6 @@
     $fieldErrorClass = 'mt-2 w-full rounded-xl border bg-white px-4 py-3.5 text-sm focus:outline-hidden focus:ring-4';
     $selectClass = 'mt-2 w-full rounded-xl border border-navy-200 bg-white px-4 py-3.5 text-sm focus:border-navy-950 focus:outline-hidden focus:ring-4 focus:ring-navy-100';
     $cardField = 'w-full rounded-xl border border-navy-200 px-4 py-3.5 text-sm focus:border-navy-950 focus:outline-hidden focus:ring-4 focus:ring-navy-100';
-    $plans = [
-        ['id' => 'deposit', 'title' => 'Pay '.App\Support\Money::percent($pricing['deposit_bp']).' deposit', 'price' => $quote['deposit'],
-         'sub' => $balanceDate ? money($quote['total'] - $quote['deposit'], 'never').' charged automatically on '.$fmtDate($balanceDate, 'M j') : 'Not available — trip is within '.$pricing['balance_due_days'].' days',
-         'disabled' => ! $balanceDate],
-        ['id' => 'full', 'title' => 'Pay in full', 'price' => $quote['total'], 'sub' => 'Nothing more to pay before your trip', 'disabled' => false],
-    ];
 @endphp
 
 @section('content')
@@ -44,14 +38,14 @@
         <div class="container mt-6">
             <div class="flex flex-col gap-3 rounded-2xl bg-navy-950 px-5 py-4 text-sm text-white sm:flex-row sm:items-center sm:justify-between">
                 <p class="flex items-center gap-2"><i data-lucide="info" class="h-4 w-4 text-brass-300"></i>Showing a sample booking for the demo.</p>
-                <a href="{{ route('booking.create') }}" class="font-bold text-brass-300 hover:underline">Start your own booking →</a>
+                <a href="{{ route('yachts.index') }}" class="font-bold text-brass-300 hover:underline">Start your own booking →</a>
             </div>
         </div>
     @endif
 
     @error('booking')
         <div class="container mt-6" role="alert">
-            <div class="flex items-center gap-3 rounded-2xl bg-red-50 px-5 py-4 text-sm font-semibold text-red-700 ring-1 ring-red-200"><i data-lucide="circle-alert" class="h-5 w-5 shrink-0"></i>{{ $message }} <a href="{{ route('booking.create') }}" class="underline">Start again</a></div>
+            <div class="flex items-center gap-3 rounded-2xl bg-red-50 px-5 py-4 text-sm font-semibold text-red-700 ring-1 ring-red-200"><i data-lucide="circle-alert" class="h-5 w-5 shrink-0"></i>{{ $message }} <a href="{{ route('yachts.index') }}" class="underline">Start again</a></div>
         </div>
     @enderror
 
@@ -61,9 +55,6 @@
             @csrf
             @foreach (['experience', 'yacht', 'guests', 'date', 'time', 'hours'] as $field)
                 <input type="hidden" name="{{ $field }}" value="{{ $selection->$field }}">
-            @endforeach
-            @foreach ($selection->addons as $addon)
-                <input type="hidden" name="addons[]" value="{{ $addon }}">
             @endforeach
             <input type="hidden" name="promo" value="{{ old('promo') }}">
             <input type="hidden" name="card_brand" value="Card">
@@ -99,11 +90,41 @@
                     </div>
                 </fieldset>
 
-                {{-- 3. Gratuity --}}
+                {{-- 3. Add-ons: all optional (user decision 2026-11-25). The experience's suggested extras come first;
+                     nothing is charged unless ticked. The totals update as they are ticked (checkout.js). --}}
+                @if ($addonChoices->isNotEmpty())
+                    <fieldset class="rounded-[2rem] bg-white p-6 shadow-card ring-1 ring-navy-100 md:p-8">
+                        <legend class="sr-only">Add-ons (optional)</legend>
+                        <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                            <div class="flex items-center gap-3"><span class="grid h-8 w-8 place-items-center rounded-full bg-navy-950 text-xs font-extrabold text-white" aria-hidden="true">3</span><h2 class="text-xl font-extrabold text-navy-950">Make it yours</h2></div>
+                            <p class="text-xs font-semibold text-navy-500">Optional · add as many as you like, or none</p>
+                        </div>
+                        <div class="mt-6 grid gap-3 md:grid-cols-2">
+                            @foreach ($addonChoices as $addon)
+                                <label class="group relative flex cursor-pointer items-start gap-4 rounded-2xl bg-white p-4 text-left ring-2 ring-navy-100 transition hover:ring-navy-300 has-[:checked]:bg-brass-50 has-[:checked]:ring-brass-400 has-[:focus-visible]:ring-navy-950">
+                                    <input type="checkbox" name="addons[]" value="{{ $addon->slug }}" class="sr-only" @checked(in_array($addon->slug, old('addons', $selection->addons), true))>
+                                    <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-navy-50 text-navy-600 group-has-[:checked]:bg-brass-400 group-has-[:checked]:text-navy-950"><i data-lucide="{{ $addon->icon }}" class="h-5 w-5"></i></span>
+                                    <span class="min-w-0 flex-1">
+                                        <span class="block font-bold text-navy-950">{{ $addon->name }}</span>
+                                        @if ($addon->suggested && $experience)
+                                            <span class="mt-1 inline-block rounded-md bg-brass-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brass-800">Suggested for {{ $experience->name }}</span>
+                                        @endif
+                                        <span class="mt-0.5 block text-xs text-navy-500">{{ $addon->description }}</span>
+                                        <span class="mt-1.5 block text-sm font-extrabold text-navy-950">{{ $whole($addon->price_cents) }}<span class="text-[11px] font-semibold text-navy-400">{{ $addon->unit === 'per_guest' ? ' per guest' : ' per trip' }}</span></span>
+                                    </span>
+                                    <span class="grid h-6 w-6 shrink-0 place-items-center rounded-md text-transparent ring-2 ring-navy-200 group-has-[:checked]:bg-navy-950 group-has-[:checked]:text-white group-has-[:checked]:ring-navy-950"><i data-lucide="check" class="h-4 w-4"></i></span>
+                                </label>
+                            @endforeach
+                        </div>
+                        @error('addons')<p data-field-error class="mt-3 text-xs font-semibold text-red-600">{{ $message }}</p>@enderror
+                    </fieldset>
+                @endif
+
+                {{-- 4. Gratuity --}}
                 <fieldset class="rounded-[2rem] bg-white p-6 shadow-card ring-1 ring-navy-100 md:p-8">
                     <legend class="sr-only">Crew gratuity</legend>
                     <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-                        <div class="flex items-center gap-3"><span class="grid h-8 w-8 place-items-center rounded-full bg-navy-950 text-xs font-extrabold text-white" aria-hidden="true">3</span><h2 class="text-xl font-extrabold text-navy-950">Crew gratuity</h2></div>
+                        <div class="flex items-center gap-3"><span class="grid h-8 w-8 place-items-center rounded-full bg-navy-950 text-xs font-extrabold text-white" aria-hidden="true">{{ $addonChoices->isNotEmpty() ? 4 : 3 }}</span><h2 class="text-xl font-extrabold text-navy-950">Crew gratuity</h2></div>
                         <p class="text-xs font-semibold text-navy-500">Optional · 100% goes to your captain &amp; crew</p>
                     </div>
                     <div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -120,30 +141,15 @@
                     </div>
                 </fieldset>
 
-                {{-- 4. Payment --}}
+                {{-- 5. Payment --}}
                 <fieldset class="rounded-[2rem] bg-white p-6 shadow-card ring-1 ring-navy-100 md:p-8">
                     <legend class="sr-only">Payment</legend>
                     <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-                        <div class="flex items-center gap-3"><span class="grid h-8 w-8 place-items-center rounded-full bg-navy-950 text-xs font-extrabold text-white" aria-hidden="true">4</span><h2 class="text-xl font-extrabold text-navy-950">Payment</h2></div>
+                        <div class="flex items-center gap-3"><span class="grid h-8 w-8 place-items-center rounded-full bg-navy-950 text-xs font-extrabold text-white" aria-hidden="true">{{ $addonChoices->isNotEmpty() ? 5 : 4 }}</span><h2 class="text-xl font-extrabold text-navy-950">Payment</h2></div>
                         <p class="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700"><i data-lucide="lock" class="h-3.5 w-3.5"></i>256-bit SSL encrypted</p>
                     </div>
 
-                    <div class="mt-6 grid gap-3 sm:grid-cols-2">
-                        @foreach ($plans as $p)
-                            <label @class([
-                                'group flex items-start gap-3 rounded-2xl bg-white p-4 text-left ring-2 ring-navy-100 transition has-[:checked]:bg-brass-50 has-[:checked]:ring-brass-400 has-[:focus-visible]:ring-navy-950',
-                                'cursor-pointer hover:ring-navy-300' => ! $p['disabled'],
-                                'cursor-not-allowed opacity-50' => $p['disabled'],
-                            ])>
-                                <input type="radio" name="plan" value="{{ $p['id'] }}" class="sr-only" @checked(old('plan', $plan) === $p['id']) @disabled($p['disabled'])>
-                                <span class="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full ring-2 ring-navy-300 group-has-[:checked]:ring-navy-950" aria-hidden="true"><span class="hidden h-2.5 w-2.5 rounded-full bg-navy-950 group-has-[:checked]:block"></span></span>
-                                <span class="flex-1">
-                                    <span class="flex items-center justify-between gap-2"><span class="font-bold text-navy-950">{{ $p['title'] }}</span><span class="font-extrabold text-navy-950" data-plan-price="{{ $p['id'] }}">{{ $whole($p['price']) }}</span></span>
-                                    <span class="mt-1 block text-xs text-navy-500" data-plan-sub="{{ $p['id'] }}">{{ $p['sub'] }}</span>
-                                </span>
-                            </label>
-                        @endforeach
-                    </div>
+                    <p class="mt-6 flex items-start gap-3 rounded-2xl bg-brass-50 p-4 text-sm text-navy-700 ring-1 ring-brass-200"><i data-lucide="circle-check" class="mt-0.5 h-5 w-5 shrink-0 text-brass-600"></i><span><strong class="text-navy-950">Paid in full today.</strong> Your yacht is booked as soon as the payment goes through. Nothing more is charged before your trip.</span></p>
 
                     {{-- Phase 5: Stripe Payment Element replaces these fields. They have NO name attribute, so card data is never sent to our server. --}}
                     <div class="mt-6 grid gap-5 sm:grid-cols-6">
@@ -170,13 +176,13 @@
                     <p class="mt-4 rounded-xl bg-navy-50 px-4 py-3 text-xs text-navy-500"><strong class="text-navy-800">Demo mode:</strong> no real payment is taken. Use card <button type="button" id="fill-demo" class="font-bold text-brass-700 underline">4242 4242 4242 4242</button>, any future expiry and any CVC.</p>
                 </fieldset>
 
-                {{-- 5. Agreement --}}
+                {{-- Agreement --}}
                 <fieldset class="rounded-[2rem] bg-white p-6 shadow-card ring-1 ring-navy-100 md:p-8">
                     <legend class="sr-only">Agreements</legend>
                     <x-form.checkbox name="agree" required>I agree to the <a href="{{ route('legal.cancellation') }}" target="_blank" class="font-bold text-navy-950 underline">Cancellation &amp; Weather Policy</a> and the passenger safety waiver, and confirm all guests will follow the captain's instructions.<span class="text-red-600" aria-hidden="true"> *</span></x-form.checkbox>
                     <x-form.checkbox name="marketing" class="mt-4">Send me seasonal deals and fireworks-night alerts (no spam, unsubscribe anytime).</x-form.checkbox>
                     <button type="submit" id="pay-btn" class="mt-8 inline-flex w-full items-center justify-center gap-3 rounded-full bg-brass-400 px-8 py-5 text-base font-extrabold text-navy-950 shadow-glow transition hover:-translate-y-0.5 hover:bg-brass-300 disabled:cursor-wait disabled:opacity-80">
-                        <i data-lucide="lock" class="h-5 w-5"></i><span id="pay-label">Pay {{ $whole($quote['dueNow']) }} &amp; confirm booking</span>
+                        <i data-lucide="lock" class="h-5 w-5"></i><span id="pay-label">Pay {{ $whole($quote['total']) }} &amp; confirm booking</span>
                     </button>
                     <p class="mt-4 text-center text-xs text-navy-400">You'll get an instant confirmation email with your booking details and dock directions.</p>
                 </fieldset>
@@ -190,7 +196,7 @@
                             <img src="{{ asset($yacht->cover) }}" alt="{{ $yacht->title }}" class="h-full w-full object-cover">
                             <div class="absolute inset-0 bg-gradient-to-t from-navy-950 via-navy-950/30 to-transparent"></div>
                             <div class="absolute bottom-4 left-5 right-5 flex items-end justify-between text-white">
-                                <div><p class="text-[10px] font-bold uppercase tracking-[0.2em] text-brass-300">{{ $experience->name }}</p><p class="font-display text-2xl">{{ $yacht->title }}</p></div>
+                                <div><p class="text-[10px] font-bold uppercase tracking-[0.2em] text-brass-300">{{ $experience?->name ?? 'Private charter' }}</p><p class="font-display text-2xl">{{ $yacht->title }}</p></div>
                                 <a href="{{ $editUrl }}" class="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold backdrop-blur hover:bg-white hover:text-navy-950">Edit<span class="sr-only"> booking</span></a>
                             </div>
                         </div>
@@ -227,10 +233,7 @@
                                 <p class="text-2xl font-extrabold text-navy-950" id="checkout-total">{{ $whole($quote['total']) }}</p>
                             </div>
                             <div class="mt-4 rounded-2xl bg-navy-950 p-4 text-white">
-                                <div class="flex items-center justify-between"><span class="text-sm font-bold">Due today</span><span class="text-xl font-extrabold text-brass-300" id="checkout-due">{{ $whole($quote['dueNow']) }}</span></div>
-                                <div @class(['mt-1 flex items-center justify-between text-xs text-white/60', 'hidden' => ! ($quote['balance'] > 0 && $balanceDate)]) id="checkout-balance">
-                                    <span>Balance on {{ $balanceDate ? $fmtDate($balanceDate, 'M j') : '' }}</span><span data-balance-amount>{{ $whole($quote['balance']) }}</span>
-                                </div>
+                                <div class="flex items-center justify-between"><span class="text-sm font-bold">Due today · paid in full</span><span class="text-xl font-extrabold text-brass-300" id="checkout-due">{{ $whole($quote['total']) }}</span></div>
                             </div>
                         </div>
                         <ul class="grid grid-cols-3 border-t border-navy-100 text-center text-[11px] font-semibold text-navy-500">

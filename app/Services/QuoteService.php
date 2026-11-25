@@ -6,19 +6,17 @@ use App\Enums\AddonUnit;
 use App\Enums\BookingItemType;
 use App\Enums\CaptainSource;
 use App\Enums\Payee;
-use App\Enums\PaymentPlan;
 use App\Enums\PromoAppliesTo;
 use App\Enums\PromoType;
 use App\Exceptions\QuoteException;
 use App\Models\Addon;
 use App\Models\Boat;
-use App\Models\Experience;
+use App\Support\Admin\BoatOptions;
 use App\Support\Money;
 use App\Support\Pricing\PromoTerms;
 use App\Support\Pricing\Quote;
 use App\Support\Pricing\QuoteLine;
 use App\Support\Pricing\QuoteRequest;
-use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
 
 /**
@@ -27,38 +25,38 @@ use Illuminate\Support\Str;
  *
  *   charter  = rate × hours, rate = hourly × weekend multiplier (Fri–Sun, Chicago time) rounded to whole dollars
  *              — or the boat's fixed price for that length, which replaces it on every day
- *   captain  = captain rate × hours                  package = the boat's override, else the experience fee
- *   add-ons  = flat, or price × guests               cleaning = fuel & cleaning fee
+ *   captain  = captain rate × hours
+ *   add-ons  = the ones the guest picked: flat, or price × guests (optional — an experience is free and its
+ *              suggested extras are charged only when picked, user decisions 2026-11-25)
+ *   cleaning = fuel & cleaning fee
  *   discount = promo: % of the charter or subtotal, or a fixed amount; never more than its base or its cap
  *   tax      = tax rate × (subtotal − discount)      gratuity = % × (charter + captain)
- *   total    = subtotal − discount + tax + gratuity
- *   deposit  = deposit % of the total; the balance is due `balance_due_days` before the trip.
- *              A trip starting sooner than that can only be paid in full.
+ *   total    = subtotal − discount + tax + gratuity, paid in full at checkout (D22: no deposit)
  *
- * Rates come from the boat, falling back to Admin → Settings (weekend multiplier, tax, deposit, gratuity options).
+ * Rates come from the boat, falling back to Admin → Settings (weekend multiplier, tax, gratuity options).
  * The JS never calculates a price: it shows what this service returns. Money split (payee per line) per §7.5.
  */
 class QuoteService
 {
     public function __construct(private SettingsService $settings) {}
 
+    /** With no lengths ticked, a boat offers every standard length from its minimum up to a full day. */
+    public const DEFAULT_MAX_HOURS = 8;
+
     /**
-     * The trip lengths (hours) a boat offers for an experience: the experience's lengths, narrowed to the boat's
-     * own when the boat lists some that match, never below the boat's minimum.
+     * The trip lengths (hours) a boat offers, never below its minimum: the ones ticked on the boat, or else every
+     * standard length from its minimum up to DEFAULT_MAX_HOURS. An experience has no length of its own: the guest
+     * books the boat by the hour and gets the experience for that time (user decision 2026-11-25).
      *
      * @return list<int>
      */
-    public function durations(Boat $boat, ?Experience $experience): array
+    public function durations(Boat $boat): array
     {
         $minimum = (int) ($boat->min_hours ?? 1);
-        $boatLengths = array_map('intval', $boat->durations ?? []);
-        $lengths = $experience && $experience->durations ? array_map('intval', $experience->durations) : $boatLengths;
-
-        if ($experience && $boatLengths !== []) {
-            $both = array_values(array_intersect($lengths, $boatLengths));
-            $lengths = $both !== [] ? $both : $lengths;
+        $lengths = array_map('intval', $boat->durations ?? []);
+        if ($lengths === []) {
+            $lengths = array_filter(BoatOptions::DURATIONS, fn (int $hours) => $hours <= max($minimum, self::DEFAULT_MAX_HOURS));
         }
-
         $lengths = array_values(array_unique(array_filter($lengths, fn (int $hours) => $hours >= $minimum)));
         sort($lengths);
 
@@ -73,13 +71,10 @@ class QuoteService
         $boat = $request->boat;
         $settings = $this->settings->all();
         $taxRateBp = (int) $settings['tax_rate_bp'];
-        $depositBp = (int) $settings['deposit_bp'];
-        $balanceDueDays = (int) $settings['balance_due_days'];
         $multiplierBp = $boat->weekend_multiplier_bp ?? (int) $settings['weekend_multiplier_bp'];
 
-        $experience = null;
-        if ($request->experience) {
-            $experience = $boat->offering($request->experience) ?? throw QuoteException::on('experience', 'This boat doesn\'t offer that experience.');
+        if ($request->experience && $boat->offering($request->experience) === null) {
+            throw QuoteException::on('experience', 'This boat doesn\'t offer that experience.');
         }
         $this->check($request, $settings['gratuity_options']);
 
@@ -118,19 +113,10 @@ class QuoteService
             );
         }
 
-        $packageFee = $experience ? (int) ($experience->pivot->package_fee_override_cents ?? $experience->package_fee_cents) : 0;
-        if ($packageFee > 0) {
-            $lines[] = new QuoteLine(BookingItemType::Package, 'package', "{$experience->name} package", 'Experience extras', 1, $packageFee, $packageFee, Payee::Platform);
-        }
-
+        // The experience itself is free and adds nothing; add-ons (its suggested extras too) only when the guest
+        // picked them (user decisions 2026-11-25).
         foreach ($this->uniqueAddons($request->addons) as $addon) {
-            $perGuest = $addon->unit === AddonUnit::PerGuest;
-            $quantity = $perGuest ? $guests : 1;
-            $lines[] = new QuoteLine(
-                BookingItemType::Addon, 'addon-'.$addon->slug, $addon->name,
-                $perGuest ? Money::format($addon->price_cents).' × '.$guests.' '.Str::plural('guest', $guests) : 'Add-on',
-                $quantity, (int) $addon->price_cents, $addon->price_cents * $quantity, Payee::Platform, $addon->getKey(),
-            );
+            $lines[] = $this->addonLine($addon, $guests);
         }
 
         $cleaning = (int) $boat->cleaning_fee_cents;
@@ -144,13 +130,6 @@ class QuoteService
         $tax = (int) round(max(0, $subtotal - $discount) * $taxRateBp / 10000);
         $gratuity = (int) round(($charter + $captain) * $request->gratuityPct / 100);
         $total = max(0, $subtotal - $discount) + $tax + $gratuity;
-
-        // Deposit or full: a trip closer than the balance date has nothing left to charge later.
-        $depositAllowed = $request->startsAt->greaterThanOrEqualTo(CarbonImmutable::now()->addDays($balanceDueDays));
-        $plan = $depositAllowed ? $request->plan : PaymentPlan::Full;
-        $deposit = (int) round($total * $depositBp / 10000);
-        $dueNow = $plan === PaymentPlan::Full ? $total : $deposit;
-        $balance = $total - $dueNow;
 
         $adjustments = [];
         if ($discount > 0) {
@@ -181,12 +160,6 @@ class QuoteService
             gratuityPct: $request->gratuityPct,
             gratuityCents: $gratuity,
             totalCents: $total,
-            plan: $plan,
-            depositAllowed: $depositAllowed,
-            depositCents: $deposit,
-            dueNowCents: $dueNow,
-            balanceCents: $balance,
-            balanceDueAt: $balance > 0 ? $request->startsAt->subDays($balanceDueDays) : null,
             pricingSnapshot: [
                 'hourly_rate_cents' => (int) $boat->hourly_rate_cents,
                 'weekend' => $weekend,
@@ -196,12 +169,9 @@ class QuoteService
                 'weekend_fixed_prices' => (bool) $boat->weekend_fixed_prices,
                 'captain_rate_cents' => $captainRate,
                 'crew_count' => (int) $boat->crew_count,
-                'package_fee_cents' => $packageFee,
                 'cleaning_fee_cents' => $cleaning,
                 'tax_rate_bp' => $taxRateBp,
                 'gratuity_pct' => $request->gratuityPct,
-                'deposit_bp' => $depositBp,
-                'balance_due_days' => $balanceDueDays,
                 'promo' => $discount > 0 ? $request->promo?->toArray() : null,
                 'ownership' => $boat->ownership->value,
                 'captain_source' => $boat->captain_source->value,
@@ -222,7 +192,7 @@ class QuoteService
      */
     private function check(QuoteRequest $request, array $gratuityOptions): void
     {
-        $lengths = $this->durations($request->boat, $request->experience);
+        $lengths = $this->durations($request->boat);
         if (! in_array($request->hours, $lengths, true)) {
             throw QuoteException::on('hours', 'Choose one of the trip lengths offered: '.implode(', ', $lengths).' hours.');
         }
@@ -248,6 +218,16 @@ class QuoteService
         $price = ($boat->duration_prices ?? [])[$hours] ?? null; // JSON keys "3" come back as int 3
 
         return $price === null ? null : (int) $price;
+    }
+
+    /** A flat add-on once, a per-guest one × guests. */
+    private function addonLine(Addon $addon, int $guests): QuoteLine
+    {
+        $perGuest = $addon->unit === AddonUnit::PerGuest;
+        $quantity = $perGuest ? $guests : 1;
+        $description = $perGuest ? Money::format($addon->price_cents).' × '.$guests.' '.Str::plural('guest', $guests) : 'Add-on';
+
+        return new QuoteLine(BookingItemType::Addon, 'addon-'.$addon->slug, $addon->name, $description, $quantity, (int) $addon->price_cents, $addon->price_cents * $quantity, Payee::Platform, $addon->getKey());
     }
 
     /**

@@ -14,7 +14,7 @@
             <div class="container flex items-center justify-center gap-3 py-2 pr-10 text-center text-xs font-semibold sm:text-sm">
                 <i data-lucide="sparkles" class="hidden h-4 w-4 sm:block"></i>
                 <span>{{ $promo['text'] }} <strong class="tracking-wider">{{ $promo['code'] }}</strong></span>
-                <a href="{{ route('booking.create') }}" class="hidden rounded-full bg-navy-950 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-navy-800 md:inline-block">{{ $promo['cta'] }}</a>
+                <a href="{{ route('yachts.index') }}" class="hidden rounded-full bg-navy-950 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-navy-800 md:inline-block">{{ $promo['cta'] }}</a>
             </div>
             <button type="button" id="promo-close" class="absolute right-3 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full hover:bg-navy-950/10" aria-label="Dismiss offer">
                 <i data-lucide="x" class="h-4 w-4"></i>
@@ -43,7 +43,7 @@
                 <i data-lucide="phone" class="h-4 w-4"></i>
             </a>
             @include('partials.account-menu')
-            <x-button :href="route('booking.create')" icon="arrow-right" class="hidden whitespace-nowrap sm:inline-flex">Book Now</x-button>
+            <x-button :href="route('yachts.index')" icon="arrow-right" class="hidden whitespace-nowrap sm:inline-flex">Book Now</x-button>
             <button type="button" id="menu-open" class="grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20 xl:hidden"
                     aria-label="Open menu" aria-controls="mobile-menu" aria-expanded="false">
                 <i data-lucide="menu" class="h-5 w-5"></i>

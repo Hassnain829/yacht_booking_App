@@ -12,14 +12,17 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Fluent;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 /**
  * Checkout + confirmation (Phase 1 demo: no payment is taken, nothing is stored in the database).
  *
- * Phase 4: GET /checkout/{booking:ulid} for a held booking. Phase 5: Stripe Payment Element,
- * webhook-confirmed bookings, receipts. The page structure and validation stay the same.
+ * Since 4.3 it opens from the boat page's booking card (the experience is optional, D21) and the whole price is
+ * paid at checkout (D22: no deposit). Add-ons are optional and picked here, the experience's suggested extras
+ * first (2026-11-25). 4.5: GET /checkout/{booking:ulid} for a held booking. Phase 5: Stripe Payment Element,
+ * webhook-confirmed bookings, receipts.
  */
 class CheckoutController extends Controller
 {
@@ -27,26 +30,36 @@ class CheckoutController extends Controller
     {
         $selection = BookingSelection::from($request->query(), $catalog);
         $isDemo = ! $selection->isComplete();
+        if ($isDemo && $selection->yacht !== null) {
+            // A real boat, but no date or start time that fits the choices (e.g. a time outside the experience's
+            // window): back to its booking card instead of a sample booking.
+            return redirect()->to(route('yachts.show', [$selection->yacht, ...collect($selection->toQuery())->only(['experience', 'date', 'hours', 'guests', 'addons'])->all()]).'#book')
+                ->with('booking_card_error', $selection->date ? 'That start time isn\'t available for your choices. Pick one of the times shown.' : 'Pick a date and a start time for your trip.');
+        }
         if ($isDemo) {
             $selection = $this->demoSelection($catalog);
             if ($selection === null) {
-                return redirect()->route('booking.create'); // nothing bookable to show as a sample
+                return redirect()->route('yachts.index'); // nothing bookable to show as a sample
             }
         }
 
         $pricing = $catalog->pricing();
         $yacht = $selection->yachtModel();
         $experience = $selection->experienceModel();
-        $balanceDate = $this->balanceDate($selection->date, $pricing['balance_due_days']);
-        $plan = $balanceDate ? 'deposit' : 'full';
         $quote = DemoQuote::fromSettings()->quote($yacht, $experience, [
             'date' => $selection->date,
             'hours' => $selection->hours,
             'guests' => $selection->guests,
             'addons' => $selection->addonModels(),
             'gratuity' => $pricing['default_gratuity'],
-            'plan' => $plan,
         ]);
+
+        // Every add-on is optional; the experience's suggested extras come first (none is ticked unless chosen).
+        $suggested = collect($experience?->extras ?? [])->pluck('slug')->all();
+        $addonChoices = $catalog->addons()
+            ->sortBy(fn ($addon) => [in_array($addon->slug, $suggested, true) ? array_search($addon->slug, $suggested, true) : 99, $addon->name])
+            ->map(fn ($addon) => new Fluent($addon->toArray() + ['suggested' => in_array($addon->slug, $suggested, true)]))
+            ->values();
 
         return view('booking.checkout', [
             'selection' => $selection,
@@ -54,17 +67,15 @@ class CheckoutController extends Controller
             'experience' => $experience,
             'quote' => $quote,
             'pricing' => $pricing,
-            'plan' => $plan,
-            'balanceDate' => $balanceDate,
             'isDemo' => $isDemo,
-            'editUrl' => route('booking.create', $selection->toQuery()),
+            'addonChoices' => $addonChoices,
+            'editUrl' => route('yachts.show', [$yacht->slug, ...collect($selection->toQuery())->only(['experience', 'date', 'hours', 'guests', 'addons'])->all()]).'#book',
             'checkoutData' => [
                 'yacht' => collect($yacht->toArray())->only(['slug', 'min_hours', 'hourly_rate_cents', 'captain_rate_cents', 'crew_count', 'cleaning_fee_cents']),
-                'experience' => collect($experience->toArray())->only(['slug', 'name', 'package_fee_cents']),
-                'addons' => collect($selection->addonModels())->map(fn ($a) => collect($a->toArray())->only(['slug', 'name', 'price_cents', 'unit']))->values(),
+                'experience' => $experience ? collect($experience->toArray())->only(['slug', 'name']) : null,
+                'addons' => $addonChoices->map(fn ($a) => collect($a->toArray())->only(['slug', 'name', 'price_cents', 'unit']))->values(),
                 'selection' => ['date' => $selection->date, 'hours' => $selection->hours, 'guests' => $selection->guests],
-                'pricing' => collect($pricing)->only(['weekend_multiplier_bp', 'tax_rate_bp', 'deposit_bp', 'default_gratuity']),
-                'balanceDate' => $balanceDate,
+                'pricing' => collect($pricing)->only(['weekend_multiplier_bp', 'tax_rate_bp', 'default_gratuity']),
                 'promoUrl' => route('checkout.promo'),
             ],
         ]);
@@ -88,9 +99,6 @@ class CheckoutController extends Controller
     {
         $data = $request->validated();
         $selection = $request->selection();
-        $pricing = config('demo.pricing');
-        $balanceDate = $this->balanceDate($selection->date, $pricing['balance_due_days']);
-        $plan = $balanceDate ? $data['plan'] : 'full'; // trips inside the balance window are paid in full
 
         $quote = DemoQuote::fromSettings()->quote($selection->yachtModel(), $selection->experienceModel(), [
             'date' => $selection->date,
@@ -99,7 +107,6 @@ class CheckoutController extends Controller
             'addons' => $selection->addonModels(),
             'promo' => $data['promo'] ?? null,
             'gratuity' => (int) $data['gratuity'],
-            'plan' => $plan,
         ]);
 
         $request->session()->put('booking.confirmation', [
@@ -107,8 +114,8 @@ class CheckoutController extends Controller
             'selection' => $selection->toQuery(),
             'contact' => ['first_name' => $data['first_name'], 'last_name' => $data['last_name'], 'email' => $data['email'], 'phone' => $data['phone']],
             'occasion' => $data['occasion'] ?? null,
-            'payment' => ['plan' => $plan, 'gratuity' => (int) $data['gratuity'], 'promo' => $quote['promo']['code'] ?? null, 'brand' => $data['card_brand'], 'last4' => $data['card_last4']],
-            'totals' => ['total' => $quote['total'], 'paid' => $quote['dueNow'], 'balance' => $quote['balance'], 'balance_date' => $plan === 'deposit' ? $balanceDate : null],
+            'payment' => ['gratuity' => (int) $data['gratuity'], 'promo' => $quote['promo']['code'] ?? null, 'brand' => $data['card_brand'], 'last4' => $data['card_last4']],
+            'totals' => ['total' => $quote['total'], 'paid' => $quote['total']], // paid in full (D22)
         ]);
 
         return redirect()->route('booking.confirmation');
@@ -122,7 +129,7 @@ class CheckoutController extends Controller
         if ($isDemo) {
             $selection = $this->demoSelection($catalog, 14);
             if ($selection === null) {
-                return redirect()->route('booking.create');
+                return redirect()->route('yachts.index');
             }
             $quote = DemoQuote::fromSettings()->quote($selection->yachtModel(), $selection->experienceModel(), [
                 'date' => $selection->date, 'hours' => 3, 'guests' => 8, 'addons' => $selection->addonModels(), 'gratuity' => 18,
@@ -132,8 +139,8 @@ class CheckoutController extends Controller
                 'selection' => $selection->toQuery(),
                 'contact' => ['first_name' => 'Alex', 'last_name' => 'Morgan', 'email' => 'alex@example.com', 'phone' => '(312) 555-0100'],
                 'occasion' => 'Birthday',
-                'payment' => ['plan' => 'deposit', 'gratuity' => 18, 'promo' => null, 'brand' => 'Visa', 'last4' => '4242'],
-                'totals' => ['total' => $quote['total'], 'paid' => $quote['deposit'], 'balance' => $quote['balance'], 'balance_date' => $this->balanceDate($selection->date, 7)],
+                'payment' => ['gratuity' => 18, 'promo' => null, 'brand' => 'Visa', 'last4' => '4242'],
+                'totals' => ['total' => $quote['total'], 'paid' => $quote['total']],
             ];
         }
 
@@ -150,14 +157,6 @@ class CheckoutController extends Controller
         ]);
     }
 
-    /** The balance is charged N days before the trip; null when that day has already passed (pay in full). */
-    private function balanceDate(string $tripDate, int $daysBefore): ?string
-    {
-        $due = CarbonImmutable::createFromFormat('!Y-m-d', $tripDate, config('app.display_timezone'))->subDays($daysBefore);
-
-        return $due->gt(CarbonImmutable::now(config('app.display_timezone'))->startOfDay()) ? $due->toDateString() : null;
-    }
-
     /**
      * Sample booking for the demo when no (valid) booking was passed in: the first bookable boat + experience
      * the admin offers (the Sunset cruise and champagne first, as in the mockup), on the first allowed day from
@@ -171,7 +170,7 @@ class CheckoutController extends Controller
         foreach ($catalog->yachts()->where('booking_enabled', true)->sortBy(fn ($y) => in_array('sunset', $y->experiences, true) ? 0 : 1) as $yacht) {
             foreach (collect($yacht->experiences)->sortBy(fn (string $slug) => $slug === 'sunset' ? 0 : 1) as $slug) {
                 $experience = $catalog->experience($slug);
-                $durations = $experience ? DemoQuote::durations($yacht, $experience) : [];
+                $durations = $yacht->lengths;
                 for ($day = $daysAhead; $experience && $day < $daysAhead + 60; $day++) {
                     $date = BookingSelection::validDate($today->addDays($day)->toDateString(), $experience);
                     if ($date === null) {

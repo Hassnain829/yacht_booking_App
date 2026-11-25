@@ -46,6 +46,17 @@ class CancellationPolicy extends Model
     }
 
     /**
+     * How many hours before the start a cancellation still gets everything back (the latest 100% rule), or null
+     * when no rule refunds in full. The booking card shows "Free cancellation until …" from it (4.3).
+     */
+    public function freeCancellationHours(): ?int
+    {
+        $full = collect($this->rules)->filter(fn (array $rule) => (int) $rule['refund_pct'] >= 100);
+
+        return $full->isEmpty() ? null : (int) $full->min('min_hours_before');
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array

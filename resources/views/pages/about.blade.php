@@ -113,7 +113,7 @@
             <h2 class="mx-auto max-w-3xl font-display text-4xl leading-tight md:text-6xl md:leading-none">Come sail with us</h2>
             <p class="mx-auto mt-4 max-w-xl text-white/70">Your captain is ready. Choose your yacht and experience in minutes.</p>
             <div class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <a href="{{ route('booking.create') }}" class="inline-flex items-center gap-2 rounded-full bg-brass-400 px-8 py-4 text-sm font-bold text-navy-950 shadow-glow hover:bg-brass-300">Book Now <i data-lucide="arrow-right" class="h-4 w-4"></i></a>
+                <a href="{{ route('yachts.index') }}" class="inline-flex items-center gap-2 rounded-full bg-brass-400 px-8 py-4 text-sm font-bold text-navy-950 shadow-glow hover:bg-brass-300">Book Now <i data-lucide="arrow-right" class="h-4 w-4"></i></a>
                 <a href="{{ route('contact') }}" class="inline-flex items-center gap-2 rounded-full border border-white/30 px-8 py-4 text-sm font-bold hover:bg-white hover:text-navy-950">Contact Us</a>
             </div>
         </div>

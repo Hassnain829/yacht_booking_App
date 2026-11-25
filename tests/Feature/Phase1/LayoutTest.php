@@ -154,9 +154,10 @@ class LayoutTest extends TestCase
 
     public function test_yacht_card_available_state_links_to_booking(): void
     {
-        $html = (string) $this->blade('<x-yacht-card :yacht="$yacht" experience="sunset" />', ['yacht' => $this->demoYacht()]);
+        $html = (string) $this->blade('<x-yacht-card :yacht="$yacht" experience="sunset" :query="$query" free="Free on Jun 4" />', ['yacht' => $this->demoYacht(), 'query' => ['date' => '2027-06-04', 'guests' => 8]]);
 
-        $this->assertStringContainsString('book?yacht=azure&amp;experience=sunset', $html);
+        $this->assertStringContainsString('yachts/azure?date=2027-06-04&amp;guests=8&amp;experience=sunset#book', $html, 'Book opens the booking card on the boat page (4.3)');
+        $this->assertStringContainsString('Free on Jun 4', $html);
         $this->assertStringContainsString('$450', $html);
         $this->assertStringNotContainsString('aria-disabled', $html);
     }

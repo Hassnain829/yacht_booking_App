@@ -37,10 +37,10 @@
         <x-admin.table min="min-w-[52rem]">
             <x-slot:head>
                 <x-admin.sort column="name" label="Experience" :sort="$sort" :dir="$dir" />
-                <th scope="col">Lengths · start times</th>
+                <th scope="col">Departs</th>
                 <th scope="col">Days</th>
                 <x-admin.sort column="boats" label="Boats" :sort="$sort" :dir="$dir" />
-                <x-admin.sort column="fee" label="Package fee" :sort="$sort" :dir="$dir" />
+                <x-admin.sort column="extras" label="Extras" :sort="$sort" :dir="$dir" />
                 <th scope="col">Shown</th>
                 <x-admin.sort column="sort" label="Order" :sort="$sort" :dir="$dir" />
                 <th scope="col"><span class="sr-only">Open</span></th>
@@ -60,10 +60,10 @@
                             </span>
                         </div>
                     </td>
-                    <td class="text-xs">{{ implode(', ', $experience->durations ?? []) }} hrs<span class="block text-navy-400">{{ trans_choice('{0} No start times|{1} 1 start time|[2,*] :count start times', count($experience->time_slots ?? [])) }}</span></td>
+                    <td class="text-xs">{{ App\Support\StartTimes::summary($experience->time_slots ?? []) ?: '—' }}</td>
                     <td class="text-xs">{{ $experience->allowed_weekdays ? implode(', ', array_map(fn ($d) => $days[$d], $experience->allowed_weekdays)) : 'Every day' }}</td>
                     <td>{{ $experience->boats_count }}</td>
-                    <td class="font-semibold text-navy-950">{{ $experience->package_fee_cents ? money($experience->package_fee_cents) : '—' }}</td>
+                    <td class="text-xs">{{ $experience->extras->isEmpty() ? '—' : $experience->extras->pluck('name')->join(', ') }}</td>
                     <td>
                         @if ($inTrash)
                             <x-admin.pill tone="danger">In the Trash</x-admin.pill>

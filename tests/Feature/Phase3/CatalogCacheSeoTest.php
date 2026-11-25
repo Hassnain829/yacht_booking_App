@@ -53,8 +53,12 @@ class CatalogCacheSeoTest extends TestCase
         $this->assertTrue(Cache::has(PublicCatalog::CACHE_KEY));
         $this->assertNotEmpty(array_filter($first, fn (string $sql) => str_contains($sql, 'from "boats"')));
 
-        $second = $this->queries(fn () => $this->get('/yachts/azure')->assertOk()->assertSee('The Azure'));
+        $second = $this->queries(fn () => $this->get('/yachts?guests=6')->assertOk()->assertSee('The Azure'));
         $this->assertSame([], array_values(array_filter($second, fn (string $sql) => preg_match('/from "(boats|experiences|addons|harbors|media|amenities)"/', $sql) === 1)), 'no catalog queries once cached');
+
+        // A page with a live price (4.3) loads the boats QuoteService needs: one query per relation, never per boat.
+        $boatPage = $this->queries(fn () => $this->get('/yachts/azure')->assertOk()->assertSee('The Azure'));
+        $this->assertLessThanOrEqual(6, count(array_filter($boatPage, fn (string $sql) => preg_match('/from "(boats|experiences|addons|availability|cancellation)/', $sql) === 1)));
     }
 
     public function test_every_kind_of_admin_change_clears_the_cache(): void
@@ -79,7 +83,7 @@ class CatalogCacheSeoTest extends TestCase
 
         // an amenity deleted from every boat (ticked on The Azure through the boat form's service)
         $table = Amenity::query()->create(['group' => 'deck', 'name' => 'Teak cockpit table', 'sort' => 1]);
-        app(BoatService::class)->save($azure->fresh(), [], ['amenities' => [$table->id], 'experiences' => $azure->experiences()->pluck('experiences.id')->mapWithKeys(fn ($id) => [$id => null])->all(), 'start_times' => []], $this->admin);
+        app(BoatService::class)->save($azure->fresh(), [], ['amenities' => [$table->id], 'experiences' => $azure->experiences()->pluck('experiences.id')->map(fn ($id) => (int) $id)->all(), 'start_times' => []], $this->admin);
         $this->get('/yachts/azure')->assertSee('Teak cockpit table');
         $this->delete("/admin/amenities/{$table->ulid}", ['reason' => 'Not on the boat any more.', 'dialog' => 'destroy-record'])->assertRedirect();
         $this->get('/yachts/azure')->assertDontSee('Teak cockpit table');

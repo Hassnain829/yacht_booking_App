@@ -18,7 +18,7 @@
             Call to <em>action</em>
         </x-section-heading>
         <div class="mt-10 flex flex-wrap items-center gap-3">
-            <x-button :href="route('booking.create')" icon="arrow-right">Book Now</x-button>
+            <x-button :href="route('yachts.index')" icon="arrow-right">Book Now</x-button>
             <x-button variant="dark">Check availability</x-button>
             <x-button variant="outline">See yachts</x-button>
             <x-button size="sm" variant="dark">Small</x-button>

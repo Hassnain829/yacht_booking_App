@@ -71,3 +71,19 @@ test('formatting dates and times', () => {
     assert.match(formatDateTimeInChicago('2026-07-04T01:30:00Z'), /^Jul 3, 2026, 8:30\sPM$/u);
     assert.throws(() => formatDateTimeInChicago('nope'), RangeError);
 });
+
+test('months for the booking calendar', async () => {
+    const { monthOf, addMonths, formatMonth, monthGrid } = await import('../../resources/js/lib/dates.js');
+    assert.equal(monthOf('2027-06-04'), '2027-06');
+    assert.equal(addMonths('2027-12', 1), '2028-01');
+    assert.equal(addMonths('2027-01', -1), '2026-12');
+    assert.equal(addMonths('2027-06', 18), '2028-12');
+    assert.throws(() => addMonths('2027-6', 1), RangeError);
+    assert.equal(formatMonth('2027-06'), 'June 2027');
+
+    const june = monthGrid('2027-06'); // 1 June 2027 is a Tuesday
+    assert.equal(june.length, 5);
+    assert.deepEqual(june[0], [null, null, '2027-06-01', '2027-06-02', '2027-06-03', '2027-06-04', '2027-06-05']);
+    assert.deepEqual(june[4], ['2027-06-27', '2027-06-28', '2027-06-29', '2027-06-30', null, null, null]);
+    assert.ok(monthGrid('2027-02').every((week) => week.length === 7));
+});

@@ -87,14 +87,14 @@ class Boat extends Model implements Trashable
         return $this->belongsToMany(Amenity::class)->orderBy('sort');
     }
 
-    /** Experiences this boat offers; the pivot can override the package fee. @return BelongsToMany<Experience, $this> */
+    /** Experiences this boat offers (the pivot can switch one off for this boat). @return BelongsToMany<Experience, $this> */
     public function experiences(): BelongsToMany
     {
-        return $this->belongsToMany(Experience::class)->withPivot(['package_fee_override_cents', 'is_active'])->withTimestamps();
+        return $this->belongsToMany(Experience::class)->withPivot(['is_active'])->withTimestamps();
     }
 
     /**
-     * The experience as this boat offers it (with the pivot, e.g. its package fee override), or null when the boat
+     * The experience as this boat offers it (with the pivot), or null when the boat
      * doesn't offer it: not attached, switched off on the boat, or hidden. Uses the loaded `experiences` if any.
      */
     public function offering(Experience $experience): ?Experience

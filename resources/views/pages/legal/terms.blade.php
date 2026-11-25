@@ -24,8 +24,8 @@
         <h2 id="bookings">Bookings and payment</h2>
         <ul>
             <li>A booking is confirmed once payment succeeds and you receive a confirmation email with a booking reference.</li>
-            <li>The price you see at checkout includes the yacht, the licensed captain (shown as its own line), any package and add-ons, and estimated taxes. Crew gratuity is optional and goes to the crew in full.</li>
-            <li>You can pay in full or pay a {{ \App\Support\Money::percent($pricing['deposit_bp']) }} deposit. With a deposit, the balance is charged automatically to the same card {{ $pricing['balance_due_days'] }} days before the trip. Trips that start within {{ $pricing['balance_due_days'] }} days are paid in full.</li>
+            <li>The price you see at checkout includes the yacht, the licensed captain (shown as its own line), any paid extras of the experience you chose, your add-ons and taxes. Crew gratuity is optional and goes to the crew in full.</li>
+            <li>The full price is paid at checkout, and your booking is confirmed straight away. Nothing more is charged before the trip.</li>
             <li>Card payments are processed by Stripe. We never see or store your full card number.</li>
             <li>The guest count you book is the maximum on board. It can never exceed the boat's USCG capacity.</li>
         </ul>

@@ -108,7 +108,7 @@ class AdminBoatsTest extends TestCase
 
         $response = $this->post('/admin/boats', $this->fields([
             'amenities' => [$wifi->ulid],
-            'experiences' => ['sunset' => ['offered' => '1', 'fee' => '25'], 'fireworks' => ['offered' => '0', 'fee' => '']],
+            'experiences' => ['sunset' => ['offered' => '1'], 'fireworks' => ['offered' => '0']],
             // never taken from the form:
             'status' => 'archived', 'ownership' => 'owner', 'owner_id' => (string) $this->admin->id, 'published_at' => '2001-01-01',
         ]));
@@ -123,13 +123,13 @@ class AdminBoatsTest extends TestCase
         $this->assertSame(['not_allowed' => ['Pets', 'Smoking']], $boat->rules);
         $this->assertSame(['navy-pier', 'flexible'], [$boat->harbor->slug, $boat->cancellationPolicy->slug]);
         $this->assertSame(['WiFi'], $boat->amenities->pluck('name')->all());
-        $this->assertSame([$sunset->id => 2500], $boat->experiences->mapWithKeys(fn ($e) => [$e->id => $e->pivot->package_fee_override_cents])->all());
+        $this->assertSame([$sunset->id], $boat->experiences->pluck('id')->all());
         $this->assertSame([true, false, true], $boat->availabilityRules()->pluck('is_open')->take(3)->all());
         $this->assertSame(['09:00', '09:30', '18:00'], $boat->availabilityRules()->where('weekday', 0)->first()->start_times);
 
         $log = AuditLog::query()->where('action', 'boat.created')->sole();
         $this->assertSame(['WiFi'], $log->after['amenities']);
-        $this->assertSame(['sunset' => 2500], $log->after['experiences']);
+        $this->assertSame(['sunset'], $log->after['experiences']);
     }
 
     public function test_a_demo_boat_with_its_own_category_saves_without_changes(): void
@@ -172,7 +172,7 @@ class AdminBoatsTest extends TestCase
             ->assertUnprocessable()->assertJsonValidationErrors(['start_times.2.times' => 'Pick at least one start time']);
         $this->postJson('/admin/boats', $this->fields(['start_times' => [3 => ['open' => '1', 'times' => ['09:15', '23:00', '04:30']]]]))
             ->assertUnprocessable()->assertJsonValidationErrors(['start_times.3.times.0', 'start_times.3.times.1', 'start_times.3.times.2']);
-        $this->postJson('/admin/boats', $this->fields(['experiences' => ['no-such-thing' => ['offered' => '1', 'fee' => '']]]))
+        $this->postJson('/admin/boats', $this->fields(['experiences' => ['no-such-thing' => ['offered' => '1']]]))
             ->assertUnprocessable()->assertJsonValidationErrors(['experiences']);
 
         $this->assertSame(0, Boat::query()->count());
@@ -181,15 +181,15 @@ class AdminBoatsTest extends TestCase
     public function test_editing_logs_only_what_changed_including_hours_and_offers(): void
     {
         $sunset = Experience::factory()->create(['slug' => 'sunset']);
-        $this->actingAs($this->admin)->post('/admin/boats', $this->fields(['experiences' => ['sunset' => ['offered' => '1', 'fee' => '']]]));
+        $this->actingAs($this->admin)->post('/admin/boats', $this->fields(['experiences' => ['sunset' => ['offered' => '1']]]));
         $boat = Boat::query()->sole();
 
-        $this->put("/admin/boats/{$boat->ulid}", $this->fields(['experiences' => ['sunset' => ['offered' => '1', 'fee' => '']]]))->assertRedirect();
+        $this->put("/admin/boats/{$boat->ulid}", $this->fields(['experiences' => ['sunset' => ['offered' => '1']]]))->assertRedirect();
         $this->assertSame(0, AuditLog::query()->where('action', 'boat.updated')->count(), 'nothing changed');
 
         $this->put("/admin/boats/{$boat->ulid}", $this->fields([
             'hourly_rate' => '700',
-            'experiences' => ['sunset' => ['offered' => '0', 'fee' => '']],
+            'experiences' => ['sunset' => ['offered' => '0']],
             'start_times' => [1 => ['open' => '1', 'times' => ['10:00', '10:30', '11:00']]],
         ]))->assertRedirect("/admin/boats/{$boat->ulid}/edit");
 

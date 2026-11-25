@@ -8,6 +8,7 @@ use App\Models\Boat;
 use App\Models\Experience;
 use App\Models\Harbor;
 use App\Models\Media;
+use App\Support\StartTimes;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -30,7 +31,11 @@ use Illuminate\Support\Fluent;
  * singleton, forgotten after every request).
  *
  * Prices and rules come from Settings (cached on their own); promo codes and the editable page content
- * (stats, testimonials, FAQs…) stay demo config until Phases 4.7 and 10.
+ * (stats, testimonials, FAQs…) stay demo config until Phases 4.8 and 10. Prices themselves are never added up
+ * here: the booking card, the examples and checkout ask QuoteService (via PriceExamples or the quote endpoint).
+ * `lengths` are QuoteService::durations(), so the fleet filter and the booking card offer exactly the lengths the
+ * price allows (the same with any experience: an experience has no length of its own, 2026-11-25). Each experience
+ * carries its departure window (`time_slots`, `departs_label`) and days (`days_label`) for every page.
  */
 class PublicCatalog
 {
@@ -44,7 +49,7 @@ class PublicCatalog
     /** @var array<string, Collection<int, Fluent>> */
     private array $built = [];
 
-    public function __construct(private SettingsService $settings) {}
+    public function __construct(private SettingsService $settings, private QuoteService $quotes) {}
 
     public static function flush(): void
     {
@@ -97,6 +102,16 @@ class PublicCatalog
         return $this->experiences()->firstWhere('slug', $slug);
     }
 
+    /**
+     * The fleet's "On board" filter (4.4): the 12 amenities ticked on the most published boats, by name.
+     *
+     * @return Collection<int, Fluent> ulid, name
+     */
+    public function amenityFilters(): Collection
+    {
+        return $this->built['amenity_filters'] ??= collect($this->payload()['amenity_filters'] ?? [])->map(fn (array $amenity) => new Fluent($amenity));
+    }
+
     /** @return Collection<int, Fluent> */
     public function addons(): Collection
     {
@@ -104,7 +119,7 @@ class PublicCatalog
     }
 
     /**
-     * Booking and price rules from Admin → Settings, plus the demo promo codes (until 4.7).
+     * Booking and price rules from Admin → Settings, plus the demo promo codes (until 4.8). No deposit (D22).
      *
      * @return array<string, mixed>
      */
@@ -115,12 +130,25 @@ class PublicCatalog
         return [
             'weekend_multiplier_bp' => (int) $settings['weekend_multiplier_bp'],
             'tax_rate_bp' => (int) $settings['tax_rate_bp'],
-            'deposit_bp' => (int) $settings['deposit_bp'],
-            'balance_due_days' => (int) $settings['balance_due_days'],
             'gratuity_options' => array_map('intval', $settings['gratuity_options']),
             'default_gratuity' => (int) $settings['default_gratuity'],
             'promos' => config('demo.pricing.promos'),
         ];
+    }
+
+    /**
+     * "Daily", "Wed & Sat", "Mon, Wed & Fri".
+     *
+     * @param  list<int>|null  $weekdays  0 = Sunday; null = every day
+     */
+    public static function daysLabel(?array $weekdays): string
+    {
+        if ($weekdays === null || $weekdays === [] || count($weekdays) === 7) {
+            return 'Daily';
+        }
+        $names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+        return collect($weekdays)->map(fn ($day) => $names[(int) $day] ?? null)->filter()->join(', ', ' & ');
     }
 
     /** Editable page content (stats, testimonials, gallery, FAQs…) — config until the CMS (Phase 10). */
@@ -150,7 +178,7 @@ class PublicCatalog
      */
     private function build(): array
     {
-        $experiences = Experience::query()->active()->orderBy('name')->get()->map(fn (Experience $experience) => [
+        $experiences = Experience::query()->active()->with('extras')->orderBy('name')->get()->map(fn (Experience $experience) => [
             'slug' => $experience->slug,
             'name' => $experience->name,
             'category' => $experience->category,
@@ -159,9 +187,16 @@ class PublicCatalog
             'tagline' => $experience->tagline,
             'description' => $experience->description,
             'includes' => $experience->includes ?? [],
-            'durations' => array_map('intval', $experience->durations ?? []),
-            'time_slots' => $experience->time_slots ?? [],
-            'package_fee_cents' => (int) $experience->package_fee_cents,
+            'time_slots' => StartTimes::normalize($experience->time_slots ?? []), // its departure window
+            'departs_label' => StartTimes::summary($experience->time_slots ?? []), // "5:00 PM – 7:30 PM"
+            'days_label' => self::daysLabel($experience->allowed_weekdays),
+            // A free experience; its extras are add-ons suggested with it at checkout, optional (2026-11-25).
+            'extras' => $experience->extras->where('is_active', true)->map(fn (Addon $addon) => [
+                'slug' => $addon->slug,
+                'name' => $addon->name,
+                'price_cents' => (int) $addon->price_cents,
+                'unit' => $addon->unit->value,
+            ])->values()->all(),
             'allowed_weekdays' => $experience->allowed_weekdays,
             'is_featured' => $experience->is_featured,
             'season_starts_on' => $experience->season_starts_on?->toDateString(),
@@ -169,18 +204,25 @@ class PublicCatalog
         ])->values()->all();
         $liveExperiences = array_column($experiences, 'slug');
 
-        $yachts = Boat::query()
+        $boats = Boat::query()
             ->listed()
             ->with([
                 'photos',
                 'harbor',
                 'amenities',
+                'cancellationPolicy',
                 'experiences' => fn ($query) => $query->where('experiences.is_active', true)->wherePivot('is_active', true),
             ])
             ->orderBy('sort')
             ->orderBy('title')
-            ->get()
-            ->map(fn (Boat $boat) => $this->yachtFrom($boat, $liveExperiences))
+            ->get();
+        $yachts = $boats->map(fn (Boat $boat) => $this->yachtFrom($boat, $liveExperiences))->values()->all();
+        $amenityFilters = $boats->flatMap(fn (Boat $boat) => $boat->amenities)
+            ->groupBy('ulid')
+            ->sortByDesc(fn ($same) => $same->count())
+            ->take(12)
+            ->map(fn ($same) => ['ulid' => $same->first()->ulid, 'name' => $same->first()->name])
+            ->sortBy('name')
             ->values()
             ->all();
 
@@ -197,6 +239,7 @@ class PublicCatalog
                 'max_quantity' => $addon->max_quantity,
             ])->values()->all(),
             'yachts' => $yachts,
+            'amenity_filters' => $amenityFilters,
         ];
     }
 
@@ -207,6 +250,8 @@ class PublicCatalog
     private function yachtFrom(Boat $boat, array $liveExperiences): array
     {
         $cover = $boat->cover();
+        $offered = $boat->experiences->filter(fn (Experience $experience) => in_array($experience->slug, $liveExperiences, true));
+        $policy = $boat->cancellationPolicy;
 
         return [
             'slug' => $boat->slug,
@@ -224,6 +269,7 @@ class PublicCatalog
             'weekend_multiplier_bp' => $boat->weekend_multiplier_bp,
             'min_hours' => (int) $boat->min_hours,
             'durations' => $boat->durations,
+            'lengths' => $this->quotes->durations($boat),
             'captain_rate_cents' => (int) $boat->captain_rate_cents,
             'crew_count' => (int) $boat->crew_count,
             'cleaning_fee_cents' => (int) $boat->cleaning_fee_cents,
@@ -241,8 +287,15 @@ class PublicCatalog
             'description' => $boat->description,
             // The boat page's "Amenities" list: the boat's own highlights first, then what is ticked (3.7).
             'amenities' => $this->amenityList($boat),
-            'experiences' => array_values(array_intersect($boat->experiences->pluck('slug')->all(), $liveExperiences)),
+            'experiences' => $offered->pluck('slug')->values()->all(),
+            'amenity_ids' => $boat->amenities->pluck('ulid')->values()->all(), // the fleet's "More filters" (4.4)
             'rules' => $boat->rules['not_allowed'] ?? [],
+            'policy' => $policy === null ? null : [
+                'name' => $policy->name,
+                'badge' => $policy->badge,
+                'points' => $policy->points ?? [],
+                'free_hours' => $policy->freeCancellationHours(),
+            ],
             'updated_at' => $boat->updated_at?->toIso8601String(), // the sitemap's lastmod
         ];
     }

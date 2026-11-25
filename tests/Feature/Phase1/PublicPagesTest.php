@@ -29,8 +29,8 @@ class PublicPagesTest extends TestCase
         return [
             'home' => ['/', ['Your Private Yacht', 'id="fleet-panel-all"', 'id="fleet-panel-large"', 'data-quick-book', 'Loved by']],
             'yachts' => ['/yachts', ['Our <em>Fleet</em>', 'id="yacht-grid"', 'Compare at a glance']],
-            'yacht' => ['/yachts/azure', ['The Azure', 'id="y-book-form"', 'Experiences on this yacht', 'Departure location']],
-            'experiences' => ['/experiences', ['Experiences <em>&amp; Events</em>', 'id="fireworks"', 'All-in from']],
+            'yacht' => ['/yachts/azure', ['The Azure', 'id="booking-card"', 'Experiences on this yacht', 'Things to know', 'Departure location']],
+            'experiences' => ['/experiences', ['Experiences <em>&amp; Events</em>', 'id="fireworks"', 'Trips from', 'The experience is free']],
             'pricing' => ['/pricing', ['Real examples', 'id="estimator"', 'Yacht rates', 'id="policies"']],
             'about' => ['/about', ['at your service', 'Captains who love this lake', 'Four Chicago harbors']],
             'contact' => ['/contact', ['Send us a message', 'name="_token"', 'name="website"', 'Quick answers']],
@@ -108,14 +108,14 @@ class PublicPagesTest extends TestCase
 
     public function test_embedded_page_data_is_valid_escaped_json(): void
     {
-        foreach (['/yachts/azure' => 'data-quote', '/pricing' => 'data-estimator'] as $url => $attribute) {
+        foreach (['/yachts/azure' => 'data-booking-card', '/pricing' => 'data-estimator'] as $url => $attribute) {
             $html = $this->get($url)->getContent();
             $this->assertMatchesRegularExpression('/'.$attribute.'="([^"]+)"/', $html);
             preg_match('/'.$attribute.'="([^"]+)"/', $html, $match);
 
             $data = json_decode(html_entity_decode($match[1], ENT_QUOTES), true, flags: JSON_THROW_ON_ERROR);
             $this->assertIsArray($data);
-            $this->assertArrayHasKey('pricing', $data);
+            $this->assertArrayNotHasKey('pricing', $data, 'no rates to add up in the browser: prices come from the quote endpoint');
             $this->assertArrayNotHasKey('admin_notes', $data, 'Only display data is embedded');
         }
     }
@@ -136,7 +136,7 @@ class PublicPagesTest extends TestCase
             ->assertSee('Most booked')
             ->assertSee('Sunset for Two')
             ->assertSee('Corporate Cruise')
-            ->assertSee('book?yacht=azure&amp;experience=playpen&amp;hours=4&amp;guests=12&amp;addons=lilypad', false);
+            ->assertSee('yachts/azure?experience=playpen&amp;hours=4&amp;guests=12&amp;addons=lilypad#book', false); // the package's add-on, untickable at checkout
     }
 
     /** Number of fleet cards carrying the `hidden` attribute (not the overflow-hidden class). */

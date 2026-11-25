@@ -1,7 +1,7 @@
 {{--
     Button / link button (mockup CYB.cls.btnPrimary / btnDark / btnOutline).
 
-    <x-button :href="route('booking.create')" icon="arrow-right">Book Now</x-button>
+    <x-button :href="route('yachts.index')" icon="arrow-right">Book Now</x-button>
     <x-button variant="dark" type="submit" size="lg">Send message</x-button>
 
     variant: primary | dark | outline | light (outline on dark backgrounds) | white

@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\PeopleController as AdminPeopleController;
 use App\Http\Controllers\Admin\SettingsController as AdminSettingsController;
 use App\Http\Controllers\Admin\SystemController as AdminSystemController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
+use App\Http\Controllers\BookingCardController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\ExperienceController;
@@ -52,6 +53,11 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', HomeController::class)->name('home');
 Route::get('/yachts', [YachtController::class, 'index'])->name('yachts.index');
 Route::get('/yachts/{slug}', [YachtController::class, 'show'])->where('slug', '[a-z0-9-]+')->name('yachts.show');
+// The boat page's booking card (4.3, D21): read-only JSON from AvailabilityService and QuoteService.
+Route::get('/yachts/{slug}/availability', [BookingCardController::class, 'availability'])->where('slug', '[a-z0-9-]+')
+    ->middleware('throttle:availability')->name('yachts.availability');
+Route::get('/yachts/{slug}/quote', [BookingCardController::class, 'quote'])->where('slug', '[a-z0-9-]+')
+    ->middleware('throttle:quote')->name('yachts.quote');
 Route::get('/experiences', [ExperienceController::class, 'index'])->name('experiences.index');
 Route::get('/pricing', [PageController::class, 'pricing'])->name('pricing');
 Route::get('/about', [PageController::class, 'about'])->name('about');
@@ -61,8 +67,9 @@ Route::get('/contact', [PageController::class, 'contact'])->name('contact');
 Route::get('/sitemap.xml', [SeoController::class, 'sitemap'])->name('sitemap');
 Route::get('/robots.txt', [SeoController::class, 'robots'])->name('robots');
 
-// Booking flow (Phase 1: demo data, no payment). Phase 4/5: holds, Stripe, /checkout/{booking:ulid}.
-Route::get('/book', [BookingController::class, 'create'])->name('booking.create');
+// Booking flow. Since 4.3 a trip is picked on the boat page (D21): the old /book wizard URL only redirects there
+// (or to the fleet when no boat is given). Checkout is still the Phase 1 demo until 4.5 (hold) and Phase 5 (Stripe).
+Route::get('/book', BookingController::class)->name('booking.create');
 Route::get('/checkout', [CheckoutController::class, 'create'])->name('checkout.create');
 Route::post('/checkout', [CheckoutController::class, 'store'])->middleware('throttle:checkout')->name('checkout.store');
 Route::post('/checkout/promo', [CheckoutController::class, 'promo'])->middleware('throttle:promo')->name('checkout.promo');

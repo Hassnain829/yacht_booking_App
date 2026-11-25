@@ -5,7 +5,6 @@ namespace Tests\Feature\Phase4;
 use App\Enums\BookingItemType;
 use App\Enums\CaptainSource;
 use App\Enums\Payee;
-use App\Enums\PaymentPlan;
 use App\Enums\PromoAppliesTo;
 use App\Exceptions\QuoteException;
 use App\Models\Addon;
@@ -23,9 +22,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Phase 4.1 — QuoteService (PLAN §7.1): the rules the mockup didn't have — each boat's weekend rate, fixed
- * prices per length, package overrides, promo limits, the deposit cut-off, who each line pays (§7.5) — and the
- * choices it refuses. The mockup's own numbers are matched in QuoteParityTest.
+ * Phase 4.1 / 4.3 — QuoteService (PLAN §7.1): the rules the mockup didn't have — each boat's weekend rate, fixed
+ * prices per length, the boat's own lengths (an experience is free, has no length and its extras are optional,
+ * 2026-11-25), promo limits, who each line pays (§7.5) — and the choices it refuses. Always the full price (D22). The mockup's own numbers are
+ * matched in QuoteParityTest.
  */
 class QuoteServiceTest extends TestCase
 {
@@ -44,7 +44,7 @@ class QuoteServiceTest extends TestCase
         $this->quotes = app(QuoteService::class);
         // $450/hr, captain $85/hr, fuel & cleaning $150 — the mockup's Azure.
         $this->boat = Boat::factory()->create(['hourly_rate_cents' => 45000, 'captain_rate_cents' => 8500, 'cleaning_fee_cents' => 15000, 'min_hours' => 3, 'durations' => null, 'max_guests' => 13]);
-        $this->sunset = Experience::factory()->create(['name' => 'Sunset Cruise', 'durations' => [2, 3, 4], 'package_fee_cents' => 0]);
+        $this->sunset = Experience::factory()->create(['name' => 'Sunset Cruise']);
         $this->boat->experiences()->attach($this->sunset);
     }
 
@@ -74,8 +74,6 @@ class QuoteServiceTest extends TestCase
         $this->assertSame(['charter' => 135000, 'captain' => 25500, 'cleaning' => 15000, 'tax' => 15795, 'gratuity' => 28890], $this->amounts($quote));
         $this->assertSame([175500, 0, 15795, 28890, 220185], [$quote->subtotalCents, $quote->discountCents, $quote->taxCents, $quote->gratuityCents, $quote->totalCents]);
         $this->assertSame('$450/hr × 3 hrs', $quote->lines[0]->description);
-        $this->assertSame([PaymentPlan::Deposit, true, 110093, 110093, 110092], [$quote->plan, $quote->depositAllowed, $quote->depositCents, $quote->dueNowCents, $quote->balanceCents]);
-        $this->assertTrue($quote->balanceDueAt->equalTo(QuoteRequest::localStart('2027-05-26', '18:00')), 'the balance is due 7 days before the trip');
         $this->assertSame($quote->totalCents, array_sum($this->amounts($quote)));
     }
 
@@ -127,32 +125,35 @@ class QuoteServiceTest extends TestCase
         $this->assertSame([120050, 'Fixed price for 3 hrs'], [$this->quote()->charterCents, $this->quote()->lines[0]->description], 'weekdays keep the fixed price');
     }
 
-    public function test_lengths_come_from_the_experience_narrowed_by_the_boat_and_never_below_its_minimum(): void
+    public function test_lengths_are_the_boats_own_never_below_its_minimum_whatever_the_experience(): void
     {
-        $this->assertSame([3, 4], $this->quotes->durations($this->boat, $this->sunset), 'the 2-hour length is below the 3-hour minimum');
+        $this->assertSame([3, 4, 5, 6, 8], $this->quotes->durations($this->boat), 'none ticked: every standard length from the 3-hour minimum to a full day');
 
-        $this->boat->forceFill(['durations' => [4, 6]])->save();
-        $this->assertSame([4], $this->quotes->durations($this->boat, $this->sunset), "the boat's own lengths narrow the experience's");
-        $this->assertSame([4, 6], $this->quotes->durations($this->boat, null));
+        $this->boat->forceFill(['durations' => [2, 4, 6]])->save();
+        $this->assertSame([4, 6], $this->quotes->durations($this->boat), 'the ticked lengths, never below the minimum');
+        $this->assertSame(6, $this->quote(['hours' => 6])->hours, 'a 6-hour sunset cruise: the experience has no length of its own');
 
-        $this->boat->forceFill(['durations' => [8]])->save();
-        $this->assertSame([3, 4], $this->quotes->durations($this->boat, $this->sunset), 'no overlap: the experience lengths stay');
-
-        $this->boat->forceFill(['durations' => null, 'min_hours' => 5])->save();
-        $this->assertSame([5], $this->quotes->durations($this->boat, $this->sunset));
+        $this->boat->forceFill(['durations' => null, 'min_hours' => 10])->save();
+        $this->assertSame([10], $this->quotes->durations($this->boat));
     }
 
-    public function test_package_fee_comes_from_the_boat_override_else_the_experience(): void
+    public function test_an_experience_is_free_and_its_suggested_extras_are_charged_only_when_picked(): void
     {
-        $proposal = Experience::factory()->create(['name' => 'Proposal', 'durations' => [3], 'package_fee_cents' => 29500]);
-        $this->boat->experiences()->attach($proposal);
-        $this->assertSame(['Proposal package', 29500], [$this->quote(['experience' => $proposal])->lines[2]->label, $this->amounts($this->quote(['experience' => $proposal]))['package']]);
+        $decor = Addon::factory()->create(['name' => 'Celebration décor', 'slug' => 'decor', 'price_cents' => 17500]);
+        $catering = Addon::factory()->perGuest(3500)->create(['name' => 'Catering', 'slug' => 'catering']);
+        $birthday = Experience::factory()->create(['name' => 'Birthdays']);
+        $birthday->extras()->attach([$decor->id => ['sort' => 0], $catering->id => ['sort' => 1]]);
+        $this->boat->experiences()->attach($birthday);
 
-        $this->boat->experiences()->updateExistingPivot($proposal->id, ['package_fee_override_cents' => 19500]);
-        $this->assertSame(19500, $this->amounts($this->quote(['experience' => $proposal]))['package']);
+        $plain = $this->quote(['experience' => $birthday->fresh(), 'guests' => 8]);
+        $this->assertSame(['charter', 'captain', 'cleaning'], array_keys(array_diff_key($this->amounts($plain), ['tax' => 0])), 'the experience and its extras add nothing until picked');
+        $this->assertSame($this->quote(['experience' => null, 'guests' => 8])->totalCents, $plain->totalCents, 'the same price as just the boat');
 
-        $this->boat->experiences()->updateExistingPivot($proposal->id, ['package_fee_override_cents' => 0]);
-        $this->assertArrayNotHasKey('package', $this->amounts($this->quote(['experience' => $proposal])), 'an override of $0: no package line');
+        $picked = $this->quote(['experience' => $birthday->fresh(), 'guests' => 8, 'addons' => [$catering]]);
+        $this->assertSame(['addon-catering' => 28000], array_intersect_key($this->amounts($picked), ['addon-catering' => 0, 'addon-decor' => 0]), 'only the extra the guest ticked');
+        $line = collect($picked->lines)->firstWhere('key', 'addon-catering');
+        $this->assertSame([BookingItemType::Addon, '$35 × 8 guests', $catering->id, Payee::Platform], [$line->type, $line->description, $line->addonId, $line->payee]);
+        $this->assertArrayNotHasKey('experience_extras', $picked->pricingSnapshot);
     }
 
     public function test_add_ons_flat_once_and_per_guest_times_the_guests(): void
@@ -192,15 +193,13 @@ class QuoteServiceTest extends TestCase
         $this->assertArrayNotHasKey('gratuity', $this->amounts($this->quote()), 'no gratuity: no line');
     }
 
-    public function test_a_trip_closer_than_the_balance_date_is_paid_in_full(): void
+    public function test_the_whole_price_is_paid_at_checkout(): void
     {
-        $soon = $this->quote(['startsAt' => QuoteRequest::localStart('2027-05-06', '18:00'), 'plan' => PaymentPlan::Deposit]);
-        $this->assertSame([false, PaymentPlan::Full, $soon->totalCents, 0, null], [$soon->depositAllowed, $soon->plan, $soon->dueNowCents, $soon->balanceCents, $soon->balanceDueAt]);
+        $quote = $this->quote(['gratuityPct' => 18]);
 
-        $full = $this->quote(['plan' => PaymentPlan::Full]);
-        $this->assertSame([true, PaymentPlan::Full, $full->totalCents, 0], [$full->depositAllowed, $full->plan, $full->dueNowCents, $full->balanceCents]);
-
-        $this->assertTrue($this->quote(['startsAt' => CarbonImmutable::now()->addDays(7)])->depositAllowed, 'exactly 7 days ahead: a deposit is still fine');
+        $this->assertArrayNotHasKey('deposit_cents', $quote->toArray(), 'D22: no deposit');
+        $this->assertArrayNotHasKey('balance_cents', $quote->toArray());
+        $this->assertSame($quote->totalCents, $quote->toArray()['total_cents']);
     }
 
     public function test_each_line_says_who_the_money_goes_to(): void
@@ -225,22 +224,23 @@ class QuoteServiceTest extends TestCase
     {
         $snapshot = $this->quote(['startsAt' => QuoteRequest::localStart('2027-06-05', '12:00'), 'gratuityPct' => 15, 'promo' => PromoTerms::fixed('SUNSET50', 5000)])->pricingSnapshot;
 
-        $this->assertSame([45000, true, 11500, 51800, null, 8500, 900, 15, 5000, 7, 'SUNSET50', 'house', 'platform'], [
+        $this->assertSame([45000, true, 11500, 51800, null, 8500, 900, 15, 'SUNSET50', 'house', 'platform'], [
             $snapshot['hourly_rate_cents'], $snapshot['weekend'], $snapshot['weekend_multiplier_bp'], $snapshot['rate_cents'], $snapshot['fixed_price_cents'],
-            $snapshot['captain_rate_cents'], $snapshot['tax_rate_bp'], $snapshot['gratuity_pct'], $snapshot['deposit_bp'], $snapshot['balance_due_days'],
+            $snapshot['captain_rate_cents'], $snapshot['tax_rate_bp'], $snapshot['gratuity_pct'],
             $snapshot['promo']['code'], $snapshot['ownership'], $snapshot['captain_source'],
         ]);
+        $this->assertArrayNotHasKey('deposit_bp', $snapshot);
         $this->assertSame(Payee::Captain, collect($this->quote(['gratuityPct' => 15])->items())->firstWhere('type', BookingItemType::Gratuity)->payee);
     }
 
     public function test_choices_that_dont_fit_the_boat_are_refused_on_their_field(): void
     {
-        $other = Experience::factory()->create(['durations' => [3]]);
+        $other = Experience::factory()->create();
         $hidden = Addon::factory()->create(['is_active' => false]);
         $gone = Addon::factory()->create();
         $gone->delete();
 
-        $this->assertRefused('hours', ['hours' => 2], 'Choose one of the trip lengths offered: 3, 4 hours.');
+        $this->assertRefused('hours', ['hours' => 2], 'Choose one of the trip lengths offered: 3, 4, 5, 6, 8 hours.');
         $this->assertRefused('guests', ['guests' => 14], 'This boat takes 1 to 13 guests.');
         $this->assertRefused('guests', ['guests' => 0]);
         $this->assertRefused('experience', ['experience' => $other], "This boat doesn't offer that experience.");

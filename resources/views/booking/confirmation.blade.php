@@ -24,7 +24,7 @@
         'domain' => $business['domain'],
         'start' => $start->format('Ymd\THis'),
         'end' => $end->format('Ymd\THis'),
-        'summary' => $experience->name.' on '.$yacht->title,
+        'summary' => ($experience?->name ?? 'Private charter').' on '.$yacht->title,
         'location' => $harbor?->name.', Chicago, IL',
         'description' => 'Booking '.$c['ref'].' · '.$selection->guests.' guests · Arrive 20 minutes early. Questions: '.$business['phone'],
     ];
@@ -55,7 +55,7 @@
                     <div class="flex flex-col gap-5 p-6 sm:flex-row sm:items-center md:p-8">
                         <img src="{{ asset($yacht->cover) }}" alt="{{ $yacht->title }}" class="h-28 w-full rounded-2xl object-cover sm:w-40">
                         <div class="flex-1">
-                            <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-brass-600">{{ $experience->name }}</p>
+                            <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-brass-600">{{ $experience?->name ?? 'Private charter' }}</p>
                             <h2 class="mt-1 font-display text-3xl text-navy-950">{{ $yacht->title }}</h2>
                             <p class="mt-1 text-sm text-navy-500">{{ $yacht->length_ft }} ft {{ $yacht->category }} · {{ $yacht->crew_count > 1 ? 'Captain + crew' : 'Licensed captain' }} included</p>
                         </div>
@@ -111,10 +111,7 @@
                     <h3 class="text-lg font-extrabold text-navy-950">Payment summary</h3>
                     <dl class="mt-4 space-y-2.5 text-sm">
                         <div class="flex justify-between"><dt class="text-navy-500">Booking total</dt><dd class="font-bold text-navy-950">{{ $whole($c['totals']['total']) }}</dd></div>
-                        <div class="flex justify-between"><dt class="text-navy-500">Paid today</dt><dd class="font-bold text-emerald-700">{{ $whole($c['totals']['paid']) }}</dd></div>
-                        @if ($c['totals']['balance'] > 0)
-                            <div class="flex justify-between"><dt class="text-navy-500">Balance due{{ $c['totals']['balance_date'] ? ' '.\Carbon\CarbonImmutable::createFromFormat('!Y-m-d', $c['totals']['balance_date'])->format('M j') : '' }}</dt><dd class="font-bold text-navy-950">{{ $whole($c['totals']['balance']) }}</dd></div>
-                        @endif
+                        <div class="flex justify-between"><dt class="text-navy-500">Paid in full today</dt><dd class="font-bold text-emerald-700">{{ $whole($c['totals']['paid']) }}</dd></div>
                         <div class="flex justify-between border-t border-navy-100 pt-3"><dt class="text-navy-500">Card</dt><dd class="font-semibold text-navy-700">{{ $c['payment']['brand'] }} •••• {{ $c['payment']['last4'] }}</dd></div>
                         <div class="flex justify-between"><dt class="text-navy-500">Gratuity</dt><dd class="font-semibold text-navy-700">{{ $c['payment']['gratuity'] }}%</dd></div>
                         @if ($c['payment']['promo'])

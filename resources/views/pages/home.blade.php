@@ -27,9 +27,9 @@
         ['icon' => 'zap', 'title' => 'Instant booking', 'text' => 'Live calendar, real time slots, and instant confirmation in under 3 minutes.'],
     ];
     $steps = [
-        ['title' => 'Choose your experience', 'text' => 'Sunset, Playpen, fireworks, river tour or a private charter — then pick the yacht that fits your group.'],
-        ['title' => 'Pick date, time & duration', 'text' => 'See live availability on the calendar and choose a departure time that works for you.'],
-        ['title' => 'Check out & set sail', 'text' => 'Secure your date with a 50% deposit. Your captain meets you at the dock — just bring the crew.'],
+        ['title' => 'Find your yacht', 'text' => 'Search the fleet by date and group size. Add a Chicago experience like sunset, the Playpen or fireworks if you like.'],
+        ['title' => 'Pick date, time & duration', 'text' => 'Right on the yacht page: live availability on the calendar, then a departure time that works for you.'],
+        ['title' => 'Check out & set sail', 'text' => 'Pay securely at checkout and you are booked at once. Your captain meets you at the dock — just bring the crew.'],
     ];
     $guestOptions = ['2' => '2 guests', '4' => '3–4 guests', '6' => '5–6 guests', '10' => '7–10 guests', '13' => '11–13 guests', '30' => '14–30 guests', '49' => '31–49 guests', '80' => '50–80 guests'];
     $tabOn = 'rounded-full bg-navy-950 px-5 py-2.5 text-sm font-bold text-white';
@@ -56,7 +56,7 @@
                 Skyline sunsets, Playpen swim parties, Navy Pier fireworks and river architecture cruises. Every package includes a licensed captain — for groups of 2 to 80, seven days a week.
             </p>
             <div class="reveal mt-9 flex flex-col items-center gap-3 sm:flex-row" data-delay="3">
-                <a href="{{ route('booking.create') }}" class="inline-flex items-center gap-2 rounded-full bg-brass-400 px-8 py-4 text-sm font-bold text-navy-950 shadow-glow transition hover:-translate-y-0.5 hover:bg-brass-300">Book Your Yacht <i data-lucide="arrow-right" class="h-4 w-4"></i></a>
+                <a href="{{ route('yachts.index') }}" class="inline-flex items-center gap-2 rounded-full bg-brass-400 px-8 py-4 text-sm font-bold text-navy-950 shadow-glow transition hover:-translate-y-0.5 hover:bg-brass-300">Book Your Yacht <i data-lucide="arrow-right" class="h-4 w-4"></i></a>
                 <a href="{{ route('pricing') }}" class="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/5 px-8 py-4 text-sm font-bold text-white backdrop-blur transition hover:bg-white hover:text-navy-950">See Pricing</a>
                 <a href="tel:{{ $business['phone_href'] }}" class="inline-flex items-center gap-2 px-4 py-4 text-sm font-bold text-white/85 hover:text-white"><i data-lucide="phone" class="h-4 w-4 text-brass-300"></i>{{ $business['phone'] }}</a>
             </div>
@@ -64,7 +64,7 @@
 
         {{-- Quick booking bar: a plain GET form to /book (works without JS) --}}
         <div class="container relative pb-8 md:pb-12">
-            <form action="{{ route('booking.create') }}" method="get" data-quick-book class="reveal mx-auto grid max-w-5xl gap-2 rounded-3xl border border-white/15 bg-white/10 p-2 shadow-2xl backdrop-blur-xl md:grid-cols-[1.3fr_1fr_0.8fr_auto]" data-delay="4">
+            <form action="{{ route('yachts.index') }}" method="get" data-quick-book class="reveal mx-auto grid max-w-5xl gap-2 rounded-3xl border border-white/15 bg-white/10 p-2 shadow-2xl backdrop-blur-xl md:grid-cols-[1.3fr_1fr_0.8fr_auto]" data-delay="4">
                 <label class="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 text-left">
                     <i data-lucide="compass" class="h-5 w-5 shrink-0 text-brass-500"></i>
                     <span class="flex-1">
@@ -183,7 +183,7 @@
 
             <div class="mt-16 grid gap-6 md:grid-cols-3">
                 @foreach ($destinations as $destination)
-                    <a href="{{ route('booking.create', ['experience' => $destination['slug']]) }}" @class(['reveal group relative block aspect-[3/4] overflow-hidden rounded-3xl', 'md:mt-12' => $loop->index === 1]) @if ($loop->index) data-delay="{{ $loop->index }}" @endif>
+                    <a href="{{ route('yachts.index', ['experience' => $destination['slug']]) }}" @class(['reveal group relative block aspect-[3/4] overflow-hidden rounded-3xl', 'md:mt-12' => $loop->index === 1]) @if ($loop->index) data-delay="{{ $loop->index }}" @endif>
                         <img src="{{ asset($destination['image']) }}" alt="{{ $destination['alt'] }}" loading="lazy" class="absolute inset-0 h-full w-full object-cover transition duration-[1.4s] group-hover:scale-110">
                         <div class="absolute inset-0 bg-gradient-to-t from-navy-950 via-navy-950/20 to-transparent"></div>
                         <span class="absolute left-5 top-5 rounded-full bg-white/15 px-3 py-1 text-[11px] font-bold uppercase tracking-wider backdrop-blur">{{ $destination['label'] }}</span>
@@ -207,7 +207,7 @@
                 </div>
                 <div class="divide-y divide-white/10 border-y border-white/10">
                     @foreach ($occasions as $occasion)
-                        <a href="{{ route('booking.create', ['experience' => $occasion['slug']]) }}" class="reveal group flex items-center gap-5 py-6">
+                        <a href="{{ route('yachts.index', ['experience' => $occasion['slug']]) }}" class="reveal group flex items-center gap-5 py-6">
                             <img src="{{ asset($occasion['image']) }}" alt="" loading="lazy" class="h-20 w-20 shrink-0 rounded-2xl object-cover md:h-24 md:w-28">
                             <div class="flex-1">
                                 <h4 class="font-display text-2xl transition group-hover:text-brass-300">{{ $experienceNames[$occasion['slug']] }}</h4>
@@ -276,7 +276,7 @@
                 @endforeach
             </ol>
             <div class="reveal mt-14 text-center">
-                <x-button :href="route('booking.create')" variant="dark" size="xl" icon="arrow-right">Start Booking</x-button>
+                <x-button :href="route('yachts.index')" variant="dark" size="xl" icon="arrow-right">Start Booking</x-button>
             </div>
         </div>
     </section>
@@ -377,7 +377,7 @@
             <h2 class="mx-auto mt-4 max-w-3xl font-display text-4xl leading-tight md:text-6xl md:leading-none">Ready to see Chicago <em class="text-brass-300">from the water?</em></h2>
             <p class="mx-auto mt-5 max-w-xl text-white/70">Pick your yacht, choose your experience and lock in your date in under three minutes.</p>
             <div class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <a href="{{ route('booking.create') }}" class="inline-flex items-center gap-2 rounded-full bg-brass-400 px-8 py-4 text-sm font-bold text-navy-950 shadow-glow transition hover:-translate-y-0.5 hover:bg-brass-300">Book Now <i data-lucide="arrow-right" class="h-4 w-4"></i></a>
+                <a href="{{ route('yachts.index') }}" class="inline-flex items-center gap-2 rounded-full bg-brass-400 px-8 py-4 text-sm font-bold text-navy-950 shadow-glow transition hover:-translate-y-0.5 hover:bg-brass-300">Book Now <i data-lucide="arrow-right" class="h-4 w-4"></i></a>
                 <a href="{{ route('yachts.index') }}" class="inline-flex items-center gap-2 rounded-full border border-white/30 px-8 py-4 text-sm font-bold text-white transition hover:bg-white hover:text-navy-950">Browse Yachts</a>
             </div>
         </div>

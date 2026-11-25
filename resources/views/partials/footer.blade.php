@@ -47,7 +47,7 @@
                         @foreach (config('site.nav') as $item)
                             <li><a href="{{ route($item['route']) }}" class="hover:text-white">{{ $item['label'] }}</a></li>
                         @endforeach
-                        <li><a href="{{ route('booking.create') }}" class="hover:text-white">Book Now</a></li>
+                        <li><a href="{{ route('yachts.index') }}" class="hover:text-white">Book Now</a></li>
                         <li><a href="{{ route('owner.dashboard') }}" class="hover:text-white">Owner Dashboard</a></li>
                     </ul>
                 </div>
@@ -55,7 +55,7 @@
                     <p class="text-xs font-bold uppercase tracking-[0.25em] text-brass-300">Experiences</p>
                     <ul class="mt-5 space-y-3 text-sm text-white/65">
                         @foreach ($footerExperiences as $experience)
-                            <li><a href="{{ route('booking.create', ['experience' => $experience->slug]) }}" class="hover:text-white">{{ $experience->name }}</a></li>
+                            <li><a href="{{ route('yachts.index', ['experience' => $experience->slug]) }}" class="hover:text-white">{{ $experience->name }}</a></li>
                         @endforeach
                     </ul>
                 </div>

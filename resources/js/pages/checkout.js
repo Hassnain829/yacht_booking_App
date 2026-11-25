@@ -6,8 +6,8 @@ import { quote } from '../lib/demo-quote.js';
 import { setFieldError } from '../ui/field-errors.js';
 
 /**
- * Checkout page: live totals (gratuity / payment plan / promo), card field formatting and
- * client-side checks, hold timer. The SERVER recalculates everything on submit (CheckoutController@store).
+ * Checkout page: live totals (optional add-ons, gratuity, promo; always paid in full, D22), card field formatting
+ * and client-side checks, hold timer. The SERVER recalculates everything on submit (CheckoutController@store).
  *
  * Card numbers never leave the browser: the card inputs have no name. Only brand + last 4 are posted.
  * Phase 5: Stripe Payment Element replaces the card inputs.
@@ -53,6 +53,8 @@ export default function checkout() {
         zip: form.querySelector('[data-card="zip"]'),
     };
     let promo = null; // { code, type, value, label } — confirmed by the server
+    const addons = Object.fromEntries(data.addons.map((addon) => [addon.slug, addon]));
+    const chosenAddons = () => Array.from(form.querySelectorAll('input[name="addons[]"]:checked')).map((box) => addons[box.value]).filter(Boolean);
 
     /* ---------------- Totals ---------------- */
     const currentQuote = () =>
@@ -60,10 +62,9 @@ export default function checkout() {
             date: data.selection.date,
             hours: data.selection.hours,
             guests: data.selection.guests,
-            addons: data.addons,
+            addons: chosenAddons(),
             promo: promo?.code,
             gratuity: Number(F.gratuity.value),
-            plan: F.plan.value,
         });
 
     function renderTotals() {
@@ -74,16 +75,6 @@ export default function checkout() {
             const pct = Number(el.dataset.tipAmount);
             if (pct > 0) el.textContent = money(Math.round((base * pct) / 100));
         }
-        const deposit = quote(data.yacht, data.experience, { ...data.pricing, promos: promo ? [promo] : [] }, {
-            date: data.selection.date, hours: data.selection.hours, guests: data.selection.guests, addons: data.addons, promo: promo?.code, gratuity: Number(F.gratuity.value), plan: 'deposit',
-        });
-        form.querySelector('[data-plan-price="deposit"]').textContent = money(deposit.deposit);
-        form.querySelector('[data-plan-price="full"]').textContent = money(deposit.total);
-        if (data.balanceDate) {
-            const date = new Date(`${data.balanceDate}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            form.querySelector('[data-plan-sub="deposit"]').textContent = `${money(deposit.total - deposit.deposit)} charged automatically on ${date}`;
-        }
-
         setHtml(
             document.getElementById('checkout-lines'),
             html`${q.lines.map((l) => html`<div class="flex justify-between gap-4"><dt class="text-navy-600">${l.label}<span class="block text-[11px] text-navy-400">${l.sub}</span></dt><dd class="font-semibold text-navy-900">${money(l.amount)}</dd></div>`)}
@@ -92,11 +83,8 @@ export default function checkout() {
                 <div class="flex justify-between gap-4"><dt class="text-navy-600">Crew gratuity (${q.gratuityPct}%)</dt><dd class="font-semibold text-navy-900">${money(q.gratuity)}</dd></div>`,
         );
         document.getElementById('checkout-total').textContent = money(q.total);
-        document.getElementById('checkout-due').textContent = money(q.dueNow);
-        const balance = document.getElementById('checkout-balance');
-        balance.classList.toggle('hidden', !(q.balance > 0 && data.balanceDate));
-        balance.querySelector('[data-balance-amount]').textContent = money(q.balance);
-        document.getElementById('pay-label').textContent = `Pay ${money(q.dueNow)} & confirm booking`;
+        document.getElementById('checkout-due').textContent = money(q.total);
+        document.getElementById('pay-label').textContent = `Pay ${money(q.total)} & confirm booking`;
     }
 
     /* ---------------- Promo (checked by the server, one code at a time) ---------------- */
@@ -196,7 +184,7 @@ export default function checkout() {
 
     /* ---------------- Submit ---------------- */
     form.addEventListener('change', (event) => {
-        if (event.target.name === 'gratuity' || event.target.name === 'plan') renderTotals();
+        if (event.target.name === 'gratuity' || event.target.name === 'addons[]') renderTotals();
     });
 
     form.addEventListener('submit', (event) => {

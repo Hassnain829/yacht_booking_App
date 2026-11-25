@@ -8,7 +8,6 @@ use App\Enums\BoatStatus;
 use App\Models\Amenity;
 use App\Models\Boat;
 use App\Models\BoatBlock;
-use App\Models\Experience;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -144,9 +143,9 @@ class BoatService
             [$before['amenities'], $after['amenities']] = [$names($oldAmenities), $names($newAmenities)];
         }
 
-        $oldOffers = $boat->experiences()->get()->mapWithKeys(fn (Experience $e) => [$e->slug => $e->pivot->package_fee_override_cents])->sortKeys()->all();
-        $boat->experiences()->sync(collect($relations['experiences'])->map(fn (?int $fee) => ['package_fee_override_cents' => $fee, 'is_active' => true])->all());
-        $newOffers = $boat->experiences()->get()->mapWithKeys(fn (Experience $e) => [$e->slug => $e->pivot->package_fee_override_cents])->sortKeys()->all();
+        $oldOffers = $boat->experiences()->pluck('slug')->sort()->values()->all();
+        $boat->experiences()->sync(collect($relations['experiences'])->mapWithKeys(fn (int $id) => [$id => ['is_active' => true]])->all());
+        $newOffers = $boat->experiences()->pluck('slug')->sort()->values()->all();
         if ($oldOffers !== $newOffers) {
             [$before['experiences'], $after['experiences']] = [$oldOffers, $newOffers];
         }

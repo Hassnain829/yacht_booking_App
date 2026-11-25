@@ -47,30 +47,23 @@ class DemoCustomer
     /** @return Collection<int, Fluent> upcoming first (soonest), then past (newest) */
     public function trips(): Collection
     {
-        $pricing = $this->catalog->pricing();
+
         $window = config('demo_owner.money.complaint_window_hours');
 
-        $trips = collect($this->config['trips'])->map(function (array $t) use ($pricing, $window) {
+        $trips = collect($this->config['trips'])->map(function (array $t) use ($window) {
             $yacht = $this->catalog->yacht($t['yacht']);
             $experience = $this->catalog->experience($t['experience']);
             $start = $this->now->startOfDay()->addDays($t['day'])->setTimeFromTimeString($t['time']);
             $end = $start->addHours($t['hours']);
             $addons = $this->catalog->addons()->whereIn('slug', $t['addons'])->values()->all();
-            $balanceDue = $start->startOfDay()->subDays($pricing['balance_due_days']);
-            $plan = $t['plan'] === 'deposit' && $balanceDue->gt($this->now) ? 'deposit' : 'full';
             $quote = DemoQuote::fromConfig()->quote($yacht, $experience, [
                 'date' => $start->toDateString(),
                 'hours' => $t['hours'],
                 'guests' => $t['guests'],
                 'addons' => $addons,
                 'gratuity' => $t['gratuity'],
-                'plan' => $plan,
             ]);
-            $paid = match ($t['status']) {
-                'completed' => $quote['total'],
-                'cancelled' => $quote['deposit'], // the deposit, refunded in full (cancelled inside the free window)
-                default => $quote['dueNow'],
-            };
+            $paid = $quote['total']; // paid in full at checkout (D22); a cancelled trip was refunded in full
             $captain = $t['captain'] ? new Fluent($this->config['captains'][$t['captain']]) : null;
             $isUpcoming = $t['status'] === 'confirmed' && $start->gt($this->now);
             $complaintUntil = $end->addHours($window);
@@ -85,8 +78,8 @@ class DemoCustomer
                 'quote' => $quote,
                 'paid_cents' => $paid,
                 'refunded_cents' => $t['status'] === 'cancelled' ? $paid : 0,
-                'balance_cents' => $t['status'] === 'confirmed' ? $quote['total'] - $paid : 0,
-                'balance_due' => $plan === 'deposit' ? $balanceDue : null,
+                'balance_cents' => 0,
+                'balance_due' => null,
                 'captain' => $captain,
                 'is_upcoming' => $isUpcoming,
                 'status_label' => self::STATUSES[$t['status']]['label'],

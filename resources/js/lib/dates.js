@@ -83,3 +83,38 @@ export function formatDateTimeInChicago(isoTimestamp, options = { dateStyle: 'me
     if (Number.isNaN(date.getTime())) throw new RangeError(`Invalid timestamp: ${isoTimestamp}`);
     return new Intl.DateTimeFormat('en-US', { ...options, timeZone: BUSINESS_TIMEZONE }).format(date);
 }
+
+const MONTH = /^(\d{4})-(\d{2})$/;
+
+/** '2027-06-04' → '2027-06' */
+export function monthOf(iso) {
+    parseIsoDate(iso);
+    return iso.slice(0, 7);
+}
+
+/** '2027-12' + 1 → '2028-01' (any whole number of months, also negative). */
+export function addMonths(month, count) {
+    const match = MONTH.exec(String(month ?? ''));
+    if (!match) throw new RangeError(`Invalid month: ${month}`);
+    const index = Number(match[1]) * 12 + Number(match[2]) - 1 + count;
+    return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`;
+}
+
+/** '2027-06' → "June 2027" */
+export function formatMonth(month) {
+    return parseIsoDate(`${addMonths(month, 0)}-01`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+/**
+ * A month as calendar weeks (Sunday first): '2027-06' → [[null, null, '2027-06-01', …], …, ['2027-06-27', …, null]].
+ * Days outside the month are null, so every week has 7 cells.
+ */
+export function monthGrid(month) {
+    const first = parseIsoDate(`${addMonths(month, 0)}-01`);
+    const cells = Array(first.getDay()).fill(null);
+    for (let day = first; day.getMonth() === first.getMonth(); day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1)) {
+        cells.push(toIsoDate(day));
+    }
+    while (cells.length % 7 !== 0) cells.push(null);
+    return Array.from({ length: cells.length / 7 }, (_, week) => cells.slice(week * 7, week * 7 + 7));
+}

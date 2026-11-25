@@ -16,7 +16,7 @@
     $chosenDurations = array_map('intval', $submitted ? (array) old('durations', []) : ($boat->durations ?? []));
     $notAllowed = $submitted ? (array) old('not_allowed', []) : ($boat->rules['not_allowed'] ?? []);
     $chosenAmenities = $submitted ? (array) old('amenities', []) : ($editing ? $boat->amenities->pluck('ulid')->all() : []);
-    $offers = $editing ? $boat->experiences->mapWithKeys(fn ($e) => [$e->slug => $e->pivot->package_fee_override_cents])->all() : [];
+    $offers = $editing ? $boat->experiences->pluck('slug')->all() : [];
     $rules = $editing ? $boat->availabilityRules->keyBy('weekday') : collect();
     $markup = $boat->weekend_multiplier_bp === null ? '' : (string) ($boat->weekend_multiplier_bp - 10000);
     $days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -143,7 +143,7 @@
                         </div>
                         <fieldset>
                             <legend class="text-sm font-bold text-navy-800">Trip lengths this boat offers</legend>
-                            <p class="mt-1 text-xs text-navy-500">None ticked: the lengths of each experience. A fixed price replaces hourly × hours for that length (optional).</p>
+                            <p class="mt-1 text-xs text-navy-500">Guests book the boat by the hour, in one of these lengths (experiences have none of their own). None ticked: every length from the minimum up to 8 hours. A fixed price replaces hourly × hours for that length (optional).</p>
                             <div class="mt-3 grid gap-2 sm:grid-cols-3">
                                 @foreach (BoatOptions::DURATIONS as $hours)
                                     <div class="flex items-center gap-2 rounded-xl p-2 ring-1 ring-navy-100">
@@ -193,12 +193,11 @@
                     @if ($experiences->isEmpty())
                         <p class="text-sm text-navy-500">No experiences yet. <a href="{{ route('admin.experiences.create') }}" class="font-bold text-navy-950 underline">Add one</a> first.</p>
                     @else
-                        <p class="mb-4 text-xs text-navy-500">Leave the fee empty to use the experience's own package fee.</p>
+                        <p class="mb-4 text-xs text-navy-500">Experiences are free for guests and use the boat's own trip lengths; each departs in its own window (set on the experience), inside this boat's start times.</p>
                         <div class="divide-y divide-navy-100">
                             @foreach ($experiences as $experience)
                                 @php
-                                    $offered = $submitted ? (bool) old('experiences.'.$experience->slug.'.offered') : array_key_exists($experience->slug, $offers);
-                                    $fee = old('experiences.'.$experience->slug.'.fee', Money::input($offers[$experience->slug] ?? null));
+                                    $offered = $submitted ? (bool) old('experiences.'.$experience->slug.'.offered') : in_array($experience->slug, $offers, true);
                                 @endphp
                                 <div class="flex flex-wrap items-center gap-3 py-2.5">
                                     <label class="flex min-w-0 flex-1 items-center gap-3 text-sm font-semibold text-navy-900">
@@ -207,9 +206,7 @@
                                         <span class="truncate">{{ $experience->name }}</span>
                                         @unless ($experience->is_active)<x-admin.pill tone="muted">Hidden</x-admin.pill>@endunless
                                     </label>
-                                    <span class="text-xs text-navy-400">{{ $experience->package_fee_cents ? money($experience->package_fee_cents) : 'No fee' }}</span>
-                                    <label for="fee-{{ $experience->slug }}" class="sr-only">Package fee for {{ $experience->name }} on this boat (USD)</label>
-                                    <input id="fee-{{ $experience->slug }}" name="experiences[{{ $experience->slug }}][fee]" inputmode="decimal" maxlength="10" placeholder="Fee $" value="{{ $fee }}" class="w-24 rounded-lg border border-navy-200 px-2 py-1.5 text-sm focus:border-navy-950 focus:outline-hidden">
+                                    <span class="text-xs text-navy-400">Departs {{ App\Support\StartTimes::summary($experience->time_slots ?? []) ?: '—' }}</span>
                                 </div>
                             @endforeach
                         </div>

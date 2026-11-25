@@ -39,15 +39,13 @@ class BookingRecordsTest extends TestCase
         $taking = [
             Booking::factory()->for($boat)->create(), // confirmed
             Booking::factory()->for($boat)->hold()->create(),
-            Booking::factory()->for($boat)->requested()->create(),
             Booking::factory()->for($boat)->create(['status' => BookingStatus::Completed]),
+            Booking::factory()->for($boat)->create(['status' => BookingStatus::NoShow]),
         ];
         $free = [
             Booking::factory()->for($boat)->hold(CarbonImmutable::now()->subSecond())->create(),
-            Booking::factory()->for($boat)->requested(CarbonImmutable::now()->subMinute())->create(),
             Booking::factory()->for($boat)->cancelled()->create(),
             Booking::factory()->for($boat)->create(['status' => BookingStatus::Expired]),
-            Booking::factory()->for($boat)->create(['status' => BookingStatus::Declined]),
         ];
 
         $this->assertEqualsCanonicalizing(collect($taking)->pluck('id')->all(), $boat->bookings()->takingTime()->pluck('id')->all());

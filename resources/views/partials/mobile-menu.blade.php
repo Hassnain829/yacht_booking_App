@@ -50,7 +50,7 @@
         </div>
 
         <div class="mt-auto space-y-3 pt-8">
-            <x-button :href="route('booking.create')" icon="arrow-right" class="w-full">Book Now</x-button>
+            <x-button :href="route('yachts.index')" icon="arrow-right" class="w-full">Book Now</x-button>
             <a href="tel:{{ $business['phone_href'] }}" class="flex w-full items-center justify-center gap-2 rounded-full border border-white/20 py-4 text-sm font-bold">
                 <i data-lucide="phone" class="h-4 w-4"></i>{{ $business['phone'] }}
             </a>

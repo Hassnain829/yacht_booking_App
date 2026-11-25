@@ -11,6 +11,7 @@ use App\Models\Experience;
 use App\Models\Harbor;
 use App\Models\Setting;
 use App\Services\SettingsService;
+use App\Support\StartTimes;
 use Illuminate\Database\Seeder;
 
 /**
@@ -84,8 +85,6 @@ class CatalogSeeder extends Seeder
         $defaults = [
             'booking' => [
                 'tax_rate_bp' => $pricing['tax_rate_bp'],
-                'deposit_bp' => $pricing['deposit_bp'],
-                'balance_due_days' => $pricing['balance_due_days'],
                 'weekend_multiplier_bp' => $pricing['weekend_multiplier_bp'],
                 'gratuity_options' => $pricing['gratuity_options'],
                 'default_gratuity' => $pricing['default_gratuity'],
@@ -152,10 +151,8 @@ class CatalogSeeder extends Seeder
                 'tagline' => $experience['tagline'],
                 'description' => $experience['description'],
                 'includes' => $experience['includes'],
-                'durations' => $experience['durations'],
-                'time_slots' => $experience['time_slots'],
+                'time_slots' => StartTimes::between(...$experience['departs']), // its departure window
                 'allowed_weekdays' => $experience['allowed_weekdays'],
-                'package_fee_cents' => $experience['package_fee_cents'],
                 'is_active' => true,
                 'sort' => $sort,
             ]);

@@ -8,8 +8,6 @@
     $groups = [
         'Booking & pricing' => [
             ['tax_rate', 'Sales tax', Money::percentInput($settings['tax_rate_bp']), '%', 0, 25, '0.01', 'Added to every booking.'],
-            ['deposit', 'Deposit', intdiv($settings['deposit_bp'], 100), '%', 10, 100, '1', 'Charged at checkout when the trip is far enough away.'],
-            ['balance_due_days', 'Balance charged', $settings['balance_due_days'], 'days', 1, 60, '1', 'Before the trip. Closer trips are paid in full.'],
             ['weekend_markup', 'Weekend rate (Fri–Sun)', Money::percentInput($settings['weekend_multiplier_bp'] - 10000), '%', 0, 100, '0.01', 'Added to hourly rates unless a boat sets its own.'],
             ['hold_minutes', 'Checkout hold', $settings['hold_minutes'], 'min', 5, 60, '1', 'How long a slot is held while the guest pays.'],
         ],

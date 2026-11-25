@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Enums\BookingStatus;
-use App\Enums\PaymentPlan;
 use App\Enums\PaymentStatus;
 use Carbon\CarbonImmutable;
 use Database\Factories\BookingFactory;
@@ -93,8 +92,8 @@ class Booking extends Model
     }
 
     /**
-     * Bookings that take the boat's time now: confirmed or past trips, and holds or requests that haven't run out.
-     * Cancelled, expired and declined ones free it.
+     * Bookings that take the boat's time now: confirmed or past trips, and holds that haven't run out.
+     * Cancelled and expired ones free it.
      *
      * @param  Builder<self>  $query
      */
@@ -124,12 +123,10 @@ class Booking extends Model
         return [
             'status' => BookingStatus::class,
             'payment_status' => PaymentStatus::class,
-            'payment_plan' => PaymentPlan::class,
             'starts_at' => 'immutable_datetime',
             'ends_at' => 'immutable_datetime',
             'hours' => 'integer',
             'guests' => 'integer',
-            'balance_due_at' => 'immutable_datetime',
             'hold_expires_at' => 'immutable_datetime',
             'confirmed_at' => 'immutable_datetime',
             'completed_at' => 'immutable_datetime',

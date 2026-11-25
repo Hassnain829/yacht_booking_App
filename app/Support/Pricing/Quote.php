@@ -2,13 +2,10 @@
 
 namespace App\Support\Pricing;
 
-use App\Enums\PaymentPlan;
-use Carbon\CarbonImmutable;
-
 /**
- * A price worked out by QuoteService (PLAN §7.1). All money in cents.
+ * A price worked out by QuoteService (PLAN §7.1). All money in cents. The whole total is paid at checkout (D22).
  *
- * `lines` are the subtotal lines (charter, captain, package, add-ons, fuel & cleaning); `adjustments` are the
+ * `lines` are the subtotal lines (charter, captain, the experience's paid extras, add-ons, fuel & cleaning); `adjustments` are the
  * discount, tax and gratuity lines that follow them. `items()` gives both, in booking_items order.
  * `pricingSnapshot` keeps the rates used, so a booking never changes when prices change, and a trip extension
  * (Phase 8) is priced with the rates of the booking.
@@ -38,12 +35,6 @@ final readonly class Quote
         public int $gratuityPct,
         public int $gratuityCents,
         public int $totalCents,
-        public PaymentPlan $plan,
-        public bool $depositAllowed,
-        public int $depositCents,
-        public int $dueNowCents,
-        public int $balanceCents,
-        public ?CarbonImmutable $balanceDueAt,
         public array $pricingSnapshot,
     ) {}
 
@@ -58,7 +49,7 @@ final readonly class Quote
     }
 
     /**
-     * The price as the booking wizard and checkout show it (4.3 wraps it in an API Resource).
+     * The price as the booking card and checkout show it (wrapped in App\Http\Resources\QuoteResource).
      *
      * @return array<string, mixed>
      */
@@ -80,12 +71,6 @@ final readonly class Quote
             'gratuity_pct' => $this->gratuityPct,
             'gratuity_cents' => $this->gratuityCents,
             'total_cents' => $this->totalCents,
-            'plan' => $this->plan->value,
-            'deposit_allowed' => $this->depositAllowed,
-            'deposit_cents' => $this->depositCents,
-            'due_now_cents' => $this->dueNowCents,
-            'balance_cents' => $this->balanceCents,
-            'balance_due_at' => $this->balanceDueAt?->toIso8601ZuluString(),
         ];
     }
 }

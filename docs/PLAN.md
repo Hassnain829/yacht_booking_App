@@ -66,8 +66,8 @@ A secure, role-based yacht charter marketplace for Chicago:
 | D18 | Optional features (reviews, waiver, deposit hold, messaging, SMS, gift cards, staff roles) come **later**. *(The captain portal moved into v1 on 2026-11-23, D19.)* |
 | D19 | **Captain portal** (user decision 2026-11-23). Captains have a login with the `captain` role and a dashboard at `/captain`: trip offers (accept / decline), their trips, acknowledging an assignment, their availability, profile + license documents, and pay. A captain account is created by **applying** (admin approval needed) or by an **admin invite**. Built in Phase 8 (§7.8). |
 | D20 | **Trip extensions** (user decision 2026-11-23). During the trip, until a cut-off before the end, the customer can **add time and pay for it** as a separate payment. It is allowed only if the boat **and** the captain are free for the extra time. The captain, the owner (owner boats) and the admin are told when it is paid. Built in Phase 8 (§7.9). |
-| D21 | **Boatsetter-style renter flow, our design** (user decision 2026-11-25). For Chicago only. Booking starts on the boat page card (date, duration, start time, optional experience, captain choice, guests), then one checkout page. The 4-step `/book` wizard is retired. Experiences become optional and work like categories. Every fee line is shown. Fleet filters, no map. Our design stays, only adjusted for the flow. Research: [docs/research/boatsetter-renter-flow.md](research/boatsetter-renter-flow.md). |
-| D22 | **Full payment only** (user decision 2026-11-25). No deposit and no balance charge. Instant book is charged at checkout. A request is authorised at checkout and captured when the owner accepts. Trip Assurance and security-deposit holds come later (D18). |
+| D21 | **Boatsetter-style renter flow, our design** (user decision 2026-11-25). For Chicago only. Booking starts on the boat page card (date, duration, start time, optional experience, captain choice, guests), then one checkout page. The 4-step `/book` wizard is retired. Experiences become optional and work like categories. Every fee line is shown. Fleet filters, no map. Our design stays, only adjusted for the flow. Research: [docs/research/boatsetter-renter-flow.md](research/boatsetter-renter-flow.md). **Experiences are free** (user, 2026-11-25, as on Boatsetter): each keeps its own start times (sunset ≠ fireworks); the admin can add **paid extras** to an experience (décor, a photographer, any facility; add-ons priced in Admin → Add-ons). Built in 4.3. **Changed the same day after the user's QA:** an experience has **no trip length of its own** (the guest books the boat by the hour and gets the experience for that time); it **departs inside a window** (sunset in the evening, fireworks at night) and the guest picks any of the boat's start times inside it, told plainly when a time or day doesn't fit; its extras are **optional add-ons suggested at checkout**, charged only when ticked. |
+| D22 | **Direct checkout, full payment only** (user decisions 2026-11-25). No deposit, no balance charge and **no request to book** (owner boats too): every booking is a hold paid in full at checkout, then confirmed. Trip Assurance and security-deposit holds come later (D18). |
 
 ### 2.2 Small confirmations
 
@@ -301,9 +301,10 @@ If someone opens another user's record, the app returns **404, not 403**, so att
 
 - **experiences:**
   - id, slug, name, category, icon, tagline, description, includes (json).
-  - durations (json), time_slots (json), allowed_weekdays (json?), season_starts_on?, season_ends_on?.
-  - package_fee_cents, is_active, is_featured, sort, seo_title, seo_description.
-- **boat_experience:** boat_id, experience_id, package_fee_override_cents?, is_active.
+  - time_slots (json: its **departure window**, every half hour of it on the start-time grid), allowed_weekdays (json?), season_starts_on?, season_ends_on?.
+  - is_active, is_featured, sort, seo_title, seo_description. *(No package fee since 4.3: the experience is free. No `durations` since the 4.4 fixes: the boat's lengths apply.)*
+- **addon_experience** (4.3): experience_id, addon_id, sort — add-ons **suggested** with the experience at checkout, optional (charged only when the guest ticks them, 4.4 fixes).
+- **boat_experience:** boat_id, experience_id, is_active. *(The per-boat package-fee override went in 4.3.)*
 - **addons:** id, slug, name, description, icon, price_cents, unit (flat|per_guest), max_quantity, is_active, sort.
 - **cancellation_policies:** id, slug (flexible|moderate|strict), name, badge, points (json, display text), **rules** (json, editable by the admin, e.g. `[{"min_hours_before":120,"refund_pct":100},{"min_hours_before":72,"refund_pct":50},{"min_hours_before":0,"refund_pct":0}]`), is_active.
 
@@ -327,10 +328,10 @@ If someone opens another user's record, the app returns **404, not 403**, so att
 - **bookings:**
   - **Identity:** id, ulid, reference (unique, e.g. `CYB-7K3P9Q`), customer_id, boat_id, experience_id?.
   - **Captain:** captain_id?, captain_assigned_at, **captain_assigned_via** (offer|direct), **captain_notified_at**, **captain_acknowledged_at**, captain_notes (written by the admin, shown to the captain; never customer personal data).
-  - **Status:** `status` (§7.3), `payment_status` (unpaid|deposit_paid|paid|partially_refunded|refunded|failed).
+  - **Status:** `status` (§7.3), `payment_status` (unpaid|paid|partially_refunded|refunded|failed).
   - **Trip:** starts_at, ends_at, hours, guests, occasion, customer_notes, admin_notes.
   - **Contact snapshot:** contact_first_name, contact_last_name, contact_email, contact_phone, heard_from.
-  - **Money:** payment_plan (deposit|full; only `full` since D22, the deposit / balance columns are cleaned up in 4.3), subtotal_cents, discount_cents, tax_cents, gratuity_bp, gratuity_cents, total_cents, amount_paid_cents, amount_refunded_cents, balance_due_cents, balance_due_at.
+  - **Money:** (payment_plan, balance_due_cents and balance_due_at were dropped in 4.3, D22) subtotal_cents, discount_cents, tax_cents, gratuity_bp, gratuity_cents, total_cents, amount_paid_cents, amount_refunded_cents, balance_due_cents, balance_due_at.
   - **Snapshots:** promo_code_id?, policy_snapshot (json), pricing_snapshot (json).
   - **Lifecycle:** hold_expires_at, confirmed_at, completed_at, cancelled_at, cancelled_by_role (customer|owner|admin|system), cancellation_reason, source (web|admin|phone), timestamps.
 - **booking_items:** booking_id, **booking_extension_id?** (set on the lines of an extension), type (charter|captain|package|addon|cleaning|discount|tax|gratuity|fee), addon_id?, label, description, quantity, unit_amount_cents, amount_cents, **payee** (platform|owner|captain), sort.
@@ -378,7 +379,7 @@ If someone opens another user's record, the app returns **404, not 403**, so att
 - **notifications:** Laravel database notifications, for the bell icon.
 - **settings:** key (unique), value (json), group. Cached.
   - Business info: name, phone, email, address, hours, social links.
-  - Booking and pricing: tax_rate_bp, weekend_multiplier_bp, gratuity options, hold_minutes, season dates. *(deposit_bp and balance_due_days are dropped in 4.3, D22.)*
+  - Booking and pricing: tax_rate_bp, weekend_multiplier_bp, gratuity options, hold_minutes, season dates. *(deposit_bp and balance_due_days were dropped in 4.3, D22.)*
   - Owner money: commission_bp, **payout_delay_hours = 72**, **complaint_window_hours = 72**, **min_withdrawal_cents = 5000**.
   - Captains (R12): **captain_offer_hours = 24**, **captain_release_hours = 48**, captain_ack_reminder_hours = 12, captain_turnaround_minutes = 30 (the minimum gap between two trips of one captain). Placeholders except the first two.
   - Extensions (R15): **extension_cutoff_minutes = 30**, extension_hold_minutes = 10, extension_max_trip_hours = 8 (the longest a trip can become). Placeholders except the first. Extensions are always whole hours (R14), so there is no step setting.
@@ -399,15 +400,14 @@ If someone opens another user's record, the app returns **404, not 403**, so att
 charter   = round(hourly_rate × (Fri–Sun ? weekend_multiplier : 1)) × hours
             (or the boat's fixed duration price, if the owner set one)
 captain   = captain_rate × hours                      (always included, its own line)
-package   = experience package fee (or the boat's override)
-addons    = flat, or price × guests
+addons    = the add-ons the guest ticked, flat or price × guests (optional; the experience is free and
+            its suggested extras are ordinary add-ons — nothing is charged unless ticked)
 cleaning  = fuel & cleaning fee
 discount  = promo (% of charter, or a fixed amount, capped)
 tax       = tax_rate × (subtotal − discount)          (9% placeholder)
 gratuity  = gratuity % × (charter + captain)          (optional: 0/15/18/20)
 total     = subtotal − discount + tax + gratuity
-payment   = the full total (D22: no deposit, no balance)
-            instant book → charged at checkout; request to book → authorised, captured when the owner accepts
+payment   = the full total, charged at checkout (D22: no deposit, no balance, no request to book)
 ```
 
 The JS only *shows* prices it gets back from the server. The server ignores any price sent by the browser and recalculates at hold time and again at payment.
@@ -426,7 +426,7 @@ A slot is free only if all of these hold:
 
 **No double booking:** the hold is created in a DB transaction that locks the boat row (`lockForUpdate`) and re-checks the overlap before inserting.
 
-**One "busy times" source.** `AvailabilityService` gives the busy intervals of a boat (bookings + extension holds + buffer, blocks, closed hours) and of a captain (assigned trips + `captain_turnaround_minutes`, unavailability). The booking wizard, trip offers (§7.8) and extensions (§7.9) all use it, so they can never disagree.
+**One "busy times" source.** `AvailabilityService` gives the busy intervals of a boat (bookings + extension holds + buffer, blocks, closed hours) and of a captain (assigned trips + `captain_turnaround_minutes`, unavailability). The boat page's booking card, the fleet's date filter, holds, trip offers (§7.8) and extensions (§7.9) all use it, so they can never disagree.
 
 ### 7.3 Booking lifecycle
 
@@ -436,13 +436,7 @@ hold (15 min) ──payment ok (webhook)──▶ confirmed ──trip ends─�
                                            └─▶ no_show
 ```
 
-**Request to book** (owner boats with Instant book off, D21):
-
-```
-requested ──owner accepts (payment captured)──▶ confirmed ──▶ …as above
-   ├─owner declines─▶ declined   (authorisation released)
-   └─no answer in time─▶ expired (authorisation released)
-```
+There is **no request to book** (D22, 2026-11-25): owner boats are booked the same way. The `requested` / `declined` statuses were removed in 4.3.
 
 Payment status and captain assignment are tracked separately. Every change is written to `booking_status_history` + `audit_logs`.
 
@@ -470,7 +464,6 @@ refund           = max(0, amount_paid − (total − refundable_total))
 Example: total $1,000 (no gratuity), paid in full (D22).
 - Cancel in the 50% window → refund $500.
 - Cancel in the 100% window → refund $1,000.
-- A request that the owner hasn't accepted yet was never captured: cancelling it just releases the authorisation.
 
 **Special cases**
 
@@ -1275,7 +1268,7 @@ There are also in-app notifications (bell icon) for customers, owners, captains 
 
 4.1 `QuoteService` (from `CYB.quote`, in cents) + unit tests: weekend, promo, gratuity, add-ons per guest, duration prices, rounding, deposit vs full. ✅ done 2026-11-23.
   - **Built:**
-    - `App\Services\QuoteService::quote(QuoteRequest): Quote` and `durations(Boat, ?Experience)`.
+    - `App\Services\QuoteService::quote(QuoteRequest): Quote` and `durations(Boat)` (an experience argument until the 4.4 fixes).
     - Value objects in `app/Support/Pricing`:
       - `QuoteRequest`: the choices only, with `localStart(date, time)` in Chicago time → UTC.
       - `PromoTerms`: percent in bp or fixed in cents, `applies_to`, min subtotal, max discount.
@@ -1363,44 +1356,65 @@ There are also in-app notifications (bell icon) for customers, owners, captains 
   - **User runs:** `php artisan migrate`. The client boat's 08:00–23:00 becomes start times 08:00–21:00.
 *Replaced 2026-11-25 (D21): the old 4.3 "wizard ⇄ endpoints" and the 4-step `/book` wizard are dropped. Booking starts on the boat page, like Boatsetter.*
 
-4.3 **Boat page booking card** (D21).
-  - The card, in our design:
-    - Date / Duration / Start time rows with popovers (calendar with day statuses, duration chips, the start-time grid);
-    - an optional Experience row;
-    - Captained / No captain (No captain only on boats that allow it — owner boats, Phase 6);
-    - a guests stepper;
-    - live price lines + total (every line shown);
-    - the "Instant book" / "Request to book" button;
-    - a "Free cancellation until …" line.
-  - JSON endpoints (§8.2): `availability` (a month's day statuses + a day's start times, from `AvailabilityService`) and `quote` (from `QuoteService`).
-  - Phone: the existing bottom bar opens a full-screen booking sheet.
-  - Boat page additions: quick-facts row, "Things to know".
-  - `/book?yacht=&experience=&date=` redirects to the boat page with those choices (without a yacht, to the fleet).
-  - **Full payment only (D22):** `QuoteService` drops the deposit plan, and the parity fixture loses its deposit cases.
-4.4 **Fleet + Experiences** (D21).
-  - Fleet filter bar: date, guests, chips (experience, duration, captain, price, instant book), "more filters" (length, category, amenities). Whitelisted query parameters.
-  - Cards: "from $X / hour", an Instant book badge, "2 – 6 hours · Captained".
-  - "Free on this date" from the availability calendar. No map.
-  - The Experiences page lists Chicago experiences like categories, each with the boats that offer it and a Book link to the boat page.
-4.5 **Hold or request + checkout.**
+4.3 **Boat page booking card** (D21). ✅ done 2026-11-25 (built together with 4.4: two steps per response from now on, user request).
+  - **User decisions while building (2026-11-25):**
+    - **Experiences are free** (Boatsetter doesn't charge for them). Each keeps its own start times (sunset ≠ fireworks: the card only offers the times the experience *and* the boat share). The admin can add **paid extras** to an experience (décor, a photographer, any facility): add-ons from Admin → Add-ons, charged on every booking of that experience.
+    - **Direct checkout only (D22):** no deposit and no request to book, owner boats too.
+  - **Migrations:**
+    - `make_experiences_free_with_paid_extras`: the `addon_experience` pivot (sort); drops `experiences.package_fee_cents` and `boat_experience.package_fee_override_cents`. Rollback brings the columns back empty.
+    - `switch_bookings_to_full_payment_only`: drops `bookings.payment_plan`, `balance_due_cents`, `balance_due_at` and the `deposit_bp` / `balance_due_days` settings.
+    - Checked forward, back and forward on a temp SQLite DB with an extra link and an old deposit setting.
+  - **Pricing:**
+    - `QuoteService`: no deposit / plan / balance (`Quote` and `QuoteRequest` lost them, the `PaymentPlan` enum is gone). The experience's paid extras are `package` lines keyed `extra-{slug}` ("With Sunset Skyline Cruise"; per guest × guests); hidden or trashed add-ons are skipped; an add-on the guest picks that the experience already includes counts once. The snapshot keeps `experience_extras`.
+    - `BookingStatus` lost `requested` / `declined`; `PaymentStatus` lost `deposit_paid`.
+    - Settings lost Deposit and Balance days.
+    - The parity test sets the mockup's package fees up as one paid extra each, so all 20 cases still match line by line (deposit answers no longer compared).
+  - **JSON endpoints** (§8.2, read-only GETs, `BookingCardController`, API Resources):
+    - `GET /yachts/{slug}/availability` (`throttle:availability`, 120/min): `?month=YYYY-MM` → each day's status (past / unavailable / soldout / limited / available); `?date=YYYY-MM-DD` → that day's start times, each free or taken with a short reason (Booked, Too soon, Not available, Booked that day). Never another trip's details.
+    - `GET /yachts/{slug}/quote` (`throttle:quote`, 60/min): every line, tax, total; without a date a weekday estimate; with a start time "Free cancellation until …" from the boat's policy (`CancellationPolicy::freeCancellationHours()`).
+    - FormRequests `BookingCard\AvailabilityRequest` / `PriceRequest` (months whitelisted, dates today … +18 months, times on the start-time grid, add-ons `exists` + `distinct` + max 10). Choices that don't fit the boat → 422 on their field; a draft / hidden / trashed boat → 404.
+    - `App\Services\BoatQuotes`: published boats by slug with what the two services read, once per request (injected per call, never into a controller constructor); `startingAt()`, `weekday()`, `freeCancellationUntil()`.
+  - **The card** (our design; `resources/js/pages/yacht.js`):
+    - Experience (optional, "Just the boat") with its days, start times and extras; Date / Duration rows and a Start time row opening panels: a month calendar (prev / next inside 18 months, booked days struck through, few-left dot), length chips, the day's start-time grid. Picking a date opens the start times next, as on Boatsetter.
+    - Guests stepper, "Captained" line (the No-captain switch waits for owner boats that allow it, Phase 6), every price line + total from the quote endpoint (the first one rendered by the server), "Book now" (asks for a date / time first), "Free cancellation until …", "You won't be charged yet".
+    - Phone: the bottom bar shows the live total and opens the card as a full-screen sheet (close button, Escape); `#book` opens it from links.
+    - "Book now" goes to checkout (still the Phase 1 demo until 4.5, now experience-optional, full payment, no plan choice).
+  - **Boat page:** quick-facts row (captain, instant confirmation, cancellation policy, harbor), "Things to know" (Included / On board from the boat's rules / its cancellation policy points), the price example from QuoteService. `?experience=&date=&hours=&guests=` preset the card (checked against the boat).
+  - `/book` (old links, home search) redirects: with a boat to its page `…#book`, otherwise to the fleet with the same filters. The wizard view, `booking.js` and `demo-availability.js` are deleted; generic "Book" links point at the fleet; `/book` left the sitemap.
+  - The pricing page's examples, "starting at" column and estimator use QuoteService (the estimator asks the quote endpoint); the experiences page "Trips from" too. Deposit copy removed everywhere (home, pricing, FAQ, terms, cancellation policy, checkout, confirmation).
+  - Admin: Experiences have a **Paid extras** card (tick add-ons, audit-logged by name; the list shows them or "Free"); the boat form's per-experience fee box is gone.
+4.4 **Fleet + Experiences** (D21). ✅ done 2026-11-25.
+  - Fleet filter bar (`App\Support\FleetFilters`, every value whitelisted, never echoed): date, guests, experience, trip length, More filters (harbor, price range, boat length, "On board" amenities from the catalog cache), type chips, sort. Same rules in `resources/js/pages/yachts.js` for instant filtering; a date submits the form, and only boats with a free start that day show, with a "Free on Dec 7 · 23 start times" pill. Sticky from lg up.
+  - Cards: lengths ("3–4 hrs · Captained"), "From $X/hr", the free-date pill; "Book" opens the boat page's card with the search (date, guests, experience, hours). No Instant-book badge or chip: every booking is instant (D22). No map.
+  - Experiences page: Chicago themes by category; each shows whether it is free or which paid extras it comes with, the boats that offer it (each opens its card with the experience picked), "Trips from" (QuoteService), and "Book this experience" (straight to the boat when only one can take it, else the fleet filtered).
+  - **QA:**
+    - 543 PHP tests, all passing (16 new: Phase4/BookingCardTest 10 — card data, presets, redirects, month / day, prices with extras and add-ons, 422s, 404s, Unavailable, 429; Phase4/FleetAndExperiencesTest 6), plus updated Quote / parity / availability / admin / page tests. 45 JS tests (+ months). Pint clean, build OK.
+    - Browser on an isolated server: no overflow on 8 pages at 390 / 768 / 1280 / 1440; desktop flow Book without a date → calendar → Dec 1 → 23 start times → 8 AM → price + "Free cancellation until …" → Sunset (4 times) → 5:30 PM → checkout with the choices; phone sheet open / pick / Escape; fleet instant filters, More filters, a date (2 free boats with pills); estimator weekday / weekend / add-on.
+  - **User runs:** `php artisan migrate` (both 4.3 migrations; the seeded package fees go — experiences become free; add paid extras in Admin → Experiences if wanted).
+  - **Fixes after the user's QA (2026-11-25, user decisions):**
+    - **Bug:** an experience picked on the fleet (or reached through "Book this experience") was lost on the way to the boat page — the card's `['experience' => null] + $query` kept the null. Every card link (photo, name, arrow, Book) now carries the search, and the fleet's instant filters rewrite the links (`data-yacht-link`).
+    - **No experience length:** `experiences.durations` dropped (migration `experiences_use_departure_windows_and_the_boats_lengths`); `QuoteService::durations(Boat)` = the boat's ticked lengths, or every standard length from its minimum up to 8 hours (`DEFAULT_MAX_HOURS`). The experiences page shows Departs / Available / "Trip length: your choice".
+    - **Departure windows:** the admin sets First / Last departure (grid selects) instead of a list; `time_slots` keeps every half hour of it (the migration fills old gaps). Seeds: sunset 5:00–7:30 PM, Playpen 10 AM–3 PM, river 9 AM–4 PM, fireworks 8–9 PM Wed & Sat, birthdays 10 AM–8 PM, corporate 9 AM–6 PM, proposals 4:30–7:30 PM, private 8 AM–6 PM. The card's experience options show their window; picking one keeps a date / time that fits and otherwise clears it with a notice ("Sunset Skyline Cruise isn't available at 10:00 AM: it departs 5:00 PM – 7:30 PM…", "…runs on Wed & Sat only"); its start-time panel says which window it shows. `AvailabilityService::problem()` gives the same messages (`outsideWindow()`), and a boat whose start times never meet the window says so.
+    - **Optional extras:** QuoteService no longer adds an experience's extras; they are add-ons the guest ticks. The demo checkout got a "Make it yours" card: every add-on as an optional tile, the experience's suggestions first ("Suggested for …"), none ticked; totals update as they are ticked. A pricing package / the estimator carry their add-ons (`?addons=`) through the card to checkout, where they can be unticked. Checkout without a fitting start time goes back to the boat's card with a message instead of a sample booking.
+    - `http.js` sends an array param as `key[]` (the card's add-ons).
+    - **User runs:** `php artisan migrate` (1 new migration).
+4.5 **Hold + checkout.** (Request to book dropped, D22.)
   - Bookings, line items, status history, hold expiry, the **double-booking lock**, promo codes + redemptions.
-  - One page in our design: inline login / register, trip summary, add-ons (moved from the old wizard's Extras step), lead guest, occasion + a note to the crew, gratuity, promo, terms.
-  - Instant book → `hold` → pay (stubbed until Phase 5). Request to book → `requested`.
-  - *2026-11-24, request to book:* owner boats are booked by request, and the owner approves first (Boatsetter-style, "Instant book" off by default). The booking statuses leave room for it (a request waiting for the owner, then accepted / declined / expired). The owner side is built in Phase 6. House boats are booked at once.
-4.6 Confirmation page + email + .ics ("waiting for the owner" for a request).
+  - One page in our design: inline login / register, trip summary, add-ons (optional, the experience's suggestions first — the demo checkout's "Make it yours" card), lead guest, occasion + a note to the crew, gratuity, promo, terms.
+  - Book now → `hold` → pay in full (stubbed until Phase 5) → confirmed.
+4.6 Confirmation page + email + .ics.
 4.7 My trips + trip detail.
 4.8 Admin: Bookings (list, calendar, detail, status, notes) + promo codes.
 **QA:** price parity with the mockup on the remaining (full-payment) cases; concurrency test (two holds on one slot); hold expiry; IDOR tests; §8.2 endpoint test set; boat page / fleet at 390 / 768 / 1280 / 1440 with no overflow.
 
 ### Phase 5 — Payments + cancellations (Stripe test mode)
 5.1 `PaymentService` interface + Stripe implementation; Stripe Customer; Payment Element (**full amount only**, D22); 3-D Secure.
-  - **Instant book:** charged at checkout.
-  - **Request to book:** a manual-capture authorisation at checkout. It is captured when the owner accepts and released on decline or expiry. Authorisations last about 7 days, so the owner's answer window (a setting, e.g. 24 h) stays well inside that.
+  - Every booking is charged in full at checkout (no request to book, no manual-capture authorisation, D22).
 5.2 Webhook endpoint + `webhook_events` + idempotent handlers; the webhook confirms the booking.
 5.3 Saved cards page. *(No automatic balance charge: there is no deposit, D22.)*
 5.4 `CancellationPolicyService` (Boatsetter-style, §7.4) with a refund preview; customer cancel; admin custom / weather / owner-cancel refunds; dispute records.
 5.5 Receipt PDF; admin Payments and Refunds screens; nightly reconcile.
-**QA:** Stripe test-card matrix (success, decline, 3-D Secure, insufficient funds); webhook replay and duplicates; refund math tests for every policy window; request authorise → capture / release.
+**QA:** Stripe test-card matrix (success, decline, 3-D Secure, insufficient funds); webhook replay and duplicates; refund math tests for every policy window.
 
 ### Phase 6 — Owners: List Your Boat (real)
 > **Client request (2026-11-24): List Your Boat should work exactly like Boatsetter's.** The field-by-field map of Boatsetter's flow (start page with address + year / make / model, conditional location fields, start-time availability, per-duration pricing after listing, owner add-ons, manage tabs) and the comparison with our wizard are in [docs/research/boatsetter-list-your-boat.md](research/boatsetter-list-your-boat.md). Its §6 lists the client decisions needed before Phase 6.
@@ -1410,7 +1424,7 @@ There are also in-app notifications (bell icon) for customers, owners, captains 
 - **Per-duration package pricing** with a Suggested ⇄ Custom toggle, set after listing.
 - **Buoy-style insurance questions** (the insurer is arranged later).
 - **Owner add-ons per boat.**
-- **Request to book**, with the owner's approval.
+- ~~Request to book, with the owner's approval.~~ *Changed 2026-11-25 (D22): every booking is a direct checkout, owner boats too.*
 - **No paid APIs:**
   - a large make list + free-text model;
   - Chicago-only harbor / marina list instead of Google address autocomplete;

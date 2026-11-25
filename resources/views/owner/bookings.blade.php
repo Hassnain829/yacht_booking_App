@@ -74,7 +74,7 @@
                 <div class="rounded-[2rem] border-2 border-dashed border-navy-200 bg-white px-6 py-14 text-center">
                     <span class="mx-auto grid h-14 w-14 place-items-center rounded-full bg-navy-50 text-navy-400"><i data-lucide="calendar-x" class="h-7 w-7"></i></span>
                     <h2 class="mt-4 font-display text-2xl text-navy-950">No {{ strtolower($tabs[$tab]) }} bookings</h2>
-                    <p class="mx-auto mt-2 max-w-md text-sm text-navy-500">New bookings appear here as soon as a guest pays their deposit.</p>
+                    <p class="mx-auto mt-2 max-w-md text-sm text-navy-500">New bookings appear here as soon as a guest books and pays.</p>
                 </div>
             @endforelse
         </div>

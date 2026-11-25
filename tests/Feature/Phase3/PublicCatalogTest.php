@@ -29,13 +29,12 @@ class PublicCatalogTest extends TestCase
         $this->seedPublicCatalog();
     }
 
-    /** @return array<string, mixed> the data the booking wizard page embeds for its JS */
-    private function wizard(string $query = ''): array
+    /** The public catalog as the next request sees it (the booking wizard that embedded it is gone since 4.3). */
+    private function catalog(): PublicCatalog
     {
-        $html = $this->get('/book'.$query)->assertOk()->getContent();
-        preg_match('/data-wizard="([^"]+)"/', $html, $match);
+        app()->forgetInstance(PublicCatalog::class);
 
-        return json_decode(html_entity_decode($match[1] ?? '{}'), true) ?? [];
+        return app(PublicCatalog::class);
     }
 
     public function test_only_published_boats_that_are_not_in_the_trash_are_shown(): void
@@ -47,8 +46,8 @@ class PublicCatalogTest extends TestCase
             ->assertSee('Four hand-picked yachts'); // the hero counts the live fleet
         $this->get('/yachts/golden')->assertNotFound();
         $this->get('/yachts/onyx')->assertNotFound();
-        $this->assertSame(['azure', 'skyline', 'windward', 'lakeside'], collect($this->wizard()['yachts'])->pluck('slug')->all());
-        $this->assertNull(collect($this->wizard('?yacht=golden&experience=sunset')['initial'])->get('yacht'), 'a hidden boat is never preselected');
+        $this->assertSame(['azure', 'skyline', 'windward', 'lakeside'], $this->catalog()->yachts()->pluck('slug')->all());
+        $this->get('/book?yacht=golden&experience=sunset')->assertRedirect('/yachts?experience=sunset'); // a hidden boat is never opened
     }
 
     public function test_the_admins_edits_appear_on_the_site(): void
@@ -59,8 +58,9 @@ class PublicCatalogTest extends TestCase
         $azure->forceFill(['title' => 'The Azure II', 'hourly_rate_cents' => 51000])->save();
 
         $this->get('/yachts/azure')->assertOk()->assertSee('The Azure II')->assertSee('Unavailable');
-        $boat = collect($this->wizard()['yachts'])->firstWhere('slug', 'azure');
-        $this->assertSame([false, 51000], [$boat['booking_enabled'], $boat['hourly_rate_cents']]);
+        $boat = $this->catalog()->yacht('azure');
+        $this->assertSame([false, 51000], [$boat->booking_enabled, $boat->hourly_rate_cents]);
+        $this->get('/yachts/azure')->assertDontSee('id="booking-card"', false); // no booking card on an Unavailable boat
     }
 
     public function test_hidden_or_trashed_experiences_add_ons_and_harbors_disappear(): void
@@ -71,10 +71,11 @@ class PublicCatalogTest extends TestCase
         Harbor::query()->where('slug', 'belmont')->update(['is_active' => false]);
 
         $this->get('/experiences')->assertOk()->assertDontSee('id="fireworks"', false)->assertDontSee('id="proposal"', false)->assertSee('id="sunset"', false);
-        $wizard = $this->wizard();
-        $this->assertNotContains('fireworks', collect($wizard['experiences'])->pluck('slug'));
-        $this->assertNotContains('champagne', collect($wizard['addons'])->pluck('slug'));
-        $this->assertNotContains('fireworks', collect($wizard['yachts'])->firstWhere('slug', 'azure')['experiences'], 'a boat no longer offers a hidden experience');
+        $catalog = $this->catalog();
+        $this->assertNotContains('fireworks', $catalog->experiences()->pluck('slug'));
+        $this->assertNotContains('champagne', $catalog->addons()->pluck('slug'));
+        $this->assertNotContains('fireworks', $catalog->yacht('azure')->experiences, 'a boat no longer offers a hidden experience');
+        $this->get('/yachts/azure')->assertOk()->assertDontSee('value="fireworks"', false); // nor in its booking card
 
         $this->get('/about')->assertOk()->assertDontSee('>Belmont Harbor</h3>', false)->assertSee('>Navy Pier</h3>', false);
         $this->get('/yachts/windward')->assertOk()->assertSee('Belmont Harbor'); // its boat still shows where it departs from
@@ -96,10 +97,11 @@ class PublicCatalogTest extends TestCase
 
     public function test_prices_use_the_settings_the_admin_saved(): void
     {
-        app(SettingsService::class)->update(['tax_rate_bp' => 1025, 'deposit_bp' => 3000], User::factory()->admin()->create(), 'New city tax rate.');
+        app(SettingsService::class)->update(['tax_rate_bp' => 1025, 'weekend_multiplier_bp' => 12000], User::factory()->admin()->create(), 'New city tax rate.');
 
-        $this->assertSame(['weekend_multiplier_bp' => 11500, 'tax_rate_bp' => 1025, 'deposit_bp' => 3000], $this->wizard()['pricing']);
-        $this->get('/pricing')->assertOk()->assertSee('30% deposit');
+        $this->assertSame([1025, 12000], [$this->catalog()->pricing()['tax_rate_bp'], $this->catalog()->pricing()['weekend_multiplier_bp']]);
+        $this->assertArrayNotHasKey('deposit_bp', $this->catalog()->pricing(), 'D22: no deposit');
+        $this->get('/pricing')->assertOk()->assertSee('Taxes (10.25%)')->assertSee('Fri – Sun (+20%)');
     }
 
     public function test_the_pages_survive_an_experience_without_boats_and_a_site_without_boats(): void
@@ -109,12 +111,13 @@ class PublicCatalogTest extends TestCase
 
         Boat::query()->update(['status' => BoatStatus::Paused]); // a mass update: no model events
         PublicCatalog::flush();
-        foreach (['/', '/yachts', '/experiences', '/pricing', '/about', '/contact', '/book'] as $url) {
+        foreach (['/', '/yachts', '/yachts?date='.now()->addWeek()->toDateString(), '/experiences', '/pricing', '/about', '/contact'] as $url) {
             $this->get($url)->assertOk();
         }
         $this->get('/pricing')->assertDontSee('id="estimator"', false);
-        $this->get('/checkout')->assertRedirect('/book');
-        $this->get('/booking/confirmation')->assertRedirect('/book');
+        $this->get('/book')->assertRedirect('/yachts');
+        $this->get('/checkout')->assertRedirect('/yachts');
+        $this->get('/booking/confirmation')->assertRedirect('/yachts');
     }
 
     public function test_the_home_page_drops_tiles_of_hidden_or_trashed_experiences(): void

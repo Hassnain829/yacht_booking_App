@@ -24,7 +24,6 @@ class SeoController extends Controller
             ['url' => route('yachts.index'), 'priority' => '0.9', 'changefreq' => 'weekly'],
             ['url' => route('experiences.index'), 'priority' => '0.9', 'changefreq' => 'weekly'],
             ['url' => route('pricing'), 'priority' => '0.7', 'changefreq' => 'monthly'],
-            ['url' => route('booking.create'), 'priority' => '0.7', 'changefreq' => 'monthly'],
             ['url' => route('about'), 'priority' => '0.6', 'changefreq' => 'monthly'],
             ['url' => route('contact'), 'priority' => '0.6', 'changefreq' => 'monthly'],
             ['url' => route('legal.cancellation'), 'priority' => '0.3', 'changefreq' => 'yearly'],

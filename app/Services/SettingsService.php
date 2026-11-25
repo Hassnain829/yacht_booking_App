@@ -23,8 +23,6 @@ class SettingsService
     public const DEFAULTS = [
         'booking' => [
             'tax_rate_bp' => 900,
-            'deposit_bp' => 5000,
-            'balance_due_days' => 7,
             'weekend_multiplier_bp' => 11500,
             'gratuity_options' => [0, 15, 18, 20],
             'default_gratuity' => 18,

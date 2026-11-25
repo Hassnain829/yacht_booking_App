@@ -53,7 +53,8 @@ class CatalogModelsTest extends TestCase
         $policy = CancellationPolicy::factory()->flexible()->create();
         $boat = Boat::factory()->create(['harbor_id' => $harbor->id, 'cancellation_policy_id' => $policy->id]);
         $sunset = Experience::factory()->create();
-        $boat->experiences()->attach($sunset, ['package_fee_override_cents' => 5000]);
+        $boat->experiences()->attach($sunset);
+        $sunset->extras()->attach(Addon::factory()->create(['name' => 'Champagne']), ['sort' => 0]);
         $boat->amenities()->attach(Amenity::factory()->highlight()->create(['name' => 'Flybridge sun lounge']));
         $boat->availabilityRules()->create(['weekday' => 6, 'is_open' => true, 'start_times' => ['09:00', '09:30']]);
         $boat->photos()->create(['collection' => 'photos', 'disk' => 'public', 'path' => 'boats/a.jpg', 'mime' => 'image/jpeg', 'size_bytes' => 1000, 'sort' => 1]);
@@ -62,7 +63,8 @@ class CatalogModelsTest extends TestCase
         $boat->refresh();
         $this->assertTrue($boat->harbor->is($harbor));
         $this->assertSame(100, $boat->cancellationPolicy->refundPercent(48));
-        $this->assertSame(5000, $boat->experiences->first()->pivot->package_fee_override_cents);
+        $this->assertTrue((bool) $boat->experiences->first()->pivot->is_active);
+        $this->assertSame(['Champagne'], $sunset->fresh()->extras->pluck('name')->all());
         $this->assertTrue($sunset->boats->first()->is($boat));
         $this->assertSame(['Flybridge sun lounge'], $boat->amenities->pluck('name')->all());
         $this->assertSame(6, $boat->availabilityRules->first()->weekday);
@@ -149,7 +151,7 @@ class CatalogModelsTest extends TestCase
 
         $this->assertSame('slug', $experience->getRouteKeyName());
         $this->assertSame(AddonUnit::PerGuest, $addon->unit);
-        $this->assertSame([2, 3, 4], $experience->durations);
+        $this->assertSame(['10:00', '10:30'], array_slice($experience->time_slots, 0, 2), 'its departure window, every half hour');
 
         foreach ([$experience, $boat, $captain] as $model) {
             $model->delete();

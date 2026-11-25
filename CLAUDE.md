@@ -40,6 +40,9 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
 
 - **Money** is integer cents (`*_cents`). **Rates** are basis points (`*_bp`; 2000 = 20%). Format only at the edge: `resources/js/lib/money.js` in JS, and a PHP Money helper in later phases.
 - **Prices** come only from `App\Services\QuoteService` (PLAN §7.1, since 4.1). Never add up a price in a controller, a view or JS. A changed price rule needs its test in `tests/Feature/Phase4/QuoteServiceTest`, and the mockup parity (`QuoteParityTest`) must keep passing.
+  - Public pages get boats for quotes from `App\Services\BoatQuotes` (since 4.3). Inject it into the action, never a controller constructor (a route keeps its controller, so the boats would go stale). The browser asks `GET /yachts/{slug}/quote` and only shows the answer.
+  - Everything is paid in full at checkout: no deposit, no request to book (D22).
+  - Experiences are free and have no length of their own: lengths are the boat's (`QuoteService::durations(Boat)`). An experience departs inside its window (`time_slots`, every half hour of it) on its days; the card and `AvailabilityService` say so when a date or time doesn't fit. Its extras (`addon_experience`) are optional add-ons suggested at checkout, charged only when ticked (D21, 2026-11-25).
 - **Availability** comes only from `App\Services\AvailabilityService` (PLAN §7.2, since 4.2):
   - A boat has **start times** per weekday (Boatsetter-style) on the `App\Support\StartTimes` grid (every half hour, 05:00–22:00, Chicago time), not opening hours. Experience start times sit on the same grid.
   - Anything that needs a boat's busy time (holds, captain offers, extensions) reads `busyIntervals()`, never its own query.

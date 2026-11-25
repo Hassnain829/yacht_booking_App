@@ -50,7 +50,7 @@ class AdminPagesTest extends TestCase
             'complaints' => ['/admin/complaints', 'Complaints', 'Cleanliness'],
             'promo codes' => ['/admin/promo-codes', 'Promo codes', 'WELCOME10'],
             'experiences' => ['/admin/experiences', 'Experiences', 'Add an experience'],
-            'add experience' => ['/admin/experiences/create', 'Experiences', 'Start times'],
+            'add experience' => ['/admin/experiences/create', 'Experiences', 'Departure window'],
             'add-ons' => ['/admin/addons', 'Add-ons', 'Add an add-on'],
             'add add-on' => ['/admin/addons/create', 'Add-ons', 'Price'],
             'settings' => ['/admin/settings', 'Settings', 'Commission'],

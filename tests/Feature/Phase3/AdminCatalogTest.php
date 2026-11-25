@@ -42,12 +42,12 @@ class AdminCatalogTest extends TestCase
             'tagline' => 'Golden hour over Lake Michigan',
             'description' => 'Watch the city light up.',
             'includes_text' => "Golden-hour departure\n\n  Skyline photo stop  \nIce, water & cups",
-            'durations' => ['3', '2'],
-            'time_slots_text' => '18:30, 17:30;18:00',
+            'departs_from' => '17:30',
+            'departs_until' => '18:30',
             'weekdays' => [],
             'season_starts_on' => '',
             'season_ends_on' => '',
-            'package_fee' => '49.5',
+            'extras' => [],
             'is_active' => '1',
             'is_featured' => '0',
             'sort' => '1',
@@ -99,20 +99,33 @@ class AdminCatalogTest extends TestCase
 
     public function test_the_admin_adds_an_experience_with_its_lists_cleaned_and_sorted(): void
     {
+        $decor = Addon::factory()->create(['slug' => 'decor', 'name' => 'Celebration décor', 'price_cents' => 17500]);
+        $champagne = Addon::factory()->create(['slug' => 'champagne', 'name' => 'Champagne toast', 'price_cents' => 12000]);
+
         $this->actingAs($this->admin)
-            ->post('/admin/experiences', $this->experience(['image' => UploadedFile::fake()->image('sunset.jpg', 1600, 1000)]))
+            ->post('/admin/experiences', $this->experience(['image' => UploadedFile::fake()->image('sunset.jpg', 1600, 1000), 'extras' => ['champagne', 'decor']]))
             ->assertRedirect('/admin/experiences/sunset-skyline-cruise/edit');
 
         $experience = Experience::query()->sole();
         $this->assertSame(['Golden-hour departure', 'Skyline photo stop', 'Ice, water & cups'], $experience->includes);
-        $this->assertSame([2, 3], $experience->durations);
-        $this->assertSame(['17:30', '18:00', '18:30'], $experience->time_slots);
+        $this->assertSame(['17:30', '18:00', '18:30'], $experience->time_slots, 'every half hour of the departure window');
+        $this->assertArrayNotHasKey('durations', $experience->getAttributes(), 'no trip length of its own (2026-11-25)');
         $this->assertNull($experience->allowed_weekdays, 'no day ticked = every day');
-        $this->assertSame(4950, $experience->package_fee_cents);
+        $this->assertSame([$champagne->id, $decor->id], $experience->extras->pluck('id')->all(), 'suggested extras in the order ticked');
         $this->assertMatchesRegularExpression('#^experiences/[0-9a-f-]{36}\.webp$#', $experience->image_path);
-        $this->assertSame(4950, AuditLog::query()->where('action', 'experience.created')->sole()->after['package_fee_cents']);
+        $this->assertSame(['Champagne toast', 'Celebration décor'], AuditLog::query()->where('action', 'experience.created')->sole()->after['extras']);
 
-        $this->get('/admin/experiences')->assertOk()->assertSee('Sunset Skyline Cruise')->assertSee('$49.50');
+        $this->get('/admin/experiences')->assertOk()->assertSee('Sunset Skyline Cruise')->assertSee('Champagne toast, Celebration décor')->assertSee('5:30 PM – 6:30 PM');
+        $this->get('/admin/experiences/sunset-skyline-cruise/edit')->assertOk()->assertSee('Optional extras')->assertSee('value="decor" checked', false)
+            ->assertSee('<option value="17:30" selected>5:30 PM</option>', false)->assertSee('<option value="18:30" selected>6:30 PM</option>', false);
+
+        // Untick one: the link goes, the add-on stays.
+        $this->put('/admin/experiences/sunset-skyline-cruise', $this->experience(['extras' => ['decor']]))->assertRedirect();
+        $this->assertSame([$decor->id], $experience->fresh()->extras->pluck('id')->all());
+        $this->assertSame(['before' => ['extras' => ['Champagne toast', 'Celebration décor']], 'after' => ['extras' => ['Celebration décor']]], collect(AuditLog::query()->where('action', 'experience.updated')->sole()->only(['before', 'after']))->map(fn ($v) => collect($v)->only('extras')->all())->all());
+        $this->put('/admin/experiences/sunset-skyline-cruise', $this->experience())->assertRedirect();
+        $this->assertSame([], $experience->fresh()->extras->pluck('id')->all());
+        $this->assertSame(2, Addon::query()->count());
     }
 
     public function test_days_season_and_every_day(): void
@@ -136,34 +149,37 @@ class AdminCatalogTest extends TestCase
             'name' => '<img src=x onerror=alert(1)>',
             'category' => 'superyacht-only',
             'icon' => 'skull',
-            'durations' => ['7', '2', '2'],
-            'time_slots_text' => '25:00, 9am',
+            'departs_from' => '25:00',
+            'departs_until' => '9am',
             'weekdays' => ['8'],
             'season_starts_on' => '2026-09-30',
             'season_ends_on' => '2026-05-01',
-            'package_fee' => '-5',
+            'extras' => ['no-such-addon'],
             'includes_text' => implode("\n", array_fill(0, 13, 'Item')),
         ]))->assertUnprocessable()->assertJsonValidationErrors([
-            'name', 'category', 'icon', 'durations.0', 'durations.1', 'time_slots.0', 'time_slots.1', 'weekdays.0', 'season_ends_on', 'package_fee', 'includes',
+            'name', 'category', 'icon', 'departs_from', 'departs_until', 'weekdays.0', 'season_ends_on', 'extras.0', 'includes',
         ]);
 
-        $this->postJson('/admin/experiences', $this->experience(['durations' => [], 'time_slots_text' => '']))
-            ->assertUnprocessable()->assertJsonValidationErrors(['durations', 'time_slots']);
+        $this->postJson('/admin/experiences', $this->experience(['departs_from' => '', 'departs_until' => '']))
+            ->assertUnprocessable()->assertJsonValidationErrors(['departs_from', 'departs_until']);
         $this->assertSame(0, Experience::query()->count());
 
-        $this->from('/admin/experiences/create')->post('/admin/experiences', $this->experience(['time_slots_text' => '9am']))->assertRedirect('/admin/experiences/create');
-        $this->get('/admin/experiences/create')->assertSee('Start times use the 24-hour format')->assertSee('value="9am"', false);
+        $this->from('/admin/experiences/create')->post('/admin/experiences', $this->experience(['departs_from' => '20:00', 'departs_until' => '17:00']))->assertRedirect('/admin/experiences/create');
+        $this->get('/admin/experiences/create')->assertSee('The last departure must be at or after the first one.');
+        $this->assertSame(0, Experience::query()->count());
     }
 
-    public function test_experience_start_times_sit_on_the_boats_half_hour_grid(): void
+    public function test_an_experience_departure_window_sits_on_the_boats_half_hour_grid(): void
     {
         $this->actingAs($this->admin);
 
-        $this->postJson('/admin/experiences', $this->experience(['time_slots_text' => '17:45, 23:00, 04:30']))
+        $this->postJson('/admin/experiences', $this->experience(['departs_from' => '17:45', 'departs_until' => '23:00']))
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['time_slots.0' => 'on the hour or half hour', 'time_slots.1', 'time_slots.2']);
-        $this->post('/admin/experiences', $this->experience(['time_slots_text' => '05:00, 22:00, 17:30']))->assertRedirect()->assertSessionHasNoErrors();
-        $this->assertSame(['05:00', '17:30', '22:00'], Experience::query()->sole()->time_slots);
+            ->assertJsonValidationErrors(['departs_from' => 'on the hour or half hour', 'departs_until']);
+        $this->post('/admin/experiences', $this->experience(['departs_from' => '20:00', 'departs_until' => '21:00']))->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame(['20:00', '20:30', '21:00'], Experience::query()->sole()->time_slots, 'a fireworks window');
+        $this->put('/admin/experiences/sunset-skyline-cruise', $this->experience(['departs_from' => '22:00', 'departs_until' => '22:00']))->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame(['22:00'], Experience::query()->sole()->time_slots, 'one departure');
     }
 
     public function test_an_experience_moves_through_the_trash_and_its_photo_goes_with_a_permanent_delete(): void

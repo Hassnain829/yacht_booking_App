@@ -43,7 +43,6 @@ class CheckoutRequest extends FormRequest
             'heard' => ['nullable', Rule::in(self::HEARD)],
             'notes' => ['nullable', 'string', 'max:1000'],
             'gratuity' => ['required', 'integer', Rule::in(config('demo.pricing.gratuity_options'))],
-            'plan' => ['required', Rule::in(['deposit', 'full'])],
             'promo' => ['nullable', 'string', 'max:30', 'alpha_num:ascii'],
             'agree' => ['accepted'],
             'marketing' => ['nullable', 'boolean'],
@@ -51,7 +50,7 @@ class CheckoutRequest extends FormRequest
             'card_last4' => ['required', 'digits:4'],
 
             // The booking itself (hidden fields) — re-checked against the catalog in after().
-            'experience' => ['required', 'string', 'max:40'],
+            'experience' => ['nullable', 'string', 'max:40'], // optional since 4.3 (D21)
             'yacht' => ['required', 'string', 'max:40'],
             'guests' => ['required', 'integer', 'between:1,'.BookingSelection::MAX_GUESTS],
             'date' => ['required', 'date_format:Y-m-d'],

@@ -13,7 +13,8 @@ use Tests\Concerns\SeedsPublicCatalog;
 use Tests\TestCase;
 
 /**
- * Phase 1.3 — booking wizard, checkout and confirmation (demo: nothing is stored, no payment).
+ * Phase 1.3 — checkout and confirmation (demo: nothing is stored, no payment). Since 4.3 the trip is picked on the
+ * boat page (D21; the /book wizard only redirects there, see BookingCardTest) and paid in full (D22).
  *
  * Covers the §8.2 set that applies before auth exists: invalid input (422), valid input,
  * server-side recalculation (posted prices ignored), rate limits (429) and escaping.
@@ -44,7 +45,7 @@ class BookingFlowTest extends TestCase
             'first_name' => 'Jane', 'last_name' => 'Doe', 'email' => 'jane@example.com', 'phone' => '(312) 555-0199',
             'occasion' => 'Birthday', 'heard' => 'Google', 'notes' => 'Window seat please',
             // Payment choices (card data: brand + last 4 only)
-            'gratuity' => '18', 'plan' => 'deposit', 'promo' => '', 'agree' => '1',
+            'gratuity' => '18', 'promo' => '', 'agree' => '1',
             'card_brand' => 'Visa', 'card_last4' => '4242',
         ], $overrides);
     }
@@ -64,38 +65,36 @@ class BookingFlowTest extends TestCase
     }
 
     /** What the server should charge for a payload (same calculator as the controller). */
-    private function expectedQuote(array $payload, string $plan): array
+    private function expectedQuote(array $payload): array
     {
         $catalog = app(PublicCatalog::class);
 
-        return DemoQuote::fromConfig()->quote($catalog->yacht($payload['yacht']), $catalog->experience($payload['experience']), [
+        return DemoQuote::fromConfig()->quote($catalog->yacht($payload['yacht']), $payload['experience'] ? $catalog->experience($payload['experience']) : null, [
             'date' => $payload['date'],
             'hours' => (int) $payload['hours'],
             'guests' => (int) $payload['guests'],
             'addons' => $catalog->addons()->whereIn('slug', $payload['addons'])->values()->all(),
             'promo' => $payload['promo'] ?: null,
             'gratuity' => (int) $payload['gratuity'],
-            'plan' => $plan,
         ]);
     }
 
     /* ------------------------------------------------------------------ selection rules */
 
-    public function test_wizard_cleans_a_deep_link_before_embedding_it(): void
+    public function test_the_selection_cleans_untrusted_input(): void
     {
-        $html = $this->get('/book?experience=sunset&yacht=azure&guests=999&date=2026-02-30&time=%3Cscript%3E&hours=99&addons=champagne,evilware,champagne&occasion=%3Cb%3Ehi')
-            ->assertOk()
-            ->getContent();
+        $selection = $this->selection(['experience' => 'sunset', 'yacht' => 'azure', 'guests' => '999', 'date' => '2026-02-30', 'time' => '<script>', 'hours' => '99', 'addons' => 'champagne,evilware,champagne', 'occasion' => '<b>hi']);
 
-        $this->assertSame([
-            'experience' => 'sunset', 'yacht' => 'azure', 'guests' => 13, 'date' => null, 'time' => null,
-            'hours' => 3, 'addons' => ['champagne'], 'occasion' => '',
-        ], $this->embedded($html, 'data-wizard')['initial']);
-        $this->assertStringNotContainsString('evilware', $html);
-        $this->assertStringNotContainsString('<b>hi', $html);
+        $this->assertSame(['experience' => 'sunset', 'yacht' => 'azure', 'guests' => 13, 'hours' => 3, 'addons' => 'champagne'], $selection->toQuery());
+        $this->assertNull($selection->occasion);
+
+        $boatOnly = $this->selection(['yacht' => 'azure', 'date' => '2026-08-12', 'time' => '09:30', 'hours' => '3']);
+        $this->assertTrue($boatOnly->isComplete(), 'the experience is optional (D21)');
+        $this->assertSame([null, '09:30', 3], [$boatOnly->experience, $boatOnly->time, $boatOnly->hours]);
+        $this->assertNull($this->selection(['yacht' => 'azure', 'date' => '2026-08-12', 'time' => '09:15'])->time, 'off the half-hour grid');
     }
 
-    public function test_wizard_never_preselects_a_boat_that_cannot_take_the_booking(): void
+    public function test_a_boat_that_cannot_take_the_booking_is_never_selected(): void
     {
         $this->assertNull($this->selection(['experience' => 'sunset', 'yacht' => 'lakeside'])->yacht, 'Lakeside does not run sunset cruises');
         $this->assertNull($this->selection(['yacht' => 'no-such-boat'])->yacht);
@@ -104,10 +103,6 @@ class BookingFlowTest extends TestCase
         PublicCatalog::flush(); // a mass update fires no model events, so clear the cached catalog by hand
         $this->app->forgetInstance(PublicCatalog::class);
         $this->assertNull($this->selection(['experience' => 'sunset', 'yacht' => 'azure'])->yacht);
-
-        $wizard = $this->embedded($this->get('/book?yacht=azure')->getContent(), 'data-wizard');
-        $this->assertNull($wizard['initial']['yacht']);
-        $this->assertFalse(collect($wizard['yachts'])->firstWhere('slug', 'azure')['booking_enabled']);
     }
 
     /** @return array<string, array{0: string, 1: string, 2: ?string}> */
@@ -159,7 +154,9 @@ class BookingFlowTest extends TestCase
         $data = $this->embedded($html, 'data-checkout');
         $this->assertSame(['date' => '2026-08-12', 'hours' => 3, 'guests' => 6], $data['selection']);
         $this->assertArrayNotHasKey('promos', $data['pricing']);
-        $this->assertSame('2026-08-05', $data['balanceDate']);
+        $this->assertArrayNotHasKey('deposit_bp', $data['pricing']);
+        $this->assertStringNotContainsString('name="plan"', $html, 'paid in full (D22): no deposit choice');
+        $this->assertStringContainsString('Paid in full today.', $html);
 
         preg_match_all('/<input[^>]*data-card="[a-z]+"[^>]*>/', $html, $cards);
         $this->assertCount(4, $cards[0], 'number, expiry, CVC and ZIP inputs');
@@ -170,14 +167,16 @@ class BookingFlowTest extends TestCase
 
     public function test_checkout_without_a_complete_selection_shows_a_sample_booking(): void
     {
-        $this->get('/checkout?yacht=azure&date=2026-02-30')->assertOk()->assertSee('Showing a sample booking');
+        $this->get('/checkout?yacht=nope&date=2026-02-30')->assertOk()->assertSee('Showing a sample booking');
+        $this->get('/checkout')->assertOk()->assertSee('Showing a sample booking');
+        // A real boat without a date / start time goes back to its booking card instead (4.4 fixes).
+        $this->get('/checkout?yacht=azure&date=2026-02-30')->assertRedirect(route('yachts.show', ['azure', 'guests' => 6, 'hours' => 3]).'#book');
     }
 
-    public function test_trips_inside_the_balance_window_offer_pay_in_full_only(): void
+    public function test_the_booking_card_opens_checkout_without_an_experience(): void
     {
-        $html = $this->get('/checkout?experience=sunset&yacht=azure&guests=6&date=2026-07-17&time=18:00&hours=3')->assertOk()->getContent();
-
-        $this->assertNull($this->embedded($html, 'data-checkout')['balanceDate']);
+        $this->get('/checkout?yacht=azure&guests=6&date=2026-08-12&time=09:30&hours=3')
+            ->assertOk()->assertDontSee('Showing a sample booking')->assertSee('Private charter')->assertSee('9:30 AM');
     }
 
     /* ------------------------------------------------------------------ checkout POST */
@@ -186,17 +185,17 @@ class BookingFlowTest extends TestCase
     {
         $payload = $this->payload();
         $tampered = $payload + [
-            'total' => '1', 'total_cents' => '1', 'hourly_rate_cents' => '1', 'deposit_cents' => '1',
+            'total' => '1', 'total_cents' => '1', 'hourly_rate_cents' => '1', 'deposit_cents' => '1', 'plan' => 'deposit',
             'status' => 'paid', 'user_id' => '1', 'owner_id' => '1', 'role' => 'admin',
             'card_number' => '4242424242424242', 'cvc' => '123',
         ];
 
         $this->post('/checkout', $tampered)->assertRedirect(route('booking.confirmation'))->assertSessionHasNoErrors();
 
-        $quote = $this->expectedQuote($payload, 'deposit');
+        $quote = $this->expectedQuote($payload);
         $saved = session('booking.confirmation');
-        $this->assertSame(['total' => $quote['total'], 'paid' => $quote['deposit'], 'balance' => $quote['total'] - $quote['deposit'], 'balance_date' => '2026-08-05'], $saved['totals']);
-        $this->assertSame(['plan' => 'deposit', 'gratuity' => 18, 'promo' => null, 'brand' => 'Visa', 'last4' => '4242'], $saved['payment']);
+        $this->assertSame(['total' => $quote['total'], 'paid' => $quote['total']], $saved['totals'], 'paid in full (D22), whatever plan is posted');
+        $this->assertSame(['gratuity' => 18, 'promo' => null, 'brand' => 'Visa', 'last4' => '4242'], $saved['payment']);
         $this->assertMatchesRegularExpression('/^CYB-[A-Z0-9]{6}$/', $saved['ref']);
 
         $stored = json_encode($saved);
@@ -212,30 +211,27 @@ class BookingFlowTest extends TestCase
             ->assertDontSee('Sample confirmation');
     }
 
-    public function test_short_notice_trips_are_charged_in_full_even_if_deposit_is_posted(): void
+    public function test_a_trip_without_an_experience_checks_out(): void
     {
-        $payload = $this->payload(['date' => '2026-07-17']); // Friday: balance date already passed
+        $payload = $this->payload(['experience' => '', 'time' => '09:30', 'hours' => '3']);
 
-        $this->post('/checkout', $payload)->assertRedirect(route('booking.confirmation'));
+        $this->post('/checkout', $payload)->assertRedirect(route('booking.confirmation'))->assertSessionHasNoErrors();
 
-        $quote = $this->expectedQuote($payload, 'full');
-        $this->assertSame('full', session('booking.confirmation.payment.plan'));
-        $this->assertSame($quote['total'], session('booking.confirmation.totals.paid'));
-        $this->assertSame(0, session('booking.confirmation.totals.balance'));
-        $this->assertNull(session('booking.confirmation.totals.balance_date'));
+        $this->assertSame($this->expectedQuote(['experience' => null] + $payload)['total'], session('booking.confirmation.totals.paid'));
+        $this->get('/booking/confirmation')->assertOk()->assertSee('Private charter');
     }
 
     public function test_a_known_promo_is_applied_by_the_server_and_an_unknown_one_is_ignored(): void
     {
-        $this->post('/checkout', $this->payload(['promo' => 'welcome10', 'plan' => 'full']));
-        $quote = $this->expectedQuote($this->payload(['promo' => 'WELCOME10']), 'full');
+        $this->post('/checkout', $this->payload(['promo' => 'welcome10']));
+        $quote = $this->expectedQuote($this->payload(['promo' => 'WELCOME10']));
         $this->assertGreaterThan(0, $quote['discount']);
         $this->assertSame('WELCOME10', session('booking.confirmation.payment.promo'));
         $this->assertSame($quote['total'], session('booking.confirmation.totals.total'));
 
-        $this->post('/checkout', $this->payload(['promo' => 'FREE100', 'plan' => 'full']));
+        $this->post('/checkout', $this->payload(['promo' => 'FREE100']));
         $this->assertNull(session('booking.confirmation.payment.promo'));
-        $this->assertSame($this->expectedQuote($this->payload(), 'full')['total'], session('booking.confirmation.totals.total'));
+        $this->assertSame($this->expectedQuote($this->payload())['total'], session('booking.confirmation.totals.total'));
     }
 
     /** @return array<string, array{0: array<string, mixed>, 1: string}> */
@@ -251,7 +247,6 @@ class BookingFlowTest extends TestCase
             'unknown referral' => [['heard' => '<b>TV</b>'], 'heard'],
             'long notes' => [['notes' => str_repeat('n', 1001)], 'notes'],
             'gratuity not offered' => [['gratuity' => '50'], 'gratuity'],
-            'unknown plan' => [['plan' => 'later'], 'plan'],
             'promo with spaces' => [['promo' => 'WEL COME'], 'promo'],
             'non-ascii promo' => [['promo' => 'WELCOMÉ10'], 'promo'],
             'terms not accepted' => [['agree' => '0'], 'agree'],

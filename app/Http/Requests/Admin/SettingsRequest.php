@@ -28,8 +28,6 @@ class SettingsRequest extends SensitiveActionRequest
     {
         return parent::rules() + [
             'tax_rate' => ['required', 'numeric', 'decimal:0,2', 'between:0,25'],
-            'deposit' => ['required', 'integer', 'between:10,100'],
-            'balance_due_days' => ['required', 'integer', 'between:1,60'],
             'weekend_markup' => ['required', 'numeric', 'decimal:0,2', 'between:0,100'],
             'hold_minutes' => ['required', 'integer', 'between:5,60'],
             'gratuity_options' => ['required', 'array', 'min:1', 'max:'.count(self::GRATUITY_CHOICES)],
@@ -79,8 +77,6 @@ class SettingsRequest extends SensitiveActionRequest
 
         return [
             'tax_rate_bp' => Money::toBasisPoints($v('tax_rate')),
-            'deposit_bp' => (int) $v('deposit') * 100,
-            'balance_due_days' => (int) $v('balance_due_days'),
             'weekend_multiplier_bp' => 10000 + (int) Money::toBasisPoints($v('weekend_markup')),
             'hold_minutes' => (int) $v('hold_minutes'),
             'gratuity_options' => $options,

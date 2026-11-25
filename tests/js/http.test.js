@@ -40,6 +40,12 @@ test('GET sends JSON headers + cookies, no CSRF header, and skips empty params',
     assert.equal(init.body, undefined);
 });
 
+test('GET sends an array param as key[] (each value once, an empty array not at all)', async () => {
+    respondWith(json(200, { ok: true }));
+    await http.get('/yachts/azure/quote', { params: { hours: 3, addons: ['champagne', 'decor'], none: [] } });
+    assert.equal(calls[0].url, `${ORIGIN}/yachts/azure/quote?hours=3&addons%5B%5D=champagne&addons%5B%5D=decor`);
+});
+
 test('POST adds the CSRF token, JSON body and idempotency key', async () => {
     respondWith(json(201, { id: 'x' }));
     const key = newIdempotencyKey();
