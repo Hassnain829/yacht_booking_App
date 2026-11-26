@@ -27,7 +27,7 @@
             ['experiences', 'sparkles', 'Experiences', route('admin.experiences.index'), null],
             ['addons', 'gift', 'Add-ons', route('admin.addons.index'), null],
             ['policies', 'shield-check', 'Cancellation policies', route('admin.policies.index'), null],
-            ['promos', 'tag', 'Promo codes', route('admin.promos.index'), null],
+            ['promos', 'tag', 'Promo codes', route('admin.promo-codes.index'), null],
         ],
         'Finance' => [
             ['payouts', 'landmark', 'Payouts', route('admin.payouts.index'), $counts['Withdrawals to approve'] ?: null],

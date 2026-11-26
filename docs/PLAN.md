@@ -1416,8 +1416,18 @@ There are also in-app notifications (bell icon) for customers, owners, captains 
   - `GET /bookings/{booking}/calendar.ics` and the email attachment: `App\Support\Calendar\TripCalendar` (RFC 5545: UTC times, escaped text, lines folded at 75 octets, CRLF).
   - **QA (4.5 + 4.6):** see the report; tests in Phase4/CheckoutTest, StripeWebhookTest, TripCalendarTest.
   - **User runs:** `php artisan migrate` (1 migration) and `php artisan db:seed --class=CatalogSeeder` for the two promo codes (it skips what exists). For real payments: Stripe test keys in `.env` (`STRIPE_KEY`, `STRIPE_SECRET`, `STRIPE_WEBHOOK_SECRET`; locally `stripe listen --forward-to localhost:8000/stripe/webhook`). Without keys the fake gateway's test card works locally.
-4.7 My trips + trip detail.
-4.8 Admin: Bookings (list, calendar, detail, status, notes) + promo codes.
+4.7 **My trips + trip detail.** ✅ done 2026-11-26 (built with 4.8).
+  - `Account\TripController` reads the guest's own bookings (BookingPolicy: anyone else's → 404). My trips: upcoming (confirmed, and a hold that can still be paid → "Finish checkout") soonest first, then past & cancelled; holds that ran out aren't trips. The Phase 1 design, real data.
+  - Trip page: the trip, departure + map, captain (or "we're assigning one"), every price line, paid with card brand + last 4, refunds, Receipt (Phase 5.5), Add to calendar (the server's .ics), the cancellation policy **from the booking's snapshot** with the refund it gives now and when it drops next (`App\Support\Booking\RefundPreview`; the gratuity always comes back). Until online cancellation (Phase 5) and the problem form (Phase 7) exist, those boxes tell the guest to call / email with the reference (the demo dialog and form, which sent nothing, are gone). The report box shows during Settings → `complaint_window_hours` after the trip.
+4.8 **Admin: Bookings + promo codes.** ✅ done 2026-11-26.
+  - **Bookings list** (`Admin\BookingController`): search by reference, guest name / email or boat; whitelisted filters (status, upcoming / past, house / owner boat, captain or not) and sort (date, total, guests, reference, booked); pages. Expired holds only when asked for.
+  - **Calendar** (`/admin/bookings/calendar?month=`): a month by Chicago day — held, confirmed and past trips; a 7-day grid on large screens, the days with trips as a list on smaller ones.
+  - **Booking page** (by its reference): trip, the guest's occasion and note, contact (admin only) + their account, every price line with its payee, payments (provider, card, status, failure), the promo code, the status history, a red note when a payment came in after the time was taken (refund by hand until Phase 5).
+  - **Notes** (`PUT …/notes`, `throttle:admin`): an internal note and a note for the captain (plain text), only what changed audit-logged.
+  - **Status** (`POST …/status`, a reason + the password, `throttle:admin-sensitive`, audit log + history): only what `BookingService::adminTargets()` allows now — let a hold go (its open payment is cancelled), Completed once the trip ended, No-show once it started. Cancel / refund: Phase 5; captain assignment: Phase 8.
+  - **Promo codes** (the 3.4 record screens, `manage-catalog`): list (state: Active / Scheduled / Ended / Used up / Hidden, uses / limit), add / edit (percent or dollars, charter or whole booking, minimum, cap for percentages, first / last Chicago day, total and per-guest limits, on / off), Trash (the code stops working at checkout), restore, delete permanently only when never used. The demo screen and `SystemController` are gone.
+  - **QA:** see the report; tests in Phase4/MyTripsTest, AdminBookingsTest, AdminPromoCodesTest.
+  - Still demo after Phase 4: the admin dashboard's numbers, listings, inbox, finance (payouts, payments, complaints), the owner area and saved cards — their phases replace them.
 **QA:** price parity with the mockup on the remaining (full-payment) cases; concurrency test (two holds on one slot); hold expiry; IDOR tests; §8.2 endpoint test set; boat page / fleet at 390 / 768 / 1280 / 1440 with no overflow.
 
 ### Phase 5 — Payments + cancellations (Stripe test mode)

@@ -17,8 +17,8 @@ use App\Http\Controllers\Admin\FinanceController as AdminFinanceController;
 use App\Http\Controllers\Admin\FleetController as AdminFleetController;
 use App\Http\Controllers\Admin\HarborController as AdminHarborController;
 use App\Http\Controllers\Admin\PeopleController as AdminPeopleController;
+use App\Http\Controllers\Admin\PromoCodeController as AdminPromoCodeController;
 use App\Http\Controllers\Admin\SettingsController as AdminSettingsController;
-use App\Http\Controllers\Admin\SystemController as AdminSystemController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\BookingCardController;
 use App\Http\Controllers\BookingConfirmationController;
@@ -108,12 +108,13 @@ Route::prefix('owner')->name('owner.')->middleware(['auth', 'active', 'verified'
     Route::get('/complaints', [OwnerComplaintController::class, 'index'])->name('complaints.index');
 });
 
-// Customer account — signed-in and active. Content is demo data until Phase 4 (BookingPolicy: other people's trips → 404).
+// Customer account — signed-in and active. My trips are the guest's own bookings (4.7; BookingPolicy: other people's
+// trips → 404). Saved cards stay demo until Phase 5.
 Route::prefix('account')->name('account.')->middleware(['auth', 'active'])->group(function () {
     Route::get('/', [AccountProfileController::class, 'show'])->name('profile');
     Route::delete('/', [AccountProfileController::class, 'destroy'])->middleware('throttle:account-security')->name('destroy');
     Route::get('/trips', [AccountTripController::class, 'index'])->name('trips.index');
-    Route::get('/trips/{ulid}', [AccountTripController::class, 'show'])->where('ulid', '[0-9A-HJKMNP-TV-Z]{26}')->name('trips.show');
+    Route::get('/trips/{booking}', [AccountTripController::class, 'show'])->where('booking', '[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}')->name('trips.show');
 
     // Security (PLAN §8.1). The 2FA page shows the setup key and recovery codes, so it needs a recent
     // password confirmation; its buttons post to Fortify's /user/two-factor-* routes.
@@ -130,7 +131,7 @@ Route::get('/files/{media:uuid}', FileController::class)->whereUuid('media')
 // admin's choice (Settings → Security; user decision 2026-11-22), so no `2fa` here.
 // Saving forms: `throttle:admin`. Sensitive actions (Trash / restore / delete permanently, settings, account
 // status): a reason + the password in the dialog (SensitiveActionRequest), `throttle:admin-sensitive`, audit log.
-// Bookings, listings, inbox and finance screens still show demo data until Phases 4–9.
+// Listings, inbox and finance screens still show demo data until Phases 6–9.
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'active', 'verified', 'can:access-admin', 'admin.idle'])->group(function () {
     /**
      * The standard admin record routes (PLAN 3.4): list, add, edit, Trash, restore, delete permanently.
@@ -152,8 +153,14 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'active', 'verified'
     $ulid = '[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}';
 
     Route::get('/', AdminDashboardController::class)->name('dashboard');
+    // Bookings (4.8): list, month calendar, a booking (by its reference) with its notes and status changes.
     Route::get('/bookings', [AdminBookingController::class, 'index'])->name('bookings.index');
-    Route::get('/bookings/{ref}', [AdminBookingController::class, 'show'])->where('ref', 'CYB-[A-Z0-9]{6}')->name('bookings.show');
+    Route::get('/bookings/calendar', [AdminBookingController::class, 'calendar'])->name('bookings.calendar');
+    Route::controller(AdminBookingController::class)->prefix('bookings/{booking:reference}')->name('bookings.')->where(['booking' => 'CYB-[A-Z0-9]{6}'])->group(function () {
+        Route::get('/', 'show')->name('show');
+        Route::put('/notes', 'notes')->middleware('throttle:admin')->name('notes');
+        Route::post('/status', 'status')->middleware('throttle:admin-sensitive')->name('status');
+    });
 
     // Fleet (3.4.1, 3.4.3–3.4.5)
     $records('boats', 'boat', AdminBoatController::class, $ulid);
@@ -178,10 +185,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'active', 'verified'
     Route::get('/listings', [AdminFleetController::class, 'listings'])->name('listings.index');
     Route::get('/listings/{ulid}', [AdminFleetController::class, 'listing'])->where('ulid', '[0-9A-HJKMNP-TV-Z]{26}')->name('listings.show');
 
-    // Catalog (3.4.2, 3.4.5). Promo codes: demo screen until 4.7.
+    // Catalog (3.4.2, 3.4.5; promo codes 4.8)
     $records('experiences', 'experience', AdminExperienceController::class, $slug);
     $records('addons', 'addon', AdminAddonController::class, $slug);
-    Route::get('/promo-codes', [AdminSystemController::class, 'promos'])->name('promos.index');
+    $records('promo-codes', 'promo', AdminPromoCodeController::class, $ulid);
     Route::controller(AdminPolicyController::class)->prefix('cancellation-policies')->name('policies.')->where(['policy' => $slug])->group(function () {
         Route::get('/', 'index')->name('index');
         Route::get('/{policy}/edit', 'edit')->name('edit');

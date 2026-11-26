@@ -16,7 +16,7 @@
             <h2 id="upcoming-title" class="text-xs font-bold uppercase tracking-[0.18em] text-navy-400">Upcoming</h2>
             <div class="mt-4 space-y-5">
                 @forelse ($upcoming as $trip)
-                    @include('account.partials.trip-card', ['trip' => $trip])
+                    @include('account.partials.trip-card', ['trip' => $trip, 'cover' => $covers[$trip->ulid], 'complaintUntil' => $complaintUntil($trip)])
                 @empty
                     <div class="rounded-[2rem] border-2 border-dashed border-navy-200 bg-white px-6 py-14 text-center">
                         <span class="mx-auto grid h-14 w-14 place-items-center rounded-full bg-navy-50 text-navy-400"><i data-lucide="sailboat" class="h-7 w-7"></i></span>
@@ -33,7 +33,7 @@
                 <h2 id="past-title" class="text-xs font-bold uppercase tracking-[0.18em] text-navy-400">Past &amp; cancelled</h2>
                 <div class="mt-4 space-y-5">
                     @foreach ($past as $trip)
-                        @include('account.partials.trip-card', ['trip' => $trip])
+                        @include('account.partials.trip-card', ['trip' => $trip, 'cover' => $covers[$trip->ulid], 'complaintUntil' => $complaintUntil($trip)])
                     @endforeach
                 </div>
             </section>

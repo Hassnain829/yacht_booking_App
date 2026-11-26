@@ -2,74 +2,126 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\BoatOwnership;
+use App\Enums\BookingStatus;
 use App\Http\Controllers\Controller;
-use App\Support\Demo\DemoAdmin;
+use App\Http\Requests\Admin\BookingNotesRequest;
+use App\Http\Requests\Admin\BookingStatusRequest;
+use App\Models\Booking;
+use App\Services\BookingService;
+use App\Support\Admin\ListQuery;
+use Carbon\CarbonImmutable;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Fluent;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
 /**
- * Admin bookings: list (search, filters, sort, pagination) and detail (captain assignment, refund).
- * Every filter and sort value is checked against a whitelist (PLAN §8.2 rule 5). Phase 4: Eloquent.
+ * Admin → Bookings (PLAN 4.8): the list (search, whitelisted filters and sort, pages), a month calendar, and a
+ * booking's page — guest contact (admin only), every price line, payments, history, notes and the status changes
+ * allowed now (BookingService). Expired holds are left out unless asked for. Cancellations with refunds and
+ * captain assignment come with Phases 5 and 8.
  */
 class BookingController extends Controller
 {
-    public const STATUSES = ['confirmed', 'completed', 'cancelled'];
+    private const SORTS = ['date' => 'starts_at', 'total' => 'total_cents', 'guests' => 'guests', 'ref' => 'reference', 'booked' => 'created_at'];
 
-    public const SORTS = ['date' => 'starts_at', 'total' => 'total_cents', 'guests' => 'guests', 'ref' => 'ref'];
-
-    public const PER_PAGE = 10;
-
-    public function index(Request $request, DemoAdmin $admin): View
+    public function index(Request $request): View
     {
-        $pick = fn (string $key, array $allowed, ?string $default = null) => is_string($request->query($key)) && in_array($request->query($key), $allowed, true) ? $request->query($key) : $default;
-        $q = is_string($request->query('q')) ? mb_substr(trim($request->query('q')), 0, 60) : '';
-        $status = $pick('status', self::STATUSES);
-        $kind = $pick('kind', ['house', 'owner']);
-        $captain = $pick('captain', ['none', 'assigned']);
-        $sort = $pick('sort', array_keys(self::SORTS), 'date');
-        $dir = $pick('dir', ['asc', 'desc'], 'desc');
+        Gate::authorize('manage-bookings');
 
-        $rows = $admin->bookings()
-            ->when($q !== '', fn ($c) => $c->filter(fn (Fluent $b) => str_contains(mb_strtolower($b->ref.' '.$b->customer.' '.$b->boat), mb_strtolower($q))))
-            ->when($status, fn ($c) => $c->where('status', $status))
-            ->when($kind, fn ($c) => $c->where('kind', $kind))
-            ->when($captain === 'none', fn ($c) => $c->where('is_upcoming', true)->whereNull('captain'))
-            ->when($captain === 'assigned', fn ($c) => $c->whereNotNull('captain'))
-            ->sortBy(fn (Fluent $b) => $sort === 'date' ? $b->starts_at->getTimestamp() : $b->{self::SORTS[$sort]}, SORT_REGULAR, $dir === 'desc')
-            ->values();
+        $list = new ListQuery($request);
+        $q = $list->search();
+        $status = $list->pick('status', array_map(fn (BookingStatus $s) => $s->value, BookingStatus::cases()));
+        $when = $list->pick('when', ['upcoming', 'past']);
+        $kind = $list->pick('kind', [BoatOwnership::House->value, BoatOwnership::Owner->value]);
+        $captain = $list->pick('captain', ['none', 'assigned']);
+        [$sort, $column, $dir] = $list->sort(self::SORTS, 'date', 'desc');
+        $like = '%'.addcslashes($q, '%_\\').'%';
 
-        $page = max(1, min((int) $request->query('page', 1), max(1, (int) ceil($rows->count() / self::PER_PAGE))));
-        $paginator = new LengthAwarePaginator($rows->forPage($page, self::PER_PAGE)->values(), $rows->count(), self::PER_PAGE, $page, [
-            'path' => $request->url(),
-            'query' => array_filter(compact('q', 'status', 'kind', 'captain') + ['sort' => $sort === 'date' ? null : $sort, 'dir' => $dir === 'desc' ? null : $dir]),
-        ]);
+        $bookings = Booking::query()
+            ->with(['boat:id,title,ownership', 'experience:id,name', 'captain:id,name'])
+            ->when($status, fn ($query) => $query->where('status', $status), fn ($query) => $query->where('status', '!=', BookingStatus::Expired))
+            ->when($q !== '', fn ($query) => $query->where(fn ($where) => $where
+                ->where('reference', 'like', $like)
+                ->orWhere('contact_first_name', 'like', $like)
+                ->orWhere('contact_last_name', 'like', $like)
+                ->orWhere('contact_email', 'like', $like)
+                ->orWhereHas('boat', fn ($boat) => $boat->where('title', 'like', $like))))
+            ->when($when === 'upcoming', fn ($query) => $query->where('ends_at', '>', now()))
+            ->when($when === 'past', fn ($query) => $query->where('ends_at', '<=', now()))
+            ->when($kind, fn ($query) => $query->whereHas('boat', fn ($boat) => $boat->where('ownership', $kind)))
+            ->when($captain === 'none', fn ($query) => $query->whereNull('captain_id'))
+            ->when($captain === 'assigned', fn ($query) => $query->whereNotNull('captain_id'))
+            ->orderBy($column, $dir)
+            ->orderBy('id', $dir)
+            ->paginate(ListQuery::PER_PAGE)
+            ->withQueryString();
 
         return view('admin.bookings.index', [
-            'bookings' => $paginator,
-            'filters' => compact('q', 'status', 'kind', 'captain'),
+            'bookings' => $bookings,
+            'filters' => compact('q', 'status', 'when', 'kind', 'captain'),
+            'statuses' => collect(BookingStatus::cases())->mapWithKeys(fn (BookingStatus $s) => [$s->value => $s->label()])->all(),
             'sort' => $sort,
             'dir' => $dir,
         ]);
     }
 
-    public function show(string $ref, DemoAdmin $admin): View
+    /** A month of trips, day by day (Chicago dates): held, confirmed and past ones. `?month=2027-06`. */
+    public function calendar(Request $request): View
     {
-        $booking = $admin->booking($ref);
-        abort_unless($booking, 404);
+        Gate::authorize('manage-bookings');
 
-        $captains = $admin->captains()->where('active', true)->values()->map(function (Fluent $captain) use ($admin, $booking) {
-            $captain->checks = $admin->captainChecks($booking, $captain);
-            $captain->eligible = collect($captain->checks)->every(fn ($check) => $check[1]);
+        $tz = config('app.display_timezone');
+        $today = CarbonImmutable::now($tz);
+        $month = $request->query('month');
+        $first = is_string($month) && preg_match('/^(\d{4})-(0[1-9]|1[0-2])$/', $month) ? CarbonImmutable::createFromFormat('!Y-m', $month, $tz) : $today->startOfMonth();
+        if ($first->lessThan($today->startOfMonth()->subMonths(24)) || $first->greaterThan($today->startOfMonth()->addMonths(24))) {
+            $first = $today->startOfMonth();
+        }
 
-            return $captain;
-        });
+        $trips = Booking::query()
+            ->with(['boat:id,title', 'experience:id,name'])
+            ->whereIn('status', [BookingStatus::Hold, BookingStatus::Confirmed, BookingStatus::Completed, BookingStatus::NoShow])
+            ->where('starts_at', '>=', $first->utc())
+            ->where('starts_at', '<', $first->addMonth()->utc())
+            ->orderBy('starts_at')
+            ->get()
+            ->reject(fn (Booking $booking) => $booking->status === BookingStatus::Hold && ! $booking->isPayable())
+            ->groupBy(fn (Booking $booking) => $booking->starts_at->setTimezone($tz)->toDateString());
+
+        return view('admin.bookings.calendar', [
+            'first' => $first,
+            'today' => $today->toDateString(),
+            'trips' => $trips,
+            'previous' => $first->subMonth()->format('Y-m'),
+            'next' => $first->addMonth()->format('Y-m'),
+        ]);
+    }
+
+    public function show(Booking $booking, BookingService $bookings): View
+    {
+        Gate::authorize('manage-bookings');
+        $booking->load(['boat.harbor', 'experience', 'items', 'captain', 'customer', 'payments', 'promoCode', 'statusHistory.actor']);
 
         return view('admin.bookings.show', [
             'booking' => $booking,
-            'captains' => $captains,
-            'current' => $captains->firstWhere('id', $booking->captain_id),
+            'targets' => $bookings->adminTargets($booking),
         ]);
+    }
+
+    public function notes(BookingNotesRequest $request, Booking $booking, BookingService $bookings): RedirectResponse
+    {
+        $bookings->updateNotes($booking, $request->notes(), $request->user());
+
+        return redirect()->route('admin.bookings.show', $booking->reference)->with('status', 'Notes saved.');
+    }
+
+    public function status(BookingStatusRequest $request, Booking $booking, BookingService $bookings): RedirectResponse
+    {
+        $to = $request->status();
+        $bookings->changeStatusByAdmin($booking, $to, $request->user(), $request->reason());
+
+        return redirect()->route('admin.bookings.show', $booking->reference)->with('status', "{$booking->reference} is now {$to->label()}.");
     }
 }

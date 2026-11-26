@@ -6,11 +6,13 @@ use App\Listeners\SecurityEventSubscriber;
 use App\Models\Addon;
 use App\Models\Amenity;
 use App\Models\Boat;
+use App\Models\Booking;
 use App\Models\CancellationPolicy;
 use App\Models\Captain;
 use App\Models\Experience;
 use App\Models\Harbor;
 use App\Models\Media;
+use App\Models\PromoCode;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\Payments\FakeGateway;
@@ -100,6 +102,8 @@ class AppServiceProvider extends ServiceProvider
             'cancellation_policy' => CancellationPolicy::class,
             'captain' => Captain::class,
             'setting' => Setting::class,
+            'booking' => Booking::class,
+            'promo_code' => PromoCode::class,
         ]);
     }
 

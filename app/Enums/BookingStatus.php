@@ -30,6 +30,19 @@ enum BookingStatus: string
         };
     }
 
+    /** The admin status pill's tone (x-admin.pill). */
+    public function tone(): string
+    {
+        return match ($this) {
+            self::Hold => 'warning',
+            self::Confirmed => 'success',
+            self::Completed => 'navy',
+            self::Cancelled => 'danger',
+            self::Expired => 'muted',
+            self::NoShow => 'brass',
+        };
+    }
+
     /** A hold keeps the boat only until `hold_expires_at`. */
     public function expires(): bool
     {

@@ -3,7 +3,6 @@
 namespace Tests\Feature\Phase1;
 
 use App\Models\User;
-use App\Support\Demo\DemoCustomer;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -11,19 +10,11 @@ use Tests\TestCase;
 
 /**
  * Phase 1.5 — auth screens (preview), customer account, legal pages, error pages.
- * Phase 2 adds: guest → login redirect, unverified → verify notice, someone else's trip → 404.
+ * Phase 2 adds: guest → login redirect, unverified → verify notice. My trips are real since 4.7 (Phase4/MyTripsTest).
  */
 class AccountPagesTest extends TestCase
 {
     use RefreshDatabase;
-
-    private const UPCOMING = '01JDTR1PQ7M3K8R2V5X9C4B6NA';
-
-    private const RECENT = '01JDTR1PQ7M3K8R2V5X9C4B6NC';
-
-    private const OLD = '01JDTR1PQ7M3K8R2V5X9C4B6ND';
-
-    private const CANCELLED = '01JDTR1PQ7M3K8R2V5X9C4B6NE';
 
     protected function setUp(): void
     {
@@ -45,73 +36,6 @@ class AccountPagesTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ account */
-
-    public function test_my_trips_lists_upcoming_soonest_first_then_past(): void
-    {
-        $html = $this->asCustomer()->get('/account/trips')
-            ->assertOk()
-            ->assertSee('<meta name="robots" content="noindex">', false)
-            ->assertSeeInOrder(['Upcoming', 'CYB-8M2K4Q', 'CYB-5T9W3R', 'Past &amp; cancelled', 'CYB-2K7D9V', 'CYB-3W8N2J', 'CYB-6Q4H8M'], false)
-            ->assertSee('Report a problem')
-            ->getContent();
-        $this->assertMatchesRegularExpression('/aria-current="page"[^>]*>My trips</', $html);
-        $this->assertCspSafe($html);
-    }
-
-    public function test_upcoming_trip_shows_payment_captain_and_the_refund_preview(): void
-    {
-        $trip = app(DemoCustomer::class)->trip(self::UPCOMING);
-        $html = $this->asCustomer()->get('/account/trips/'.self::UPCOMING)
-            ->assertOk()
-            ->assertSee('Capt. Devon J.')
-            ->assertSee(money($trip->quote['total'], 'always'))
-            ->assertSee(money($trip->refund['refund'], 'always').' <span', false)
-            ->assertSee('Moderate policy')
-            ->assertSee('id="cancel-dialog"', false)
-            ->assertDontSee('id="report-form"', false)
-            ->getContent();
-
-        $this->assertSame(100, $trip->refund['percent']);
-        $this->assertSame($trip->paid_cents, $trip->refund['refund'], 'Full refund of the deposit');
-        preg_match('/data-ics="([^"]+)"/', $html, $m);
-        $ics = json_decode(html_entity_decode($m[1], ENT_QUOTES), true, flags: JSON_THROW_ON_ERROR);
-        $this->assertSame('CYB-8M2K4Q', $ics['ref']);
-        $this->assertMatchesRegularExpression('/^\d{8}T\d{6}$/', $ics['start']);
-        $this->assertCspSafe($html);
-    }
-
-    public function test_recent_trip_can_be_reported_within_72_hours(): void
-    {
-        $this->asCustomer()->get('/account/trips/'.self::RECENT)
-            ->assertOk()
-            ->assertSee('id="report-form"', false)
-            ->assertSee('Cleanliness')
-            ->assertDontSee('id="cancel-dialog"', false)
-            ->assertSee('This trip has ended.');
-    }
-
-    public function test_old_trip_explains_the_report_window_closed(): void
-    {
-        $this->asCustomer()->get('/account/trips/'.self::OLD)->assertOk()->assertSee('The window to report a problem closed')->assertDontSee('id="report-form"', false);
-    }
-
-    public function test_cancelled_trip_shows_the_refund(): void
-    {
-        $trip = app(DemoCustomer::class)->trip(self::CANCELLED);
-        $this->asCustomer()->get('/account/trips/'.self::CANCELLED)
-            ->assertOk()
-            ->assertSee('Cancelled on')
-            ->assertSee(money($trip->refunded_cents, 'always').' was refunded', false)
-            ->assertDontSee('data-open-cancel', false);
-    }
-
-    public function test_unknown_or_malformed_trip_ids_are_404(): void
-    {
-        $this->asCustomer()->get('/account/trips/01JDTR1PQ7M3K8R2V5X9C4B6NZ')->assertNotFound();
-        $this->asCustomer()->get('/account/trips/01jdtr1pq7m3k8r2v5x9c4b6na')->assertNotFound();
-        $this->asCustomer()->get('/account/trips/1')->assertNotFound();
-        $this->asCustomer()->get('/account/trips/%3Cscript%3E')->assertNotFound();
-    }
 
     public function test_profile_page_renders_every_section_without_card_numbers(): void
     {

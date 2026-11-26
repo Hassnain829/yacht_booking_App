@@ -61,7 +61,7 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
   - It is cached (3.6) and cleared by the model events of the catalog models. A change made **without model events** (a query-builder `update()` / `delete()`, a pivot `sync()` / `attach()`) must call `PublicCatalog::flushAfterCommit()`, or the site shows stale data for up to a day.
   - Page tests seed it with `Tests\Concerns\SeedsPublicCatalog` (+ RefreshDatabase).
 - **Phase 1 demo code** (delete when the real data arrives):
-  - Demo data lives in `config/demo*.php`, read through `App\Support\Demo\*` (shaped like the future models, dates relative to "now"). Since 3.5 only the still-demo screens use it (My trips, owner area, admin bookings / finance, promo codes, page content).
+  - Demo data lives in `config/demo*.php`, read through `App\Support\Demo\*` (shaped like the future models, dates relative to "now"). Since 4.8 only the still-demo screens use it (the owner area, the admin dashboard / listings / inbox / finance, saved cards, page content).
   - `<form data-demo-form="message">` = a form whose endpoint doesn't exist yet: the browser validates it, then shows a toast. Remove the attribute when the endpoint is built.
 - **Components with built-in classes take props, never a second conflicting class:** `x-button` → `size`/`variant`, `x-admin.pill` → `tone`, `x-admin.table` → `min`.
 - **Files:**
