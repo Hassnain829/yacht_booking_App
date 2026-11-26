@@ -67,7 +67,7 @@ A secure, role-based yacht charter marketplace for Chicago:
 | D19 | **Captain portal** (user decision 2026-11-23). Captains have a login with the `captain` role and a dashboard at `/captain`: trip offers (accept / decline), their trips, acknowledging an assignment, their availability, profile + license documents, and pay. A captain account is created by **applying** (admin approval needed) or by an **admin invite**. Built in Phase 8 (§7.8). |
 | D20 | **Trip extensions** (user decision 2026-11-23). During the trip, until a cut-off before the end, the customer can **add time and pay for it** as a separate payment. It is allowed only if the boat **and** the captain are free for the extra time. The captain, the owner (owner boats) and the admin are told when it is paid. Built in Phase 8 (§7.9). |
 | D21 | **Boatsetter-style renter flow, our design** (user decision 2026-11-25). For Chicago only. Booking starts on the boat page card (date, duration, start time, optional experience, captain choice, guests), then one checkout page. The 4-step `/book` wizard is retired. Experiences become optional and work like categories. Every fee line is shown. Fleet filters, no map. Our design stays, only adjusted for the flow. Research: [docs/research/boatsetter-renter-flow.md](research/boatsetter-renter-flow.md). **Experiences are free** (user, 2026-11-25, as on Boatsetter): each keeps its own start times (sunset ≠ fireworks); the admin can add **paid extras** to an experience (décor, a photographer, any facility; add-ons priced in Admin → Add-ons). Built in 4.3. **Changed the same day after the user's QA:** an experience has **no trip length of its own** (the guest books the boat by the hour and gets the experience for that time); it **departs inside a window** (sunset in the evening, fireworks at night) and the guest picks any of the boat's start times inside it, told plainly when a time or day doesn't fit; its extras are **optional add-ons suggested at checkout**, charged only when ticked. |
-| D22 | **Direct checkout, full payment only** (user decisions 2026-11-25). No deposit, no balance charge and **no request to book** (owner boats too): every booking is a hold paid in full at checkout, then confirmed. Trip Assurance and security-deposit holds come later (D18). |
+| D22 | **Direct checkout, full payment only** (user decisions 2026-11-25). No deposit, no balance charge and **no request to book** (owner boats too): every booking is a hold paid in full at checkout, then confirmed. Trip Assurance and security-deposit holds come later (D18). **2026-11-26 (user): the payment is received at checkout from 4.5** — Stripe's core (planned for 5.1 / 5.2) came forward; there is no stubbed step. |
 
 ### 2.2 Small confirmations
 
@@ -750,7 +750,7 @@ These rules apply to every Blade form, every JSON endpoint called from our JS, a
 - **Server controls the money:**
   - Amounts are calculated on the server and sent in cents.
   - Stripe calls carry idempotency keys.
-- **Confirmation by webhook only:** a booking is `confirmed` only when the **webhook** reports success; the browser redirect alone never confirms it.
+- **Confirmation from Stripe only:** a booking is `confirmed` only when **Stripe** reports success — its signed webhook, or our server retrieving the PaymentIntent (the return page and its status poll, so a missed or late webhook never strands a paid guest; 4.5). The browser's redirect or its word alone never confirms it.
 - **Checks and fraud:** a nightly reconcile job compares Stripe with our DB, and Stripe Radar screens for fraud.
 
 ### 8.5 Data, audit and operations
@@ -1263,7 +1263,7 @@ There are also in-app notifications (bell icon) for customers, owners, captains 
         - A block was added and removed from the new place.
         - A backwards block jumps to its error, which doesn't count as unsaved boat edits.
 
-### Phase 4 — Booking engine (payment stubbed)
+### Phase 4 — Booking engine (payments taken from 4.5, user 2026-11-26)
 > **Client request (2026-11-24 / 25): the renter flow works like Boatsetter's, for Chicago, in our own design (D21, D22).** The research (search, boat page, booking card, phone sheet, checkout, fees, policies, Chicago) and the agreed changes are in [docs/research/boatsetter-renter-flow.md](research/boatsetter-renter-flow.md). Answers B1–B9 are in its §11. **Phase 4 now has 8 steps** (4.1–4.2 done; 4.3–4.8 below replace the old 4.3–4.7).
 
 4.1 `QuoteService` (from `CYB.quote`, in cents) + unit tests: weekend, promo, gratuity, add-ons per guest, duration prices, rounding, deposit vs full. ✅ done 2026-11-23.
@@ -1401,19 +1401,28 @@ There are also in-app notifications (bell icon) for customers, owners, captains 
     - **No visible inner scrollbars (user, 2026-11-26):** every inner scroller uses `no-scrollbar` (sticky panels, the phone booking sheet, the mobile menu, tables, chip rows); the page's own scrollbar stays.
     - The catalog cache key is versioned (`PublicCatalog::CACHE_KEY`, now `catalog.public.v2`): a deploy that changes the payload's shape never reads an old one (the card showed "departs null" until the cache expired). "1 hours" → "1 hour".
     - **User runs:** `php artisan migrate` (1 new migration).
-4.5 **Hold + checkout.** (Request to book dropped, D22.)
-  - Bookings, line items, status history, hold expiry, the **double-booking lock**, promo codes + redemptions.
-  - One page in our design: inline login / register, trip summary, add-ons (optional, the experience's suggestions first — the demo checkout's "Make it yours" card), lead guest, occasion + a note to the crew, gratuity, promo, terms.
-  - Book now → `hold` → pay in full (stubbed until Phase 5) → confirmed.
-4.6 Confirmation page + email + .ics.
+4.5 **Hold + checkout, paid in full.** ✅ done 2026-11-26 (built with 4.6). (Request to book dropped, D22.) **User decision 2026-11-26: the payment is received at checkout now** — the full amount, no deposit; Stripe's core (5.1 / 5.2) came forward.
+  - **Migration** `create_payments_and_promo_codes_tables`: `promo_codes` (value: percent in bp, fixed in cents; dates, total and per-guest limits, soft deletes), `promo_redemptions` (one per booking), `payments` (one per attempt: provider, intent id, amount, status, card brand + last 4 only, idempotency key), `webhook_events` (unique event id), `bookings.hold_key` (unique) + the `promo_code_id` foreign key. The mockup's WELCOME10 / SUNSET50 are seeded (CatalogSeeder). Checked forward, back, forward.
+  - **Flow:** the boat card's "Book now" → signed in: `POST /checkout` holds the trip right away; a guest: `GET /checkout` (the trip + its QuoteService price, with **inline log in / create account** — Fortify's own endpoints; `RegisterResponse` now goes back to `url.intended`, so the guest returns to the trip; email verification can wait) → "Continue to payment" holds it → `GET /checkout/{booking}` → Pay → card → confirmation (4.6).
+  - **Hold** (`HoldTrip`): inside a transaction that **locks the boat row** (the double-booking lock), AvailabilityService checks the trip again; the booking (reference, contact from the account, policy snapshot, QuoteService lines with the default gratuity) is held for Settings → `hold_minutes` (15). The form's idempotency key is the booking's `hold_key` (+ the `idempotent` middleware): a double click makes one hold. One hold per guest: a new one lets go of their older open holds. A taken time / wrong choice goes back to the boat card with the reason.
+  - **Checkout page** (the mockup's design): lead guest (prefilled), trip details (occasion, how they heard, a note to the captain), **Make it yours** (every add-on optional, the experience's suggestions first, unticked), gratuity tiles (amounts from QuoteService), promo code (applied on the server, `throttle:promo`), the card, terms, the summary with every line, a hold timer counting to the server's expiry. The live price is `GET /checkout/{booking}/price` (QuoteService, read-only). An ended hold shows "This hold has ended" with a way back.
+  - **Pay** (`PrepareCheckoutPayment`, `POST …/pay`, idempotent): locks the booking; the hold must be open; the trip is checked again; the final choices are priced and saved; one open payment per booking (re-used after a decline, its amount updated). Never a posted price.
+  - **Payments** (`App\Services\Payments\PaymentGateway`): `StripeGateway` (PaymentIntent for the total with an idempotency key, Payment Element in the browser with a deferred intent, 3-D Secure by Stripe, card data only in Stripe's frames, CSP allows js.stripe.com / hooks.stripe.com / api.stripe.com with the Stripe driver only) and `FakeGateway` (local / tests without keys: a test card form sending only brand + last 4; 4000 0000 0000 0002 declines; refused in production). `config/payments.php`: Stripe when `STRIPE_SECRET` is set.
+  - **Confirmation** (`ConfirmPaidBooking`, idempotent): from the signed **webhook** (`POST /stripe/webhook`, no CSRF, events stored once, a failed one retried) or the return page / status poll asking Stripe. Confirms the hold (paid in full, history line, promo redemption) and, after the commit, emails the guest (`BookingConfirmed`, .ics attached) and the business (`NewBookingReceived`). A payment that lands after the hold ran out confirms if the time is still free; otherwise the booking stays expired, marked paid, with an admin note to refund (refunds: Phase 5).
+  - **Hold expiry:** `bookings:expire-holds` every minute (scheduler): expired + history + open intents cancelled.
+  - The Phase 1 demo checkout (`BookingSelection`, `CheckoutRequest`, the promo demo endpoint, `/booking/confirmation`) is gone. DemoQuote stays for the screens still on demo data (My trips 4.7, admin bookings 4.8).
+4.6 **Confirmation page + email + .ics.** ✅ done 2026-11-26.
+  - `GET /bookings/{booking}/confirmation` (the guest's own, else 404; a hold goes back to its checkout): the mockup's page with the booking's data — reference (copy), date / time / guests / length, occasion and add-ons, every line, paid in full + card brand and last 4, what happens next, the meeting point map.
+  - `GET /bookings/{booking}/calendar.ics` and the email attachment: `App\Support\Calendar\TripCalendar` (RFC 5545: UTC times, escaped text, lines folded at 75 octets, CRLF).
+  - **QA (4.5 + 4.6):** see the report; tests in Phase4/CheckoutTest, StripeWebhookTest, TripCalendarTest.
+  - **User runs:** `php artisan migrate` (1 migration) and `php artisan db:seed --class=CatalogSeeder` for the two promo codes (it skips what exists). For real payments: Stripe test keys in `.env` (`STRIPE_KEY`, `STRIPE_SECRET`, `STRIPE_WEBHOOK_SECRET`; locally `stripe listen --forward-to localhost:8000/stripe/webhook`). Without keys the fake gateway's test card works locally.
 4.7 My trips + trip detail.
 4.8 Admin: Bookings (list, calendar, detail, status, notes) + promo codes.
 **QA:** price parity with the mockup on the remaining (full-payment) cases; concurrency test (two holds on one slot); hold expiry; IDOR tests; §8.2 endpoint test set; boat page / fleet at 390 / 768 / 1280 / 1440 with no overflow.
 
 ### Phase 5 — Payments + cancellations (Stripe test mode)
-5.1 `PaymentService` interface + Stripe implementation; Stripe Customer; Payment Element (**full amount only**, D22); 3-D Secure.
-  - Every booking is charged in full at checkout (no request to book, no manual-capture authorisation, D22).
-5.2 Webhook endpoint + `webhook_events` + idempotent handlers; the webhook confirms the booking.
+5.1 ~~Payment gateway + Stripe implementation; Payment Element (full amount only, D22); 3-D Secure.~~ *Done in 4.5 (user 2026-11-26).* Left for 5.1: a Stripe Customer per guest (needed for saved cards).
+5.2 ~~Webhook endpoint + `webhook_events` + idempotent handlers.~~ *Done in 4.5.* Left: more event types (refunds, disputes) as 5.4 – 5.5 need them.
 5.3 Saved cards page. *(No automatic balance charge: there is no deposit, D22.)*
 5.4 `CancellationPolicyService` (Boatsetter-style, §7.4) with a refund preview; customer cancel; admin custom / weather / owner-cancel refunds; dispute records.
 5.5 Receipt PDF; admin Payments and Refunds screens; nightly reconcile.

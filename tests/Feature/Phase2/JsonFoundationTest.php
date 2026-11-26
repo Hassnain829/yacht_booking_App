@@ -40,6 +40,8 @@ class JsonFoundationTest extends TestCase
         });
         Route::middleware('web')->get('/_test/users/{user}', fn (User $user) => $user->ulid);
         Route::middleware('web')->get('/_test/crash', fn () => throw new RuntimeException('database password is hunter2'));
+        // A promo-code check like checkout's (4.5 moved the real one onto a held booking): validated, `throttle:promo`.
+        Route::middleware(['web', 'throttle:promo'])->post('/_test/promo', fn (Request $request) => ['data' => ['code' => strtoupper($request->validate(['code' => ['required', 'string', 'max:30']])['code'])]]);
     }
 
     /* ------------------------------------------------------------------ error format */
@@ -51,7 +53,7 @@ class JsonFoundationTest extends TestCase
         $missing = $this->getJson('/_test/users/01JDQ7M3K8R2V5X9C4B6N0P1TZ')->assertStatus(404)->assertExactJson(['message' => 'Not found.']);
         $this->assertStringNotContainsString('App\\\\Models', $missing->getContent(), 'no model names');
 
-        $this->getJson('/checkout/promo')->assertStatus(405)->assertExactJson(['message' => 'Method not allowed.']); // no list of routes / methods
+        $this->getJson('/stripe/webhook')->assertStatus(405)->assertExactJson(['message' => 'Method not allowed.']); // no list of routes / methods
 
         config(['app.debug' => false]);
         $crash = $this->getJson('/_test/crash')->assertStatus(500);
@@ -59,17 +61,17 @@ class JsonFoundationTest extends TestCase
         $this->assertArrayNotHasKey('trace', $crash->json());
 
         // Validation keeps Laravel's field errors; HTML requests still get our error pages.
-        $this->postJson('/checkout/promo', [])->assertStatus(422)->assertJsonValidationErrors('code');
+        $this->postJson('/_test/promo', [])->assertStatus(422)->assertJsonValidationErrors('code');
         $this->get('/no-such-page')->assertNotFound()->assertSee('find that page');
     }
 
     public function test_a_json_429_keeps_its_retry_after_header(): void
     {
         for ($i = 0; $i < 10; $i++) {
-            $this->postJson('/checkout/promo', ['code' => 'GUESS'.$i]);
+            $this->postJson('/_test/promo', ['code' => 'GUESS'.$i]);
         }
 
-        $this->postJson('/checkout/promo', ['code' => 'WELCOME10'])
+        $this->postJson('/_test/promo', ['code' => 'WELCOME10'])
             ->assertStatus(429)->assertExactJson(['message' => 'Too many requests.'])->assertHeader('Retry-After');
     }
 
@@ -82,10 +84,10 @@ class JsonFoundationTest extends TestCase
         }
 
         for ($i = 0; $i < 10; $i++) {
-            $this->postJson('/checkout/promo', ['code' => 'GUESS'.$i]);
+            $this->postJson('/_test/promo', ['code' => 'GUESS'.$i]);
         }
-        $this->postJson('/checkout/promo', ['code' => 'WELCOME10'])->assertStatus(429); // the guest (this IP) is out
-        $this->actingAs(User::factory()->create())->postJson('/checkout/promo', ['code' => 'WELCOME10'])->assertOk(); // an account has its own count
+        $this->postJson('/_test/promo', ['code' => 'WELCOME10'])->assertStatus(429); // the guest (this IP) is out
+        $this->actingAs(User::factory()->create())->postJson('/_test/promo', ['code' => 'WELCOME10'])->assertOk(); // an account has its own count
     }
 
     public function test_every_route_that_changes_data_has_a_rate_limit(): void
@@ -122,7 +124,7 @@ class JsonFoundationTest extends TestCase
         };
 
         $this->assertSame(['data' => ['id' => $user->ulid, 'joined_at' => '2026-11-22T15:00:00Z']], $resource->response()->getData(true));
-        $this->postJson('/checkout/promo', ['code' => 'welcome10'])->assertOk()->assertJsonPath('data.code', 'WELCOME10');
+        $this->postJson('/_test/promo', ['code' => 'welcome10'])->assertOk()->assertJsonPath('data.code', 'WELCOME10');
     }
 
     /* ------------------------------------------------------------------ idempotency */

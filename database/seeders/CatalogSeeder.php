@@ -4,11 +4,14 @@ namespace Database\Seeders;
 
 use App\Enums\AddonUnit;
 use App\Enums\AmenityGroup;
+use App\Enums\PromoAppliesTo;
+use App\Enums\PromoType;
 use App\Models\Addon;
 use App\Models\Amenity;
 use App\Models\CancellationPolicy;
 use App\Models\Experience;
 use App\Models\Harbor;
+use App\Models\PromoCode;
 use App\Models\Setting;
 use App\Services\SettingsService;
 use App\Support\StartTimes;
@@ -36,6 +39,7 @@ class CatalogSeeder extends Seeder
         $this->harbors();
         $this->experiences();
         $this->addons();
+        $this->promoCodes();
     }
 
     private function policies(): void
@@ -155,6 +159,23 @@ class CatalogSeeder extends Seeder
                 'allowed_weekdays' => $experience['allowed_weekdays'],
                 'is_active' => true,
                 'sort' => $sort,
+            ]);
+        }
+    }
+
+    /** The mockup's two codes (4.5): WELCOME10 (10% off the charter) and SUNSET50 ($50 off the booking). */
+    private function promoCodes(): void
+    {
+        foreach (config('demo.pricing.promos') as $promo) {
+            if (PromoCode::withTrashed()->where('code', $promo['code'])->exists()) {
+                continue;
+            }
+            PromoCode::query()->create([
+                'code' => $promo['code'],
+                'type' => PromoType::from($promo['type']),
+                'value' => $promo['type'] === 'percent' ? $promo['value'] * 100 : $promo['value'], // percent → basis points
+                'applies_to' => PromoAppliesTo::from($promo['applies_to']),
+                'is_active' => true,
             ]);
         }
     }

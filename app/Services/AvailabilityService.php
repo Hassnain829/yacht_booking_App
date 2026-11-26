@@ -82,11 +82,12 @@ class AvailabilityService
     }
 
     /**
-     * Why this exact trip can't take place, or null when it can.
+     * Why this exact trip can't take place, or null when it can. `$checkNotice` off: a payment that came in after
+     * its hold ran out is not refused for the advance notice it already met when it was held.
      *
      * @return array{field: string, message: string}|null
      */
-    public function problem(Boat $boat, CarbonImmutable $startsAt, int $hours, ?Experience $experience = null, int $guests = 1, ?Booking $ignore = null): ?array
+    public function problem(Boat $boat, CarbonImmutable $startsAt, int $hours, ?Experience $experience = null, int $guests = 1, ?Booking $ignore = null, bool $checkNotice = true): ?array
     {
         $boat->loadMissing(['availabilityRules', 'experiences']);
         $local = $startsAt->setTimezone(config('app.display_timezone'));
@@ -103,7 +104,7 @@ class AvailabilityService
         }
 
         $busy = $this->busyIntervals($boat, $day->subDay()->utc(), $day->addDays(2)->utc(), $ignore);
-        $taken = $this->slotProblem($boat, $startsAt->utc(), $hours, $day, $busy);
+        $taken = $this->slotProblem($boat, $startsAt->utc(), $hours, $day, $busy, $checkNotice);
 
         return $taken === null ? null : ['field' => 'time', 'message' => self::message($taken, $boat)];
     }
@@ -226,9 +227,9 @@ class AvailabilityService
      *
      * @param  list<array{kind: string, starts_at: CarbonImmutable, ends_at: CarbonImmutable, trip_starts_at: ?CarbonImmutable}>  $busy
      */
-    private function slotProblem(Boat $boat, CarbonImmutable $startsAt, int $hours, CarbonImmutable $day, array $busy): ?string
+    private function slotProblem(Boat $boat, CarbonImmutable $startsAt, int $hours, CarbonImmutable $day, array $busy, bool $checkNotice = true): ?string
     {
-        if ($startsAt->lessThan(CarbonImmutable::now()->addMinutes(max(0, (int) $boat->advance_notice_minutes)))) {
+        if ($checkNotice && $startsAt->lessThan(CarbonImmutable::now()->addMinutes(max(0, (int) $boat->advance_notice_minutes)))) {
             return 'notice';
         }
 

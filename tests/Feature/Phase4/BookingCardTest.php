@@ -7,10 +7,12 @@ use App\Models\Addon;
 use App\Models\Boat;
 use App\Models\Booking;
 use App\Models\Experience;
+use App\Models\User;
 use App\Services\PublicCatalog;
 use App\Support\StartTimes;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\Concerns\SeedsPublicCatalog;
 use Tests\TestCase;
 
@@ -145,10 +147,10 @@ class BookingCardTest extends TestCase
     public function test_checkout_without_a_fitting_start_time_goes_back_to_the_boats_card(): void
     {
         $this->get('/checkout?yacht=azure&experience=sunset&date=2027-05-12&time=10:00&hours=3&guests=6&addons=champagne')
-            ->assertRedirect(route('yachts.show', ['azure', 'experience' => 'sunset', 'guests' => 6, 'date' => '2027-05-12', 'hours' => 3, 'addons' => 'champagne']).'#book')
-            ->assertSessionHas('booking_card_error');
-        $this->get('/yachts/azure?experience=sunset&date=2027-05-12')->assertSee('That start time isn\'t available for your choices.');
-        $this->get('/yachts/azure')->assertDontSee('That start time isn\'t available for your choices.');
+            ->assertRedirect(route('yachts.show', ['azure', 'experience' => 'sunset', 'date' => '2027-05-12', 'hours' => 3, 'guests' => 6, 'addons' => 'champagne']).'#book')
+            ->assertSessionHas('booking_card_error', "Sunset Skyline Cruise isn't available at 10:00 AM: it departs 5:00 PM – 7:30 PM. Pick a start time inside that window, or just book the boat.");
+        $this->get('/yachts/azure?experience=sunset&date=2027-05-12')->assertSee('Sunset Skyline Cruise isn&#039;t available at 10:00 AM', false);
+        $this->get('/yachts/azure')->assertDontSee('isn&#039;t available at 10:00 AM', false);
     }
 
     public function test_checkout_offers_every_add_on_unticked_with_the_experiences_suggestions_first(): void
@@ -156,18 +158,23 @@ class BookingCardTest extends TestCase
         $decor = Addon::query()->where('slug', 'decor')->sole();
         Experience::query()->where('slug', 'sunset')->sole()->extras()->attach($decor, ['sort' => 0]);
         PublicCatalog::flush();
-        $trip = '/checkout?yacht=azure&experience=sunset&date=2027-05-12&time=17:30&hours=3&guests=6';
+        $guest = User::factory()->create();
+        $trip = ['yacht' => 'azure', 'experience' => 'sunset', 'date' => '2027-05-12', 'time' => '17:30', 'hours' => 3, 'guests' => 6];
 
-        $page = $this->get($trip)->assertOk()->assertSee('Make it yours')->assertSee('Suggested for Sunset Skyline Cruise');
-        $html = $page->getContent();
+        $this->actingAs($guest)->post('/checkout', $trip + ['idempotency_key' => (string) Str::uuid()])->assertRedirect();
+        $booking = Booking::query()->latest('id')->firstOrFail();
+        $html = $this->get("/checkout/{$booking->ulid}")->assertOk()->assertSee('Make it yours')->assertSee('Suggested for Sunset Skyline Cruise')->getContent();
         $this->assertLessThan(strpos($html, 'value="catering"'), strpos($html, 'value="decor"'), 'the suggested extra comes first');
         $this->assertSame(7, substr_count($html, 'name="addons[]"'), 'every add-on is offered');
         $this->assertStringNotContainsString('checked', substr($html, strpos($html, 'value="decor"'), 60), 'nothing is ticked for the guest');
-        $this->assertSame(['charter', 'captain', 'cleaning'], array_column($page->viewData('quote')['lines'], 'key'), 'nothing is charged until ticked');
+        $this->assertSame(['charter', 'captain', 'cleaning', 'tax', 'gratuity'], $booking->items->pluck('type')->map->value->all(), 'nothing is charged until ticked');
 
-        $picked = $this->get($trip.'&addons=decor')->assertOk();
-        $this->assertSame(['charter', 'captain', 'addon-decor', 'cleaning'], array_column($picked->viewData('quote')['lines'], 'key'));
-        $this->assertStringContainsString('checked', substr($picked->getContent(), strpos($picked->getContent(), 'value="decor"'), 60));
+        // A pricing package's add-on comes ticked (the guest can untick it).
+        $this->post('/checkout', ['time' => '18:00', 'addons' => 'decor', 'idempotency_key' => (string) Str::uuid()] + $trip)->assertRedirect();
+        $picked = Booking::query()->latest('id')->firstOrFail();
+        $this->assertContains('addon', $picked->items->pluck('type')->map->value->all());
+        $page = $this->get("/checkout/{$picked->ulid}")->getContent();
+        $this->assertStringContainsString('checked', substr($page, strpos($page, 'value="decor"'), 60));
     }
 
     public function test_choices_that_dont_fit_are_refused_on_their_field(): void

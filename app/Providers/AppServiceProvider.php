@@ -13,6 +13,9 @@ use App\Models\Harbor;
 use App\Models\Media;
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\Payments\FakeGateway;
+use App\Services\Payments\PaymentGateway;
+use App\Services\Payments\StripeGateway;
 use App\Services\PublicCatalog;
 use App\View\Composers\FooterComposer;
 use App\View\Composers\HeaderComposer;
@@ -26,6 +29,8 @@ use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use RuntimeException;
+use Stripe\StripeClient;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -36,6 +41,24 @@ class AppServiceProvider extends ServiceProvider
     {
         // One catalog per request: the controller, the footer and the booking pieces share its queries (PLAN 3.5).
         $this->app->scoped(PublicCatalog::class);
+
+        // Card payments (PLAN §8.4, 4.5): Stripe with its keys; the fake gateway (a test card form, no money) only
+        // in local development and tests — never in production.
+        $this->app->singleton(PaymentGateway::class, function (): PaymentGateway {
+            if (config('payments.driver') === 'stripe') {
+                return new StripeGateway(
+                    new StripeClient((string) config('payments.stripe.secret')),
+                    config('payments.stripe.key'),
+                    config('payments.stripe.webhook_secret'),
+                    (string) config('payments.currency', 'usd'),
+                );
+            }
+            if ($this->app->isProduction()) {
+                throw new RuntimeException('Payments: set the Stripe keys. The fake gateway is for local development and tests only.');
+            }
+
+            return new FakeGateway;
+        });
     }
 
     /**
@@ -110,6 +133,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('hold', fn (Request $request) => Limit::perMinute(10)->by($perVisitor($request)));
         RateLimiter::for('checkout', fn (Request $request) => Limit::perMinute(10)->by($perVisitor($request)));
         RateLimiter::for('promo', fn (Request $request) => Limit::perMinute(10)->by($perVisitor($request))); // stops code guessing
+        RateLimiter::for('payment', fn (Request $request) => Limit::perMinute(10)->by($perVisitor($request)));
+        RateLimiter::for('payment-status', fn (Request $request) => Limit::perMinute(60)->by($perVisitor($request)));
+        RateLimiter::for('webhooks', fn (Request $request) => Limit::perMinute(300)->by('ip:'.$request->ip()));
 
         // Files: uploads (listing photos, documents, complaint photos — Phases 3.4, 6, 7) and opening a private file.
         RateLimiter::for('uploads', fn (Request $request) => Limit::perMinute(30)->by($perVisitor($request)));

@@ -43,6 +43,9 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
   - Public pages get boats for quotes from `App\Services\BoatQuotes` (since 4.3). Inject it into the action, never a controller constructor (a route keeps its controller, so the boats would go stale). The browser asks `GET /yachts/{slug}/quote` and only shows the answer.
   - Everything is paid in full at checkout: no deposit, no request to book (D22).
   - Experiences are free and have no length of their own: lengths are the boat's (`QuoteService::durations(Boat)`). An experience departs inside its window (`time_slots`, every half hour of it) on its days; the card and `AvailabilityService` say so when a date or time doesn't fit. Its extras (`addon_experience`) are optional add-ons suggested at checkout, charged only when ticked (D21, 2026-11-25).
+- **Bookings and payments (since 4.5):** paid in full at checkout (D22).
+  - A trip is held by `App\Actions\Booking\HoldTrip` (boat-row lock = the double-booking lock), paid through `PrepareCheckoutPayment` and confirmed only by `ConfirmPaidBooking` — from Stripe's word (signed webhook, or the server retrieving the intent), never the browser's. Status changes go through `BookingService::transition()` (writes the history).
+  - Card payments go through `App\Services\Payments\PaymentGateway` (Stripe; `FakeGateway` only in local / tests, refused in production). Card data never touches our server: only the brand and last 4 are stored.
 - **Availability** comes only from `App\Services\AvailabilityService` (PLAN §7.2, since 4.2):
   - A boat has **start times** per weekday (Boatsetter-style) on the `App\Support\StartTimes` grid (every half hour, 05:00–22:00, Chicago time), not opening hours. Experience start times sit on the same grid.
   - Anything that needs a boat's busy time (holds, captain offers, extensions) reads `busyIntervals()`, never its own query.

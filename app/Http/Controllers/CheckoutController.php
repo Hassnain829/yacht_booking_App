@@ -2,198 +2,259 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\CheckoutRequest;
-use App\Http\Requests\PromoCodeRequest;
-use App\Http\Resources\PromoCodeResource;
+use App\Actions\Booking\ConfirmPaidBooking;
+use App\Actions\Booking\HoldTrip;
+use App\Actions\Booking\PrepareCheckoutPayment;
+use App\Enums\BookingStatus;
+use App\Enums\PaymentIntentStatus;
+use App\Exceptions\QuoteException;
+use App\Http\Requests\Checkout\ApplyPromoRequest;
+use App\Http\Requests\Checkout\BookingActionRequest;
+use App\Http\Requests\Checkout\CheckoutPayRequest;
+use App\Http\Requests\Checkout\CheckoutPriceRequest;
+use App\Http\Requests\Checkout\HoldRequest;
+use App\Http\Requests\Checkout\TestCardRequest;
+use App\Http\Requests\Checkout\TripChoicesRequest;
+use App\Http\Resources\Checkout\BookingStatusResource;
+use App\Http\Resources\Checkout\CheckoutQuoteResource;
+use App\Http\Resources\Checkout\PaymentStartResource;
+use App\Http\Resources\Checkout\PromoResource;
+use App\Models\Booking;
+use App\Models\Payment;
+use App\Services\AvailabilityService;
+use App\Services\BoatQuotes;
+use App\Services\CheckoutPricing;
+use App\Services\Payments\PaymentGateway;
+use App\Services\PromoService;
 use App\Services\PublicCatalog;
-use App\Support\Demo\BookingSelection;
-use App\Support\Demo\DemoQuote;
-use Carbon\CarbonImmutable;
+use App\Services\SettingsService;
+use App\Support\Checkout\CheckoutOptions;
+use App\Support\Payments\Intent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Fluent;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 /**
- * Checkout + confirmation (Phase 1 demo: no payment is taken, nothing is stored in the database).
- *
- * Since 4.3 it opens from the boat page's booking card (the experience is optional, D21) and the whole price is
- * paid at checkout (D22: no deposit). Add-ons are optional and picked here, the experience's suggested extras
- * first (2026-11-25). 4.5: GET /checkout/{booking:ulid} for a held booking. Phase 5: Stripe Payment Element,
- * webhook-confirmed bookings, receipts.
+ * Checkout (PLAN 4.5, D22: paid in full at checkout, no deposit; the payment is taken in 4.5, user decision
+ * 2026-11-26). The boat page's booking card → `start` (guests sign in or create an account right there) →
+ * `hold` (the time is kept for the guest, HoldTrip) → `show` (add-ons, details, gratuity, promo, card) → `pay`
+ * (the final price + a payment intent for the total) → the card is confirmed with the provider in the browser →
+ * `complete` / the webhook → ConfirmPaidBooking → the confirmation page (BookingConfirmationController, 4.6).
+ * Every price is QuoteService's; the booking is confirmed only on the provider's word, never the browser's.
  */
 class CheckoutController extends Controller
 {
-    public function create(Request $request, PublicCatalog $catalog): View|RedirectResponse
+    /** The trip summary before it is held; a guest signs in or creates an account here first. */
+    public function start(TripChoicesRequest $request, BoatQuotes $boats, AvailabilityService $availability, PublicCatalog $catalog): View|RedirectResponse
     {
-        $selection = BookingSelection::from($request->query(), $catalog);
-        $isDemo = ! $selection->isComplete();
-        if ($isDemo && $selection->yacht !== null) {
-            // A real boat, but no date or start time that fits the choices (e.g. a time outside the experience's
-            // window): back to its booking card instead of a sample booking.
-            return redirect()->to(route('yachts.show', [$selection->yacht, ...collect($selection->toQuery())->only(['experience', 'date', 'hours', 'guests', 'addons'])->all()]).'#book')
-                ->with('booking_card_error', $selection->date ? 'That start time isn\'t available for your choices. Pick one of the times shown.' : 'Pick a date and a start time for your trip.');
+        try {
+            $trip = $request->trip($boats);
+        } catch (ValidationException $exception) {
+            return $this->backToCard((string) $request->validated('yacht'), $request->tripQuery(), collect($exception->errors())->flatten()->first());
         }
-        if ($isDemo) {
-            $selection = $this->demoSelection($catalog);
-            if ($selection === null) {
-                return redirect()->route('yachts.index'); // nothing bookable to show as a sample
-            }
+        $problem = $availability->problem($trip['boat'], $trip['startsAt'], $trip['hours'], $trip['experience'], $trip['guests']);
+        if ($problem !== null) {
+            return $this->backToCard($trip['boat']->slug, $request->tripQuery(), $problem['message']);
+        }
+        $quote = $boats->quote($trip['boat'], $trip['experience'], (string) $request->validated('date'), (string) $request->validated('time'), $trip['hours'], $trip['guests'], $trip['addons']);
+
+        if ($request->user() === null) {
+            $request->session()->put('url.intended', $request->fullUrl()); // back here after signing in or signing up
         }
 
-        $pricing = $catalog->pricing();
-        $yacht = $selection->yachtModel();
-        $experience = $selection->experienceModel();
-        $quote = DemoQuote::fromSettings()->quote($yacht, $experience, [
-            'date' => $selection->date,
-            'hours' => $selection->hours,
-            'guests' => $selection->guests,
-            'addons' => $selection->addonModels(),
-            'gratuity' => $pricing['default_gratuity'],
+        return view('booking.checkout-start', [
+            'trip' => $trip,
+            'yacht' => $catalog->yacht($trip['boat']->slug),
+            'quote' => $quote,
+            'holdFields' => ['yacht' => $trip['boat']->slug] + $request->tripQuery(),
+            'editUrl' => route('yachts.show', [$trip['boat']->slug, ...collect($request->tripQuery())->only(['experience', 'date', 'hours', 'guests', 'addons'])->all()]).'#book',
         ]);
+    }
 
-        // Every add-on is optional; the experience's suggested extras come first (none is ticked unless chosen).
+    /** "Book now" / "Continue": hold the trip for the guest (the double-booking lock is in HoldTrip). */
+    public function hold(HoldRequest $request, BoatQuotes $boats, HoldTrip $hold): RedirectResponse
+    {
+        try {
+            $trip = $request->trip($boats);
+            $booking = $hold->handle($request->user(), $trip['boat'], $trip['experience'], $trip['startsAt'], $trip['hours'], $trip['guests'], $trip['addons'], (string) $request->validated('idempotency_key'));
+        } catch (ValidationException $exception) {
+            return $this->backToCard((string) $request->validated('yacht'), $request->tripQuery(), collect($exception->errors())->flatten()->first());
+        }
+
+        return redirect()->route('checkout.show', $booking);
+    }
+
+    /** The checkout page of a held booking. */
+    public function show(Booking $booking, PublicCatalog $catalog, CheckoutPricing $pricing, SettingsService $settings, PaymentGateway $gateway): View|RedirectResponse
+    {
+        Gate::authorize('view', $booking);
+        if (in_array($booking->status, [BookingStatus::Confirmed, BookingStatus::Completed], true)) {
+            return redirect()->route('bookings.confirmation', $booking);
+        }
+        $booking->load(['boat.harbor', 'experience', 'items', 'promoCode']);
+        $experience = $booking->experience ? $catalog->experience($booking->experience->slug) : null;
         $suggested = collect($experience?->extras ?? [])->pluck('slug')->all();
-        $addonChoices = $catalog->addons()
-            ->sortBy(fn ($addon) => [in_array($addon->slug, $suggested, true) ? array_search($addon->slug, $suggested, true) : 99, $addon->name])
-            ->map(fn ($addon) => new Fluent($addon->toArray() + ['suggested' => in_array($addon->slug, $suggested, true)]))
+        $addons = $catalog->addons()
+            ->sortBy(fn (Fluent $addon) => [in_array($addon->slug, $suggested, true) ? array_search($addon->slug, $suggested, true) : 99, $addon->name])
+            ->map(fn (Fluent $addon) => new Fluent($addon->toArray() + ['suggested' => in_array($addon->slug, $suggested, true)]))
             ->values();
+        $local = $booking->starts_at->setTimezone(config('app.display_timezone'));
+        $gratuityOptions = array_map('intval', $settings->all()['gratuity_options']);
 
         return view('booking.checkout', [
-            'selection' => $selection,
-            'yacht' => $yacht,
-            'experience' => $experience,
-            'quote' => $quote,
-            'pricing' => $pricing,
-            'isDemo' => $isDemo,
-            'addonChoices' => $addonChoices,
-            'editUrl' => route('yachts.show', [$yacht->slug, ...collect($selection->toQuery())->only(['experience', 'date', 'hours', 'guests', 'addons'])->all()]).'#book',
+            'booking' => $booking,
+            'yacht' => $catalog->yacht($booking->boat->slug),
+            'payable' => $booking->isPayable(),
+            'addons' => $addons,
+            'chosenAddons' => array_map(fn ($addon) => $addon->slug, $pricing->chosenAddons($booking)),
+            'gratuityOptions' => $gratuityOptions,
+            'defaultGratuity' => (int) $settings->all()['default_gratuity'],
+            'gratuityAmounts' => $booking->isPayable() ? rescue(fn () => $pricing->gratuityAmounts($booking, $gratuityOptions), [], report: false) : [],
+            'gratuity' => intdiv((int) $booking->gratuity_bp, 100),
+            'occasions' => CheckoutOptions::OCCASIONS,
+            'heard' => CheckoutOptions::HEARD,
+            'editUrl' => route('yachts.show', array_filter([$booking->boat->slug, 'experience' => $booking->experience?->slug, 'date' => $local->toDateString(), 'hours' => $booking->hours, 'guests' => $booking->guests])).'#book',
             'checkoutData' => [
-                'yacht' => collect($yacht->toArray())->only(['slug', 'min_hours', 'hourly_rate_cents', 'captain_rate_cents', 'crew_count', 'cleaning_fee_cents']),
-                'experience' => $experience ? collect($experience->toArray())->only(['slug', 'name']) : null,
-                'addons' => $addonChoices->map(fn ($a) => collect($a->toArray())->only(['slug', 'name', 'price_cents', 'unit']))->values(),
-                'selection' => ['date' => $selection->date, 'hours' => $selection->hours, 'guests' => $selection->guests],
-                'pricing' => collect($pricing)->only(['weekend_multiplier_bp', 'tax_rate_bp', 'default_gratuity']),
-                'promoUrl' => route('checkout.promo'),
+                'urls' => [
+                    'price' => route('checkout.price', $booking),
+                    'promo' => route('checkout.promo', $booking),
+                    'pay' => route('checkout.pay', $booking),
+                ],
+                'provider' => $gateway->name(),
+                'publishableKey' => $gateway->publishableKey(),
+                'holdExpiresAt' => $booking->hold_expires_at?->toIso8601ZuluString(),
+                'serverNow' => now()->toIso8601ZuluString(),
+                'amountCents' => (int) $booking->total_cents,
+                'currency' => config('payments.currency', 'usd'),
+                'promo' => $booking->promoCode ? (new PromoResource($booking->promoCode))->resolve() : null,
             ],
         ]);
     }
 
-    /** One promo code at a time (rate-limited). Returns the discount rule, never the list of codes. */
-    public function promo(PromoCodeRequest $request, PublicCatalog $catalog): JsonResponse|PromoCodeResource
+    /** The live price for the add-ons and gratuity the guest is trying out. */
+    public function price(CheckoutPriceRequest $request, Booking $booking, CheckoutPricing $pricing): CheckoutQuoteResource
     {
-        $code = strtoupper($request->validated('code'));
-        $promo = collect($catalog->pricing()['promos'])->firstWhere('code', $code);
+        $this->ensurePayable($booking);
 
-        if (! $promo) {
-            return response()->json(['message' => 'That promo code is not valid.', 'errors' => ['code' => ['That promo code is not valid.']]], 422);
-        }
-
-        return new PromoCodeResource($promo);
+        return new CheckoutQuoteResource($pricing->quote($booking, $request->addons(), $request->gratuity()));
     }
 
-    /** PHASE 1 DEMO: validates, recalculates the price on the server, then shows the confirmation. */
-    public function store(CheckoutRequest $request): RedirectResponse
+    public function applyPromo(ApplyPromoRequest $request, Booking $booking, PromoService $promos): PromoResource
     {
-        $data = $request->validated();
-        $selection = $request->selection();
+        $this->ensurePayable($booking);
+        $promo = $promos->check((string) $request->validated('code'), $request->user());
+        $booking->forceFill(['promo_code_id' => $promo->getKey()])->save();
 
-        $quote = DemoQuote::fromSettings()->quote($selection->yachtModel(), $selection->experienceModel(), [
-            'date' => $selection->date,
-            'hours' => $selection->hours,
-            'guests' => $selection->guests,
-            'addons' => $selection->addonModels(),
-            'promo' => $data['promo'] ?? null,
-            'gratuity' => (int) $data['gratuity'],
-        ]);
-
-        $request->session()->put('booking.confirmation', [
-            'ref' => 'CYB-'.Str::upper(Str::random(6)),
-            'selection' => $selection->toQuery(),
-            'contact' => ['first_name' => $data['first_name'], 'last_name' => $data['last_name'], 'email' => $data['email'], 'phone' => $data['phone']],
-            'occasion' => $data['occasion'] ?? null,
-            'payment' => ['gratuity' => (int) $data['gratuity'], 'promo' => $quote['promo']['code'] ?? null, 'brand' => $data['card_brand'], 'last4' => $data['card_last4']],
-            'totals' => ['total' => $quote['total'], 'paid' => $quote['total']], // paid in full (D22)
-        ]);
-
-        return redirect()->route('booking.confirmation');
+        return new PromoResource($promo);
     }
 
-    public function confirmation(Request $request, PublicCatalog $catalog): View|RedirectResponse
+    public function removePromo(BookingActionRequest $request, Booking $booking): Response
     {
-        $confirmation = $request->session()->get('booking.confirmation');
-        $isDemo = ! is_array($confirmation);
+        $this->ensurePayable($booking);
+        $booking->forceFill(['promo_code_id' => null])->save();
 
-        if ($isDemo) {
-            $selection = $this->demoSelection($catalog, 14);
-            if ($selection === null) {
-                return redirect()->route('yachts.index');
-            }
-            $quote = DemoQuote::fromSettings()->quote($selection->yachtModel(), $selection->experienceModel(), [
-                'date' => $selection->date, 'hours' => 3, 'guests' => 8, 'addons' => $selection->addonModels(), 'gratuity' => 18,
-            ]);
-            $confirmation = [
-                'ref' => 'CYB-DEMO42',
-                'selection' => $selection->toQuery(),
-                'contact' => ['first_name' => 'Alex', 'last_name' => 'Morgan', 'email' => 'alex@example.com', 'phone' => '(312) 555-0100'],
-                'occasion' => 'Birthday',
-                'payment' => ['gratuity' => 18, 'promo' => null, 'brand' => 'Visa', 'last4' => '4242'],
-                'totals' => ['total' => $quote['total'], 'paid' => $quote['total']],
-            ];
+        return response()->noContent();
+    }
+
+    /** "Pay": the final price on the booking and a payment for its total (the browser then confirms the card). */
+    public function pay(CheckoutPayRequest $request, Booking $booking, PrepareCheckoutPayment $prepare): PaymentStartResource
+    {
+        $key = (string) ($request->header('Idempotency-Key') ?? $request->input('idempotency_key'));
+        [$payment, $intent] = $prepare->handle($booking, $request->user(), $request->choices(), $key);
+
+        return new PaymentStartResource(['payment' => $payment->setRelation('booking', $booking), 'intent' => $intent]);
+    }
+
+    /** Back from the card step (Stripe's return URL): ask the provider — never trust the redirect itself. */
+    public function complete(BookingActionRequest $request, Booking $booking, PaymentGateway $gateway, ConfirmPaidBooking $confirm): View|RedirectResponse
+    {
+        $booking = $this->syncWithProvider($booking, $gateway, $confirm);
+        if ($booking->status === BookingStatus::Confirmed) {
+            return redirect()->route('bookings.confirmation', $booking);
         }
+        $payment = $booking->payments()->latest('id')->first();
 
-        $selection = BookingSelection::from($confirmation['selection'], $catalog);
-        abort_unless($selection->isComplete(), 404);
-
-        return view('booking.confirmation', [
-            'c' => $confirmation,
-            'selection' => $selection,
-            'yacht' => $selection->yachtModel(),
-            'experience' => $selection->experienceModel(),
-            'addons' => $selection->addonModels(),
-            'isDemo' => $isDemo,
+        return view('booking.complete', [
+            'booking' => $booking->load('boat'),
+            'state' => match (true) {
+                $booking->status !== BookingStatus::Hold => 'closed',
+                $payment?->status === PaymentIntentStatus::Processing => 'processing',
+                $payment?->failure_message !== null => 'failed',
+                default => 'processing',
+            },
+            'failure' => $payment?->failure_message,
+            'statusUrl' => route('checkout.status', $booking),
         ]);
+    }
+
+    /** Polled while the payment is being confirmed. */
+    public function status(BookingActionRequest $request, Booking $booking, PaymentGateway $gateway, ConfirmPaidBooking $confirm): BookingStatusResource
+    {
+        return new BookingStatusResource($this->syncWithProvider($booking, $gateway, $confirm));
     }
 
     /**
-     * Sample booking for the demo when no (valid) booking was passed in: the first bookable boat + experience
-     * the admin offers (the Sunset cruise and champagne first, as in the mockup), on the first allowed day from
-     * `$daysAhead` on. Null when nothing is bookable (no live, bookable boat offers a live experience).
+     * The fake gateway's test card (local development and tests only: 404 with Stripe or in production). 4242…
+     * pays; 4000 0000 0000 0002 is declined.
      */
-    private function demoSelection(PublicCatalog $catalog, int $daysAhead = 10): ?BookingSelection
+    public function testCard(TestCardRequest $request, Booking $booking, PaymentGateway $gateway, ConfirmPaidBooking $confirm): JsonResponse
     {
-        $today = CarbonImmutable::now(config('app.display_timezone'));
-        $addon = $catalog->addons()->firstWhere('slug', 'champagne') ?? $catalog->addons()->first();
+        abort_if($gateway->name() !== 'fake' || app()->isProduction(), 404);
+        $payment = $booking->payments()->whereIn('status', [PaymentIntentStatus::RequiresPayment, PaymentIntentStatus::RequiresAction])->latest('id')->first();
+        if ($payment === null) {
+            throw QuoteException::on('card', 'Start the payment again: press Pay.');
+        }
+        if ($request->boolean('decline')) {
+            $confirm->handle($payment, new Intent((string) $payment->provider_intent_id, PaymentIntentStatus::RequiresPayment, $payment->amount_cents, failureCode: 'card_declined', failureMessage: 'Your card was declined.'));
 
-        foreach ($catalog->yachts()->where('booking_enabled', true)->sortBy(fn ($y) => in_array('sunset', $y->experiences, true) ? 0 : 1) as $yacht) {
-            foreach (collect($yacht->experiences)->sortBy(fn (string $slug) => $slug === 'sunset' ? 0 : 1) as $slug) {
-                $experience = $catalog->experience($slug);
-                $durations = $yacht->lengths;
-                for ($day = $daysAhead; $experience && $day < $daysAhead + 60; $day++) {
-                    $date = BookingSelection::validDate($today->addDays($day)->toDateString(), $experience);
-                    if ($date === null) {
-                        continue;
-                    }
-                    $selection = BookingSelection::from([
-                        'experience' => $slug,
-                        'yacht' => $yacht->slug,
-                        'guests' => (string) min(8, $yacht->max_guests),
-                        'date' => $date,
-                        'time' => $experience->time_slots[1] ?? $experience->time_slots[0],
-                        'hours' => (string) (in_array(3, $durations, true) ? 3 : $durations[0]),
-                        'addons' => $addon?->slug ?? '',
-                        'occasion' => 'Birthday',
-                    ], $catalog);
-                    if ($selection->isComplete()) {
-                        return $selection;
-                    }
-                    break;
-                }
+            throw QuoteException::on('card', 'Your card was declined. Try another card.');
+        }
+
+        $booking = $confirm->handle($payment, new Intent(
+            (string) $payment->provider_intent_id, PaymentIntentStatus::Succeeded, $payment->amount_cents,
+            chargeId: 'fake_ch_'.Str::lower((string) Str::ulid()), cardBrand: strtolower((string) $request->validated('brand')), cardLast4: (string) $request->validated('last4'),
+        ));
+
+        return response()->json(['data' => ['redirect' => $booking->status === BookingStatus::Confirmed ? route('bookings.confirmation', $booking) : route('checkout.complete', $booking)]]);
+    }
+
+    /** An open Stripe payment is checked with Stripe (a webhook may not have arrived yet, or locally not at all). */
+    private function syncWithProvider(Booking $booking, PaymentGateway $gateway, ConfirmPaidBooking $confirm): Booking
+    {
+        $booking->refresh();
+        $payment = $booking->payments()->latest('id')->first();
+        if ($payment instanceof Payment && $gateway->name() === 'stripe' && $payment->provider === 'stripe'
+            && $payment->status !== PaymentIntentStatus::Succeeded && $payment->status !== PaymentIntentStatus::Canceled && $payment->provider_intent_id) {
+            $intent = $gateway->retrieve($payment);
+            if ($intent->status !== $payment->status) {
+                $confirm->handle($payment, $intent);
             }
         }
 
-        return null;
+        return $booking->refresh();
+    }
+
+    /** @throws QuoteException when the hold ran out (or the booking is no longer open) */
+    private function ensurePayable(Booking $booking): void
+    {
+        if (! $booking->isPayable()) {
+            throw QuoteException::on('hold', 'Your hold on this time ran out. Go back to the yacht and pick a time again.');
+        }
+    }
+
+    /** @param  array<string, mixed>  $query */
+    private function backToCard(string $slug, array $query, ?string $message): RedirectResponse
+    {
+        if (! preg_match('/^[a-z0-9-]{1,80}$/', $slug)) {
+            return redirect()->route('yachts.index');
+        }
+
+        return redirect()->to(route('yachts.show', [$slug, ...collect($query)->only(['experience', 'date', 'hours', 'guests', 'addons'])->all()]).'#book')
+            ->with('booking_card_error', $message ?? 'That time is no longer available. Pick another one.');
     }
 }

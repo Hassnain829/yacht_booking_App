@@ -252,7 +252,12 @@
                                 <p class="font-display text-2xl text-navy-950">Book {{ $yacht->title }}</p>
                                 <button type="button" data-sheet-close class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-navy-950 ring-1 ring-navy-100" aria-label="Close the booking card"><i data-lucide="x" class="h-5 w-5"></i></button>
                             </div>
-                            <form id="booking-card" action="{{ route('checkout.create') }}" method="get" novalidate data-booking-card="{{ json_encode($card) }}" class="overflow-hidden rounded-3xl bg-white shadow-card ring-1 ring-navy-100">
+                            <form id="booking-card" action="{{ auth()->check() ? route('checkout.hold') : route('checkout.start') }}" method="{{ auth()->check() ? 'post' : 'get' }}" novalidate data-booking-card="{{ json_encode($card) }}" class="overflow-hidden rounded-3xl bg-white shadow-card ring-1 ring-navy-100">
+                                @auth
+                                    {{-- Signed in: "Book now" holds the time right away (4.5); a guest signs in on the checkout page first. --}}
+                                    @csrf
+                                    <input type="hidden" name="idempotency_key" value="{{ Str::uuid() }}">
+                                @endauth
                                 <input type="hidden" name="yacht" value="{{ $yacht->slug }}">
                                 <input type="hidden" name="date" value="{{ $initial['date'] }}">
                                 <input type="hidden" name="time" value="">
@@ -323,7 +328,7 @@
                                         <div class="mt-3 flex items-end justify-between gap-4 border-t border-navy-200 pt-3"><span class="font-bold text-navy-950">Total</span><span data-card="total" class="text-lg font-extrabold text-navy-950">{{ $estimate ? money($estimate->totalCents) : '—' }}</span></div>
                                         <p data-card="note" class="mt-2 text-xs text-navy-500">{{ $initial['date'] ? 'Paid in full at checkout.' : 'Weekday price. Pick a date for yours.' }}</p>
                                     </div>
-                                    <p data-card="error" @unless (session('booking_card_error')) hidden @endunless class="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">{{ session('booking_card_error') }}</p>
+                                    <p data-card="error" @unless (session('booking_card_error') ?? $errors->first()) hidden @endunless class="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">{{ session('booking_card_error') ?? $errors->first() }}</p>
 
                                     <x-button type="submit" icon="arrow-right" size="block">Book now</x-button>
                                     <p data-card="cancellation" class="flex items-center justify-center gap-2 text-center text-xs font-semibold text-emerald-700"><i data-lucide="calendar-check" class="h-3.5 w-3.5"></i><span data-card="cancellation-text">{{ $policy && $policy['free_hours'] ? 'Free cancellation up to '.($policy['free_hours'] % 24 === 0 ? ($policy['free_hours'] / 24).' '.Str::plural('day', $policy['free_hours'] / 24) : $policy['free_hours'].' hours').' before' : ($policy ? $policy['name'].' cancellation policy' : 'Cancellation policy shown at checkout') }}</span></p>

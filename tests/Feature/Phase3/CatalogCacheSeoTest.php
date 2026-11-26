@@ -5,9 +5,11 @@ namespace Tests\Feature\Phase3;
 use App\Enums\BoatStatus;
 use App\Models\Amenity;
 use App\Models\Boat;
+use App\Models\Booking;
 use App\Models\User;
 use App\Services\BoatService;
 use App\Services\PublicCatalog;
+use App\Support\StartTimes;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -150,8 +152,16 @@ class CatalogCacheSeoTest extends TestCase
 
     public function test_private_pages_are_noindex_and_canonical_urls_drop_the_query(): void
     {
-        $this->get('/checkout')->assertOk()->assertSee('<meta name="robots" content="noindex">', false);
-        $this->get('/booking/confirmation')->assertOk()->assertSee('<meta name="robots" content="noindex">', false);
+        $azure = Boat::query()->where('slug', 'azure')->sole();
+        foreach (range(0, 6) as $day) {
+            $azure->availabilityRules()->create(['weekday' => $day, 'is_open' => true, 'start_times' => StartTimes::defaults()]);
+        }
+        $date = now(config('app.display_timezone'))->addDays(10)->toDateString();
+        $this->get("/checkout?yacht=azure&date={$date}&time=12:00&hours=3&guests=2")->assertOk()->assertSee('<meta name="robots" content="noindex">', false);
+        $guest = User::factory()->create();
+        $booking = Booking::factory()->for($azure)->create(['customer_id' => $guest->id, 'contact_first_name' => 'Ana', 'contact_email' => 'ana@example.com']);
+        $this->actingAs($guest)->get("/bookings/{$booking->ulid}/confirmation")->assertOk()->assertSee('<meta name="robots" content="noindex">', false);
+        auth()->logout();
 
         $this->get('/yachts?type=Sailboat&sort=price-asc')->assertOk()
             ->assertSee('<link rel="canonical" href="'.route('yachts.index').'">', false)

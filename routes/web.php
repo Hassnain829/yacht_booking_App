@@ -21,6 +21,7 @@ use App\Http\Controllers\Admin\SettingsController as AdminSettingsController;
 use App\Http\Controllers\Admin\SystemController as AdminSystemController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\BookingCardController;
+use App\Http\Controllers\BookingConfirmationController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\ExperienceController;
@@ -36,6 +37,7 @@ use App\Http\Controllers\Owner\EarningsController as OwnerEarningsController;
 use App\Http\Controllers\Owner\PayoutController as OwnerPayoutController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\SeoController;
+use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\YachtController;
 use App\Support\Demo\DemoCatalog;
 use Illuminate\Support\Facades\Route;
@@ -68,12 +70,30 @@ Route::get('/sitemap.xml', [SeoController::class, 'sitemap'])->name('sitemap');
 Route::get('/robots.txt', [SeoController::class, 'robots'])->name('robots');
 
 // Booking flow. Since 4.3 a trip is picked on the boat page (D21): the old /book wizard URL only redirects there
-// (or to the fleet when no boat is given). Checkout is still the Phase 1 demo until 4.5 (hold) and Phase 5 (Stripe).
+// (or to the fleet when no boat is given).
 Route::get('/book', BookingController::class)->name('booking.create');
-Route::get('/checkout', [CheckoutController::class, 'create'])->name('checkout.create');
-Route::post('/checkout', [CheckoutController::class, 'store'])->middleware('throttle:checkout')->name('checkout.store');
-Route::post('/checkout/promo', [CheckoutController::class, 'promo'])->middleware('throttle:promo')->name('checkout.promo');
-Route::get('/booking/confirmation', [CheckoutController::class, 'confirmation'])->name('booking.confirmation');
+
+// Checkout (4.5 – 4.6, D22: paid in full at checkout). A guest signs in on the start page; "Book now" holds the
+// time (the double-booking lock) while they pay. Only their own booking (BookingPolicy: else 404). The booking is
+// confirmed on the provider's word: the webhook, or the server asking it — never the browser.
+Route::get('/checkout', [CheckoutController::class, 'start'])->name('checkout.start');
+Route::middleware(['auth', 'active'])->group(function () {
+    $booking = '[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}';
+    Route::post('/checkout', [CheckoutController::class, 'hold'])->middleware(['throttle:hold', 'idempotent'])->name('checkout.hold');
+    Route::controller(CheckoutController::class)->prefix('checkout/{booking}')->name('checkout.')->where(['booking' => $booking])->group(function () {
+        Route::get('/', 'show')->name('show');
+        Route::get('/price', 'price')->middleware('throttle:quote')->name('price');
+        Route::post('/promo', 'applyPromo')->middleware('throttle:promo')->name('promo');
+        Route::delete('/promo', 'removePromo')->middleware('throttle:checkout')->name('promo.remove');
+        Route::post('/pay', 'pay')->middleware(['throttle:payment', 'idempotent'])->name('pay');
+        Route::get('/complete', 'complete')->name('complete');
+        Route::get('/status', 'status')->middleware('throttle:payment-status')->name('status');
+        Route::post('/test-card', 'testCard')->middleware(['throttle:payment', 'idempotent'])->name('test-card'); // fake gateway only (404 otherwise)
+    });
+    Route::get('/bookings/{booking}/confirmation', [BookingConfirmationController::class, 'show'])->where('booking', $booking)->name('bookings.confirmation');
+    Route::get('/bookings/{booking}/calendar.ics', [BookingConfirmationController::class, 'calendar'])->where('booking', $booking)->middleware('throttle:files')->name('bookings.calendar');
+});
+Route::post('/stripe/webhook', StripeWebhookController::class)->middleware('throttle:webhooks')->name('stripe.webhook');
 
 // Owner screens — signed-in, active, verified (PLAN §4.5). Page content is still demo data until Phase 6/7.
 Route::get('/list-your-boat', [ListingController::class, 'create'])

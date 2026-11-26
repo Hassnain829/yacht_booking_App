@@ -13,7 +13,8 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * Each request gets a fresh nonce; Vite adds it to the tags it renders (@vite, @fonts). Our own
  * markup never needs it (no inline <script>/<style> — checked by the tests).
- * Phase 5 adds Stripe (js.stripe.com, api.stripe.com, hooks.stripe.com) to the lists below.
+ * With Stripe payments (4.5) its Payment Element is allowed: js.stripe.com (script, frames), hooks.stripe.com
+ * (3-D Secure frames), api.stripe.com (requests) and *.stripe.com images. Card data stays in Stripe's frames.
  */
 class SecurityHeaders
 {
@@ -63,6 +64,14 @@ class SecurityHeaders
             array_push($connect, $server, $socket);
         }
 
+        $frames = self::FRAME_SOURCES;
+        if (config('payments.driver') === 'stripe') {
+            $scripts[] = 'https://js.stripe.com';
+            array_push($frames, 'https://js.stripe.com', 'https://hooks.stripe.com');
+            $connect[] = 'https://api.stripe.com';
+            $images[] = 'https://*.stripe.com';
+        }
+
         $directives = [
             'default-src' => ["'self'"],
             'script-src' => $scripts,
@@ -71,7 +80,7 @@ class SecurityHeaders
             'font-src' => $fonts,
             'connect-src' => $connect,
             'media-src' => ["'self'"],
-            'frame-src' => self::FRAME_SOURCES,
+            'frame-src' => $frames,
             'object-src' => ["'none'"],
             'base-uri' => ["'self'"],
             'form-action' => ["'self'"],

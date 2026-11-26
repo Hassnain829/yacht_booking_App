@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * are set by the booking services (forceFill) — never from a request (CLAUDE.md security standard).
  */
 #[Fillable(['occasion', 'customer_notes', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone', 'heard_from'])]
-#[Hidden(['id', 'customer_id', 'boat_id', 'experience_id', 'captain_id', 'promo_code_id'])]
+#[Hidden(['id', 'customer_id', 'boat_id', 'experience_id', 'captain_id', 'promo_code_id', 'hold_key'])]
 class Booking extends Model
 {
     /** @use HasFactory<BookingFactory> */
@@ -85,6 +85,24 @@ class Booking extends Model
         return $this->hasMany(BookingItem::class)->orderBy('sort');
     }
 
+    /** @return HasMany<Payment, $this> */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class)->orderBy('id');
+    }
+
+    /** @return BelongsTo<PromoCode, $this> */
+    public function promoCode(): BelongsTo
+    {
+        return $this->belongsTo(PromoCode::class)->withTrashed();
+    }
+
+    /** A hold that hasn't run out yet: the guest can still pay for it. */
+    public function isPayable(?CarbonImmutable $now = null): bool
+    {
+        return $this->status === BookingStatus::Hold && $this->takesTime($now);
+    }
+
     /** @return HasMany<BookingStatusHistory, $this> */
     public function statusHistory(): HasMany
     {
@@ -134,6 +152,14 @@ class Booking extends Model
             'captain_assigned_at' => 'immutable_datetime',
             'captain_notified_at' => 'immutable_datetime',
             'captain_acknowledged_at' => 'immutable_datetime',
+            'subtotal_cents' => 'integer',
+            'discount_cents' => 'integer',
+            'tax_cents' => 'integer',
+            'gratuity_bp' => 'integer',
+            'gratuity_cents' => 'integer',
+            'total_cents' => 'integer',
+            'amount_paid_cents' => 'integer',
+            'amount_refunded_cents' => 'integer',
             'policy_snapshot' => 'array',
             'pricing_snapshot' => 'array',
         ];

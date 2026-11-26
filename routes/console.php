@@ -15,5 +15,8 @@ Artisan::command('inspire', function () {
 // Queued emails (security emails, and later booking emails): a short worker each minute — shared hosting has no daemon.
 Schedule::command('queue:work --stop-when-empty --tries=3 --max-time=55')->everyMinute()->withoutOverlapping();
 
+// Holds that ran out become expired and their open payment forms are cancelled (PLAN §7.3, 4.5).
+Schedule::command('bookings:expire-holds')->everyMinute()->withoutOverlapping();
+
 // Delete rows past their retention, e.g. login_events older than a year (LoginEvent::prunable).
 Schedule::command('model:prune')->daily();

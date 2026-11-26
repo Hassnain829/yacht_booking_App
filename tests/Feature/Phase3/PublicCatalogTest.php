@@ -116,8 +116,7 @@ class PublicCatalogTest extends TestCase
         }
         $this->get('/pricing')->assertDontSee('id="estimator"', false);
         $this->get('/book')->assertRedirect('/yachts');
-        $this->get('/checkout')->assertRedirect('/yachts');
-        $this->get('/booking/confirmation')->assertRedirect('/yachts');
+        $this->get('/checkout')->assertRedirect('/yachts'); // no trip: back to the fleet
     }
 
     public function test_the_home_page_drops_tiles_of_hidden_or_trashed_experiences(): void
@@ -130,14 +129,5 @@ class PublicCatalogTest extends TestCase
             ->assertDontSee('?experience=celebration', false)
             ->assertDontSee('?experience=playpen', false)
             ->assertSee('?experience=river', false);
-    }
-
-    public function test_the_checkout_sample_uses_whatever_the_admin_offers(): void
-    {
-        Experience::query()->where('slug', 'sunset')->first()->delete();
-        Addon::query()->where('slug', 'champagne')->first()->delete();
-
-        $this->get('/checkout')->assertOk()->assertDontSee('Sunset Skyline Cruise');
-        $this->get('/booking/confirmation')->assertOk();
     }
 }

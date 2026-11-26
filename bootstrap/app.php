@@ -25,6 +25,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // (compared exactly in the header), so it doesn't need to be encrypted.
         $middleware->encryptCookies(except: ['promo_hidden']);
 
+        // Stripe's webhook signs its requests instead (PLAN §8.4): no session, no CSRF token.
+        $middleware->validateCsrfTokens(except: ['stripe/webhook']);
+
         // Signed-in users who open /login or /register go to their role's home (PLAN §4.2).
         $middleware->redirectUsersTo(fn (Request $request) => Home::for($request->user()));
 

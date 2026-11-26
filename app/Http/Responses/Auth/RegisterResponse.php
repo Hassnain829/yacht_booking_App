@@ -7,7 +7,10 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Laravel\Fortify\Contracts\RegisterResponse as RegisterResponseContract;
 
-/** After sign-up: straight to "Check your inbox" (the verification email was just sent). */
+/**
+ * After sign-up: back to the page that asked for an account (checkout, 4.5 — the guest books right away and
+ * verifies the email later), otherwise straight to "Check your inbox" (the verification email was just sent).
+ */
 class RegisterResponse implements RegisterResponseContract
 {
     public function toResponse($request): JsonResponse|RedirectResponse
@@ -15,6 +18,6 @@ class RegisterResponse implements RegisterResponseContract
         /** @var Request $request */
         return $request->wantsJson()
             ? new JsonResponse(['message' => 'Account created. Please verify your email.'], 201)
-            : redirect()->route('verification.notice');
+            : redirect()->intended(route('verification.notice'));
     }
 }
