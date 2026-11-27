@@ -68,6 +68,7 @@ A secure, role-based yacht charter marketplace for Chicago:
 | D20 | **Trip extensions** (user decision 2026-11-23). During the trip, until a cut-off before the end, the customer can **add time and pay for it** as a separate payment. It is allowed only if the boat **and** the captain are free for the extra time. The captain, the owner (owner boats) and the admin are told when it is paid. Built in Phase 8 (§7.9). |
 | D21 | **Boatsetter-style renter flow, our design** (user decision 2026-11-25). For Chicago only. Booking starts on the boat page card (date, duration, start time, optional experience, captain choice, guests), then one checkout page. The 4-step `/book` wizard is retired. Experiences become optional and work like categories. Every fee line is shown. Fleet filters, no map. Our design stays, only adjusted for the flow. Research: [docs/research/boatsetter-renter-flow.md](research/boatsetter-renter-flow.md). **Experiences are free** (user, 2026-11-25, as on Boatsetter): each keeps its own start times (sunset ≠ fireworks); the admin can add **paid extras** to an experience (décor, a photographer, any facility; add-ons priced in Admin → Add-ons). Built in 4.3. **Changed the same day after the user's QA:** an experience has **no trip length of its own** (the guest books the boat by the hour and gets the experience for that time); it **departs inside a window** (sunset in the evening, fireworks at night) and the guest picks any of the boat's start times inside it, told plainly when a time or day doesn't fit; its extras are **optional add-ons suggested at checkout**, charged only when ticked. |
 | D22 | **Direct checkout, full payment only** (user decisions 2026-11-25). No deposit, no balance charge and **no request to book** (owner boats too): every booking is a hold paid in full at checkout, then confirmed. Trip Assurance and security-deposit holds come later (D18). **2026-11-26 (user): the payment is received at checkout from 4.5** — Stripe's core (planned for 5.1 / 5.2) came forward; there is no stubbed step. |
+| D23 | **Refunds need the admin; the card fee isn't refunded** (user decisions 2026-11-26). A guest's online cancellation frees the time at once, but its refund is only **asked for**: no money goes back until the admin **approves** it (the amount can be changed) or **declines** it (the reason is emailed). A guest who asks by phone / email is cancelled and refunded by the admin from the booking page. The **card processing fee is borne by the guest**: it is kept back from the refund, once per booking (Stripe's real fee, else the 2.9% + 30¢ estimate); the admin can choose not to keep it. Weather cancellations: a refund only for now — **rescheduling comes later** (the admin cancels + the guest rebooks). Saved cards are wanted (checkout "Save this card", pay with a saved card). |
 
 ### 2.2 Small confirmations
 
@@ -351,14 +352,15 @@ If someone opens another user's record, the app returns **404, not 403**, so att
 
 ### 6.6 Payments and finance
 
-- **customer_payment_methods:** user_id, stripe_payment_method_id, brand, last4, exp_month, exp_year, is_default. This is a display cache only.
+- **customer_payment_methods:** ulid, user_id, provider (stripe|fake), provider_payment_method_id (unique per provider), brand, last4, exp_month, exp_year, is_default. This is a display cache only (5.3). `users.stripe_customer_id` holds the guest's Stripe Customer.
 - **payments:**
   - id, booking_id, user_id, provider_intent_id (unique), provider_charge_id.
   - kind (deposit|balance|full|extension|extra), amount_cents.
   - status (requires_payment|requires_action|processing|succeeded|failed|canceled), failure_code, failure_message, paid_at.
   - idempotency_key (unique), meta (json).
-- **refunds:** id, payment_id, booking_id, amount_cents, reason (customer_cancel|owner_cancel|weather|complaint|admin|dispute), policy_pct?, status, provider_refund_id, created_by, note.
-- **disputes:** id, payment_id, provider_dispute_id, amount_cents, reason, status, evidence_due_by.
+  - Since 5.3 / 5.4: provider_payment_method_id (the card that paid or was chosen), save_card, fee_cents (the provider's processing fee), amount_refunded_cents.
+- **refunds** (5.4, D23): ulid, booking_id, payment_id?, amount_cents, fee_cents (card fee kept back), policy_pct?, reason (customer_cancel|owner_cancel|weather|complaint|late_payment|admin|dispute), status (requested|rejected|pending|succeeded|failed|canceled), guest_reason?, note?, decision_note?, provider_refund_id (unique), failure_reason?, idempotency_key (unique), requested_by?, decided_by?, decided_at?, refunded_at?.
+- **disputes** (5.4): ulid, booking_id?, payment_id?, provider, provider_dispute_id (unique), amount_cents, reason, status, evidence_due_by, closed_at.
 - **webhook_events:** id, event_id (unique), type, payload (json), received_at, processed_at, error.
 - **ledger_entries** (the money truth for owners and captains):
   - id, account_type (owner|captain|platform), account_id?, booking_id?, payout_id?, complaint_id?.
@@ -453,21 +455,24 @@ Each boat uses one policy. The owner chooses it in the wizard; for house boats, 
 | **Moderate** | ≥ 5 days (120 h) | 3–5 days (72–120 h) | < 3 days (72 h) |
 | **Strict** | ≥ 30 days (720 h) | 15–30 days (360–720 h) | < 15 days (360 h) |
 
-**How the refund is calculated** (customer cancels):
+**How the refund is calculated** (customer cancels; `CancellationPolicyService`, since 5.4):
 
 ```
-refund_pct       = from the policy snapshot, using hours between now and the trip start
-refundable_total = refund_pct × (total − gratuity) + gratuity      (gratuity is always returned)
-refund           = max(0, amount_paid − (total − refundable_total))
+refund_pct       = from the policy snapshot, using hours between now and the trip start (0% once it started)
+by_policy        = refund_pct × (total − gratuity) + gratuity      (gratuity is always returned)
+                   — never more than is left to refund (paid − refunded − refunds already asked for)
+refund           = max(0, by_policy − card_fee)                    (D23: the card fee isn't refunded, kept once)
 ```
 
-Example: total $1,000 (no gratuity), paid in full (D22).
-- Cancel in the 50% window → refund $500.
-- Cancel in the 100% window → refund $1,000.
+Example: total $1,000 (no gratuity), paid in full (D22); the card fee was $29.30.
+- Cancel in the 50% window → refund $470.70.
+- Cancel in the 100% window → refund $970.70.
+
+**No refund without the admin (D23):** the guest's cancellation asks for that refund; the admin approves it (the amount can change) or declines it with a reason.
 
 **Special cases**
 
-- **Weather or safety cancellation** (by the admin): 100% refund, or a reschedule if the customer prefers.
+- **Weather or safety cancellation** (by the admin): 100% refund (the admin chooses whether to keep the card fee back). Rescheduling comes later (D23).
 - **Owner cancels a confirmed trip:** 100% refund to the customer. The admin can deduct a penalty from the owner's earnings, as a `deduction` ledger entry with a reason (R5 ✅).
 - **Admin override:** the admin can always issue a custom full or partial refund with a written reason. This needs password re-confirmation and is audited.
 
@@ -1431,10 +1436,22 @@ There are also in-app notifications (bell icon) for customers, owners, captains 
 **QA:** price parity with the mockup on the remaining (full-payment) cases; concurrency test (two holds on one slot); hold expiry; IDOR tests; §8.2 endpoint test set; boat page / fleet at 390 / 768 / 1280 / 1440 with no overflow.
 
 ### Phase 5 — Payments + cancellations (Stripe test mode)
-5.1 ~~Payment gateway + Stripe implementation; Payment Element (full amount only, D22); 3-D Secure.~~ *Done in 4.5 (user 2026-11-26).* Left for 5.1: a Stripe Customer per guest (needed for saved cards).
-5.2 ~~Webhook endpoint + `webhook_events` + idempotent handlers.~~ *Done in 4.5.* Left: more event types (refunds, disputes) as 5.4 – 5.5 need them.
-5.3 Saved cards page. *(No automatic balance charge: there is no deposit, D22.)*
-5.4 `CancellationPolicyService` (Boatsetter-style, §7.4) with a refund preview; customer cancel; admin custom / weather / owner-cancel refunds; dispute records.
+5.1 ~~Payment gateway + Stripe implementation; Payment Element (full amount only, D22); 3-D Secure.~~ *Done in 4.5 (user 2026-11-26).* The Stripe Customer per guest came with 5.3. ✅
+5.2 ~~Webhook endpoint + `webhook_events` + idempotent handlers.~~ *Done in 4.5.* Refund and dispute events came with 5.4. ✅
+5.3 **Saved cards.** ✅ done 2026-11-26 (built with 5.4).
+  - Migration `create_refunds_disputes_and_saved_cards_tables` (also `users.stripe_customer_id`, the payments columns, refunds, disputes). Checked forward, back, forward.
+  - **Fix 2026-11-27 (user's MySQL):** the saved cards' automatic unique index name was 67 characters; MySQL allows 64, so the first run stopped half-way. The indexes are named now (`cpm_*`) and up() carries on from a half-done run. `Phase5/IndexNameLengthTest` checks every index name against the 64-character limit (SQLite has none).
+  - `App\Services\Payments\SavedCards`: the guest's Stripe Customer (created when first needed), the display cache, default, remove (detached at Stripe), forgotten when the account is deleted.
+  - Profile & security → Payment methods: the guest's cards (expired ones marked), Make default, Remove (asks first), **Add a card** — Stripe's Payment Element in setup mode: the server creates the SetupIntent and, after the browser confirms it, asks Stripe whether it succeeded and belongs to this customer (`account.cards.store`, or Stripe's return URL `account.cards.added`); the fake gateway's test card locally. `throttle:cards`; another guest's card → 404 (CustomerPaymentMethodPolicy).
+  - Checkout: the saved cards (default picked, expired ones disabled) or "Use a new card" + **"Save this card for next time"** (Stripe's `setup_future_usage`, matched on the Payment Element); a saved card is confirmed with Stripe using that card (3-D Secure if its bank asks). The card is saved when the payment succeeds (ConfirmPaidBooking), with the provider's fee (`payments.fee_cents`).
+5.4 **Cancellations + refunds (admin-approved, D23).** ✅ done 2026-11-26.
+  - `CancellationPolicyService` (§7.4: the snapshot's rules, the gratuity always back, never more than is left, less the card fee once) replaces `RefundPreview`.
+  - **Guest:** "Cancel trip" on the trip page (a reason, an optional note; `throttle:cancel` + idempotency key) → `CancelBooking::byGuest`: the booking is cancelled, the time freed, the history written, the refund **requested** (nothing sent); emails: the guest (`TripCancelled`: under review) and the business (`GuestCancelledTrip`). The trip page and My trips show the refund's state (under review, on its way, refunded, declined).
+  - **Admin** (booking page; a reason + the password, `throttle:admin-sensitive`, audit log; `issue-refunds`): **Approve** (the amount can change; sent to Stripe, `RefundSent`) / **Decline** (`RefundDeclined` with the reason) a guest's refund; **Cancel booking** (the guest asked by phone, weather, the owner, other) with the refund by the policy, everything paid, a custom amount or none, the card fee kept back or not (sent at once); **Refund** without cancelling (a complaint, a late payment, weather cut short, goodwill). The bookings list shows the refunds to approve (banner, `?refund=requested`, a pill).
+  - `RefundService`: refunds go against the paid payment with money left, with the refund's idempotency key; money is counted on the payment and the booking once, when Stripe says it succeeded (`payment_status` partially_refunded / refunded); a provider error marks it failed and the admin sees why.
+  - Webhook: `refund.*` / `charge.refund.updated` (status; found by Stripe's id or ours in the metadata) and `charge.dispute.*` (Dispute records on the booking; `DisputeOpened` to the business).
+  - Legal cancellation page: the card fee, the team's review, no free new date for weather (D23). Rescheduling: later.
+  - **QA:** see the report; tests in Phase5/CancellationPolicyServiceTest, CancelTripTest, AdminRefundsTest, SavedCardsTest, RefundWebhookTest.
 5.5 Receipt PDF; admin Payments and Refunds screens; nightly reconcile.
 **QA:** Stripe test-card matrix (success, decline, 3-D Secure, insufficient funds); webhook replay and duplicates; refund math tests for every policy window.
 

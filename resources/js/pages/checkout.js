@@ -11,8 +11,9 @@ import { setFieldError } from '../ui/field-errors.js';
  * final choices (POST …/pay → the payment for the total) and then:
  *  - Stripe: confirms the card in Stripe's Payment Element (card data stays in Stripe's frames) and goes to the
  *    return page, where the server asks Stripe — never trusting the browser — and confirms the booking;
- *  - the fake gateway (local / tests): sends only the test card's brand, last 4 and decline flag.
- * The hold timer counts down to the server's hold expiry; then the page reloads into "This hold has ended".
+ *  - the fake gateway (local / tests): sends only the test card's brand, last 4, expiry and decline flag.
+ * Since 5.3 the guest can pay with a saved card (Stripe confirms with that card) or tick "Save this card for next
+ * time" (Stripe's setup_future_usage, matched on the Payment Element). The hold timer counts down to the server's hold expiry; then the page reloads into "This hold has ended".
  */
 const digits = (value) => String(value).replace(/\D/g, '');
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -61,6 +62,8 @@ export default function checkout() {
     };
     const failure = (error) => (error instanceof HttpError ? Object.values(error.errors)[0]?.[0] ?? error.message : 'Something went wrong. Please try again.');
     const chosenAddons = () => Array.from(form.querySelectorAll('input[name="addons[]"]:checked')).map((box) => box.value);
+    const savedCard = () => form.querySelector('input[name="card"]:checked:not([value=""])');
+    const saveBox = F.save_card;
     const gratuity = () => Number(form.querySelector('input[name="gratuity"]:checked')?.value ?? 0);
 
     /* ---------------- Stripe's Payment Element (only with the Stripe driver) ---------------- */
@@ -80,6 +83,17 @@ export default function checkout() {
             elements.create('payment', { layout: 'tabs' }).mount('#payment-element');
         }
     }
+    // "Save this card": the Payment Element must ask for the same setup_future_usage as the intent.
+    const syncSave = () => elements?.update({ setupFutureUsage: !savedCard() && saveBox?.checked ? 'off_session' : null });
+    saveBox?.addEventListener('change', syncSave);
+
+    /* ---------------- Saved cards (5.3): a saved card hides the new card's fields ---------------- */
+    const newCard = form.querySelector('[data-new-card]');
+    form.querySelector('[data-saved-cards]')?.addEventListener('change', () => {
+        newCard.classList.toggle('hidden', Boolean(savedCard()));
+        form.querySelector('[data-card-error]')?.classList.add('hidden');
+        syncSave();
+    });
 
     /* ---------------- Price (QuoteService through the price endpoint) ---------------- */
     const payText = () => `Pay ${formatCents(amountCents)} & confirm booking`;
@@ -181,7 +195,7 @@ export default function checkout() {
     };
 
     /* ---------------- Validation (UX only — the server validates again) ---------------- */
-    const rules = [
+    const allRules = [
         [F.first_name, (v) => v.trim().length > 0, 'Required'],
         [F.last_name, (v) => v.trim().length > 0, 'Required'],
         [F.email, (v) => EMAIL.test(v.trim()), 'Enter a valid email'],
@@ -205,16 +219,18 @@ export default function checkout() {
             : []),
         [F.agree, (_, el) => el.checked, 'Please accept to continue'],
     ];
+    const cardFields = card ? Object.values(card) : [];
+    const rules = () => (savedCard() ? allRules.filter(([field]) => !cardFields.includes(field)) : allRules);
     const check = ([field, ok, message]) => {
         const valid = ok(field.value, field);
         setFieldError(field, valid ? '' : message);
         return valid;
     };
     form.addEventListener('blur', (event) => {
-        const rule = rules.find(([field]) => field === event.target);
+        const rule = rules().find(([field]) => field === event.target);
         if (rule && event.target.value) check(rule);
     }, true);
-    F.agree.addEventListener('change', () => check(rules.find(([field]) => field === F.agree)));
+    F.agree.addEventListener('change', () => check(allRules.find(([field]) => field === F.agree)));
 
     if (card) {
         card.number.addEventListener('input', () => {
@@ -234,7 +250,7 @@ export default function checkout() {
             card.cvc.value = '123';
             card.zip.value = '60601';
             paintBrand();
-            rules.filter(([field]) => Object.values(card).includes(field)).forEach(check);
+            allRules.filter(([field]) => cardFields.includes(field)).forEach(check);
         });
     }
 
@@ -260,6 +276,8 @@ export default function checkout() {
         heard: F.heard.value || null,
         notes: F.notes.value || null,
         agree: F.agree.checked,
+        card: savedCard()?.value ?? null,
+        save_card: !savedCard() && Boolean(saveBox?.checked),
     });
     const fieldErrors = (error) => {
         if (!(error instanceof HttpError) || !error.isValidation) return false;
@@ -269,6 +287,13 @@ export default function checkout() {
             if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement) {
                 setFieldError(field, messages[0]);
                 shown = true;
+            } else if (name === 'card') {
+                const box = form.querySelector('[data-card-error]');
+                if (box) {
+                    box.textContent = messages[0];
+                    box.classList.remove('hidden');
+                    shown = true;
+                }
             }
         }
         return shown;
@@ -277,9 +302,10 @@ export default function checkout() {
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (paying) return;
-        const results = rules.map(check);
+        const current = rules();
+        const results = current.map(check);
         if (!results.every(Boolean)) {
-            const first = rules[results.indexOf(false)][0];
+            const first = current[results.indexOf(false)][0];
             first.scrollIntoView({ behavior: 'smooth', block: 'center' });
             setTimeout(() => first.focus({ preventScroll: true }), 400);
             toast('Please check the highlighted fields', 'error');
@@ -289,7 +315,9 @@ export default function checkout() {
         setPaying(true);
 
         try {
-            if (elements) {
+            const saved = savedCard();
+            if (elements && !saved) {
+                syncSave();
                 const { error: incomplete } = await elements.submit(); // Stripe checks its own fields first
                 if (incomplete) throw new Error(incomplete.message);
             }
@@ -297,19 +325,30 @@ export default function checkout() {
 
             if (payment.provider === 'stripe') {
                 const name = `${F.first_name.value} ${F.last_name.value}`.trim();
-                const { error, paymentIntent } = await stripe.confirmPayment({
-                    elements,
-                    clientSecret: payment.client_secret,
-                    confirmParams: { return_url: payment.return_url, payment_method_data: { billing_details: { name, email: F.email.value, phone: F.phone.value } } },
-                    redirect: 'if_required',
-                });
+                // A saved card: Stripe confirms with that card (3-D Secure if its bank asks); a new one: the Element.
+                const { error, paymentIntent } = await stripe.confirmPayment(
+                    payment.payment_method
+                        ? { clientSecret: payment.client_secret, confirmParams: { return_url: payment.return_url, payment_method: payment.payment_method }, redirect: 'if_required' }
+                        : {
+                              elements,
+                              clientSecret: payment.client_secret,
+                              confirmParams: { return_url: payment.return_url, payment_method_data: { billing_details: { name, email: F.email.value, phone: F.phone.value } } },
+                              redirect: 'if_required',
+                          },
+                );
                 if (error) throw new Error(error.message ?? 'Your card was not charged. Please try again.');
                 if (paymentIntent) window.location.assign(payment.return_url); // the server asks Stripe and confirms
                 return;
             }
 
-            const number = digits(card.number.value);
-            const { data: result } = await http.post(payment.test_card_url, { brand: paintBrand(), last4: number.slice(-4), decline: number === DECLINE_CARD }, { idempotencyKey: newIdempotencyKey() });
+            const test = saved
+                ? { brand: saved.dataset.brand, last4: saved.dataset.last4, decline: false, exp_month: Number(saved.dataset.expMonth), exp_year: Number(saved.dataset.expYear) }
+                : (() => {
+                      const number = digits(card.number.value);
+                      const [month, year] = card.exp.value.split('/').map((part) => Number(digits(part)));
+                      return { brand: paintBrand(), last4: number.slice(-4), decline: number === DECLINE_CARD, exp_month: month, exp_year: 2000 + year };
+                  })();
+            const { data: result } = await http.post(payment.test_card_url, test, { idempotencyKey: newIdempotencyKey() });
             window.location.assign(result.redirect);
         } catch (error) {
             setPaying(false);

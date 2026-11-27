@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * provider (PCI SAQ-A): only the brand and last 4 digits are kept, for display. Nothing here is fillable: the
  * checkout actions set every field (forceFill).
  */
-#[Hidden(['id', 'booking_id', 'user_id', 'provider_intent_id', 'provider_charge_id', 'idempotency_key', 'meta'])]
+#[Hidden(['id', 'booking_id', 'user_id', 'provider_intent_id', 'provider_charge_id', 'provider_payment_method_id', 'idempotency_key', 'meta'])]
 class Payment extends Model
 {
     use HasUlids;
@@ -35,12 +35,21 @@ class Payment extends Model
         return $this->belongsTo(User::class);
     }
 
+    /** What of this payment can still go back to the card. */
+    public function refundableCents(): int
+    {
+        return $this->status === PaymentIntentStatus::Succeeded ? max(0, $this->amount_cents - $this->amount_refunded_cents) : 0;
+    }
+
     /** @return array<string, mixed> */
     protected function casts(): array
     {
         return [
             'status' => PaymentIntentStatus::class,
             'amount_cents' => 'integer',
+            'fee_cents' => 'integer',
+            'amount_refunded_cents' => 'integer',
+            'save_card' => 'boolean',
             'paid_at' => 'immutable_datetime',
             'meta' => 'array',
         ];

@@ -11,6 +11,7 @@ use App\Notifications\BookingConfirmed;
 use App\Notifications\NewBookingReceived;
 use App\Services\AvailabilityService;
 use App\Services\BookingService;
+use App\Services\Payments\SavedCards;
 use App\Services\PromoService;
 use App\Services\SettingsService;
 use App\Support\Payments\Intent;
@@ -23,7 +24,10 @@ use Illuminate\Support\Facades\Notification;
  *
  * A success confirms the held booking (paid in full, D22), records the promo redemption and, after the commit,
  * emails the guest (with the .ics) and the business. If the hold had run out and someone else took the time
- * meanwhile, the booking stays expired, marked paid, with a note to refund it (refunds: Phase 5).
+ * meanwhile, the booking stays expired, marked paid, with a note to refund it (the admin refunds it, 5.4).
+ *
+ * Since 5.3 the provider's processing fee and the paying card are kept on the payment, and a card the guest asked
+ * to save is added to their saved cards.
  */
 class ConfirmPaidBooking
 {
@@ -32,6 +36,7 @@ class ConfirmPaidBooking
         private BookingService $bookings,
         private PromoService $promos,
         private SettingsService $settings,
+        private SavedCards $cards,
     ) {}
 
     public function handle(Payment $payment, Intent $intent): Booking
@@ -61,10 +66,15 @@ class ConfirmPaidBooking
                 'provider_charge_id' => $intent->chargeId,
                 'card_brand' => $intent->cardBrand === null ? null : mb_substr($intent->cardBrand, 0, 20),
                 'card_last4' => $intent->cardLast4,
+                'provider_payment_method_id' => $intent->paymentMethodId ?? $payment->provider_payment_method_id,
+                'fee_cents' => $intent->feeCents ?? $payment->fee_cents,
                 'failure_code' => null,
                 'failure_message' => null,
                 'paid_at' => now(),
             ])->save();
+            if ($payment->save_card && $intent->card() !== null && $payment->user !== null) {
+                $this->cards->remember($payment->user, $intent->card());
+            }
             $booking->forceFill([
                 'payment_status' => PaymentStatus::Paid,
                 'amount_paid_cents' => $booking->amount_paid_cents + $intent->amountCents,

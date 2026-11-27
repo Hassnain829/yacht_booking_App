@@ -6,11 +6,13 @@ use App\Enums\PaymentIntentStatus;
 use App\Exceptions\QuoteException;
 use App\Models\Addon;
 use App\Models\Booking;
+use App\Models\CustomerPaymentMethod;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\AvailabilityService;
 use App\Services\BookingService;
 use App\Services\Payments\PaymentGateway;
+use App\Services\Payments\SavedCards;
 use App\Services\PromoService;
 use App\Services\QuoteService;
 use App\Support\Payments\Intent;
@@ -25,6 +27,9 @@ use Illuminate\Validation\ValidationException;
  * QuoteService and put on the booking, and the payment for the total is created (or its open one set to the new
  * total). The browser then confirms the card with the provider; the booking is confirmed by ConfirmPaidBooking
  * only when the provider says the money came in.
+ *
+ * Since 5.3 the intent belongs to the guest's customer at the provider, and carries the saved card they chose or
+ * their wish to save the new card ("Save this card for next time").
  */
 class PrepareCheckoutPayment
 {
@@ -34,10 +39,11 @@ class PrepareCheckoutPayment
         private BookingService $bookings,
         private PromoService $promos,
         private PaymentGateway $gateway,
+        private SavedCards $cards,
     ) {}
 
     /**
-     * @param  array{addons: list<Addon>, gratuity: int, first_name: string, last_name: string, email: string, phone: string, occasion: ?string, notes: ?string, heard: ?string}  $choices
+     * @param  array{addons: list<Addon>, gratuity: int, first_name: string, last_name: string, email: string, phone: string, occasion: ?string, notes: ?string, heard: ?string, card?: ?CustomerPaymentMethod, save_card?: bool}  $choices
      * @return array{0: Payment, 1: Intent}
      *
      * @throws ValidationException when the hold ran out, the trip isn't free or can't be priced
@@ -72,6 +78,11 @@ class PrepareCheckoutPayment
             ])->save();
             $this->bookings->applyQuote($booking, $quote);
 
+            $customerId = $this->cards->customerId($user);
+            $card = [
+                'provider_payment_method_id' => ($choices['card'] ?? null)?->provider_payment_method_id,
+                'save_card' => ($choices['card'] ?? null) === null && ($choices['save_card'] ?? false),
+            ];
             $payment = $booking->payments()->where('idempotency_key', $idempotencyKey)->first() // the same click sent twice
                 ?? $booking->payments()->whereIn('status', [PaymentIntentStatus::RequiresPayment, PaymentIntentStatus::RequiresAction])->latest('id')->first();
             if ($payment === null) {
@@ -84,18 +95,20 @@ class PrepareCheckoutPayment
                     'currency' => config('payments.currency', 'usd'),
                     'status' => PaymentIntentStatus::RequiresPayment,
                     'idempotency_key' => $idempotencyKey,
+                    ...$card,
                 ]);
                 $payment->save();
-                $intent = $this->gateway->createIntent($payment, $booking);
+                $intent = $this->gateway->createIntent($payment, $booking, $customerId);
                 $payment->forceFill(['provider_intent_id' => $intent->id])->save();
 
                 return [$payment, $intent];
             }
 
-            if ($payment->amount_cents !== $booking->total_cents) {
-                $payment->forceFill(['amount_cents' => $booking->total_cents])->save();
+            $payment->forceFill(['amount_cents' => $booking->total_cents, ...$card]);
+            if ($payment->isDirty()) {
+                $payment->save();
 
-                return [$payment, $this->gateway->updateAmount($payment)];
+                return [$payment, $this->gateway->updateIntent($payment, $customerId)];
             }
 
             return [$payment, $this->gateway->retrieve($payment)];

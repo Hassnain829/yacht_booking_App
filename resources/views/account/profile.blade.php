@@ -121,27 +121,44 @@
                     </form>
                 </section>
 
-                {{-- Saved cards (Phase 5: Stripe payment methods; we only store brand + last 4) --}}
+                {{-- Saved cards (5.3): kept by the payment provider; we only store the brand, last 4 and expiry. --}}
                 <section id="cards" class="{{ $card }} scroll-mt-28" aria-labelledby="cards-title">
                     <h2 id="cards-title" class="text-lg font-extrabold text-navy-950">Payment methods</h2>
                     <p class="mt-2 text-sm text-navy-500">Cards are stored securely by Stripe — we only keep the brand and last 4 digits.</p>
-                    <ul class="mt-5 space-y-3" id="card-list">
-                        @foreach ($cards as $saved)
-                            <li class="flex items-center gap-4 rounded-2xl p-4 ring-1 ring-navy-100" data-card>
-                                <span class="grid h-10 w-14 shrink-0 place-items-center rounded-lg bg-navy-950 text-[10px] font-extrabold uppercase tracking-wider text-white">{{ ['Mastercard' => 'MC', 'American Express' => 'AMEX', 'Amex' => 'AMEX', 'Discover' => 'DISC'][$saved->brand] ?? $saved->brand }}</span>
-                                <div class="min-w-0 flex-1">
-                                    <p class="text-sm font-bold text-navy-950">{{ $saved->brand }} •••• {{ $saved->last4 }}</p>
-                                    <p class="text-xs text-navy-500">Expires {{ $saved->expires }}</p>
-                                </div>
-                                @if ($saved->default)
-                                    <span class="rounded-full bg-brass-100 px-2.5 py-1 text-[11px] font-bold text-brass-800">Default</span>
-                                @else
-                                    <button type="button" data-remove-card class="rounded-full px-3 py-2 text-xs font-bold text-navy-400 hover:bg-red-50 hover:text-red-600">Remove</button>
-                                @endif
-                            </li>
-                        @endforeach
-                    </ul>
-                    <x-button variant="outline" class="mt-5" data-soon icon-left="credit-card">Add a card</x-button>
+                    @if ($cardMessage = ['card-added' => 'Your card is saved.', 'card-removed' => 'The card was removed.', 'card-default' => 'Your default card is changed.'][(string) $status] ?? null)
+                        <p class="{{ $ok }}" role="status">{{ $cardMessage }}</p>
+                    @elseif ($status === 'card-failed')
+                        <p class="mt-4 rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700 ring-1 ring-red-200" role="alert">We couldn't save that card. Please try again.</p>
+                    @endif
+                    @if ($cards->isEmpty())
+                        <p class="mt-5 rounded-2xl bg-navy-50/70 p-4 text-sm text-navy-600">No saved cards yet. Add one here, or tick "Save this card for next time" when you pay.</p>
+                    @else
+                        <ul class="mt-5 space-y-3" id="card-list">
+                            @foreach ($cards as $saved)
+                                <li class="flex flex-wrap items-center gap-4 rounded-2xl p-4 ring-1 ring-navy-100" data-card>
+                                    <x-card-brand :brand="$saved->brandName()" />
+                                    <div class="min-w-0 flex-1">
+                                        <p class="text-sm font-bold text-navy-950">{{ $saved->label() }}</p>
+                                        <p @class(['text-xs', 'text-navy-500' => ! $saved->isExpired(), 'font-semibold text-red-600' => $saved->isExpired()])>{{ $saved->isExpired() ? 'Expired '.$saved->expires() : 'Expires '.$saved->expires() }}</p>
+                                    </div>
+                                    @if ($saved->is_default)
+                                        <span class="rounded-full bg-brass-100 px-2.5 py-1 text-[11px] font-bold text-brass-800">Default</span>
+                                    @elseif (! $saved->isExpired())
+                                        <form method="POST" action="{{ route('account.cards.default', $saved) }}">
+                                            @csrf
+                                            <button type="submit" class="rounded-full px-3 py-2 text-xs font-bold text-navy-600 hover:bg-navy-50 hover:text-navy-950">Make default</button>
+                                        </form>
+                                    @endif
+                                    <form method="POST" action="{{ route('account.cards.destroy', $saved) }}" data-remove-card="{{ $saved->label() }}">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="rounded-full px-3 py-2 text-xs font-bold text-navy-400 hover:bg-red-50 hover:text-red-600">Remove</button>
+                                    </form>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
+                    <x-button variant="outline" class="mt-5" data-open-add-card icon-left="credit-card">Add a card</x-button>
                 </section>
 
                 {{-- Delete account (Phase 2.5: password in the dialog; personal data anonymized, booking records kept) --}}
@@ -158,6 +175,49 @@
         </div>
     </x-account.shell>
 @endsection
+
+@push('modals')
+    {{-- Add a card (5.3): Stripe's Payment Element in setup mode, or the fake gateway's test card locally. --}}
+    <dialog id="card-dialog" aria-labelledby="card-dialog-title" class="m-auto w-[calc(100%-2rem)] max-w-lg rounded-3xl bg-white p-0 text-navy-900 shadow-2xl backdrop:bg-navy-950/60">
+        <form id="card-form" class="p-6 md:p-8" novalidate data-card-setup="{{ json_encode($cardSetup) }}">
+            <h2 id="card-dialog-title" class="font-display text-3xl text-navy-950">Add a card</h2>
+            <p class="mt-3 text-sm leading-relaxed text-navy-600">Stored securely by Stripe for your next booking. We only keep its brand and last 4 digits.</p>
+            @if ($cardSetup['provider'] === 'stripe')
+                <div id="card-element" class="mt-5 min-h-24"></div>
+            @else
+                @php($field = 'w-full rounded-xl border border-navy-200 px-4 py-3.5 text-sm focus:border-navy-950 focus:outline-hidden focus:ring-4 focus:ring-navy-100')
+                {{-- Fake gateway (local development and tests only): the inputs have no name; only the brand, last 4 and expiry are posted. --}}
+                <div class="mt-5 grid gap-4 sm:grid-cols-6" data-test-card>
+                    <div class="sm:col-span-6">
+                        <label for="new-card-number" class="text-sm font-bold text-navy-800">Card number<span class="text-red-600" aria-hidden="true"> *</span></label>
+                        <div class="relative mt-2"><input id="new-card-number" inputmode="numeric" autocomplete="cc-number" placeholder="1234 5678 9012 3456" maxlength="19" data-card="number" class="{{ $field }} tracking-wider"></div>
+                    </div>
+                    <div class="sm:col-span-3">
+                        <label for="new-card-exp" class="text-sm font-bold text-navy-800">Expiry<span class="text-red-600" aria-hidden="true"> *</span></label>
+                        <div class="relative mt-2"><input id="new-card-exp" inputmode="numeric" autocomplete="cc-exp" placeholder="MM / YY" maxlength="7" data-card="exp" class="{{ $field }}"></div>
+                    </div>
+                    <div class="sm:col-span-3">
+                        <label for="new-card-cvc" class="text-sm font-bold text-navy-800">CVC<span class="text-red-600" aria-hidden="true"> *</span></label>
+                        <div class="relative mt-2"><input id="new-card-cvc" inputmode="numeric" autocomplete="cc-csc" placeholder="123" maxlength="4" data-card="cvc" class="{{ $field }}"></div>
+                    </div>
+                </div>
+                <p class="mt-4 rounded-xl bg-navy-50 px-4 py-3 text-xs text-navy-500"><strong class="text-navy-800">Test mode:</strong> use <button type="button" data-fill-test-card class="font-bold text-brass-700 underline">4242 4242 4242 4242</button>, any future expiry and any CVC.</p>
+            @endif
+            <p class="mt-4 hidden rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700 ring-1 ring-red-200" role="alert" data-card-dialog-error></p>
+            <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <x-button type="button" variant="outline" data-close-dialog>Cancel</x-button>
+                <x-button type="submit" variant="dark" data-save-card>Save card</x-button>
+            </div>
+        </form>
+    </dialog>
+@endpush
+
+@if ($cardSetup['provider'] === 'stripe')
+    @push('head')
+        {{-- Stripe.js must load from Stripe itself (PCI); allowed by the CSP with the Stripe driver. --}}
+        <script src="https://js.stripe.com/v3/" nonce="{{ Illuminate\Support\Facades\Vite::cspNonce() }}"></script>
+    @endpush
+@endif
 
 @if ($deletionBlockers === [])
     @push('modals')

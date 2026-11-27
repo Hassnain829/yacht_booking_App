@@ -5,20 +5,15 @@
 | Demo customer account (Phase 1 only)
 |--------------------------------------------------------------------------
 |
-| Sample trips and saved cards for the account screens (/account/trips, the cards on /account). Read
+| Sample trips for the demo admin screens (complaints, finance) that still read them. Read
 | through App\Support\Demo\DemoCustomer: day offsets become dates relative to today (Chicago) and
 | prices come from DemoQuote, like a real booking's price snapshot. The profile is real since Phase 2.5.
-| Phase 4 (bookings) and Phase 5 (Stripe cards) replace the rest; then this file is deleted.
+| My trips are real since 4.7 and saved cards since 5.3; the admin's later phases replace the rest, then this
+| file is deleted.
 |
 */
 
 return [
-
-    // Display cache of Stripe payment methods (PLAN §6.6) — never full card numbers.
-    'cards' => [
-        ['id' => 'pm_demo_visa', 'brand' => 'Visa', 'last4' => '4242', 'exp_month' => 12, 'exp_year' => 2028, 'default' => true],
-        ['id' => 'pm_demo_mc', 'brand' => 'Mastercard', 'last4' => '4444', 'exp_month' => 8, 'exp_year' => 2027, 'default' => false],
-    ],
 
     'captains' => [
         'devon' => ['name' => 'Capt. Devon J.', 'initials' => 'DJ', 'license' => 'USCG Master · 50-ton', 'years' => 14],

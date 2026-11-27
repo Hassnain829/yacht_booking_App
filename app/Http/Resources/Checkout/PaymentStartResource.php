@@ -10,7 +10,8 @@ use Illuminate\Http\Request;
 /**
  * What the browser needs to take the payment (POST /checkout/{booking}/pay): the provider, Stripe's client secret
  * for this intent (never stored on our side), the amount being charged (the booking's total, D22) and where to go
- * afterwards. The fake gateway gets its test card endpoint instead of a secret.
+ * afterwards. The fake gateway gets its test card endpoint instead of a secret. Paying with a saved card, Stripe's
+ * id for that card (the guest's own) is sent so the browser confirms with it.
  */
 class PaymentStartResource extends ApiResource
 {
@@ -29,6 +30,7 @@ class PaymentStartResource extends ApiResource
             'payment' => $payment->ulid,
             'provider' => $payment->provider,
             'client_secret' => $payment->provider === 'stripe' ? $intent->clientSecret : null,
+            'payment_method' => $payment->provider === 'stripe' ? $payment->provider_payment_method_id : null, // the guest's own saved card
             'amount_cents' => $payment->amount_cents,
             'currency' => $payment->currency,
             'return_url' => route('checkout.complete', $booking),

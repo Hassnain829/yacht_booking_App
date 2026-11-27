@@ -4,11 +4,15 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\BoatOwnership;
 use App\Enums\BookingStatus;
+use App\Enums\RefundReason;
+use App\Enums\RefundStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\BookingNotesRequest;
 use App\Http\Requests\Admin\BookingStatusRequest;
 use App\Models\Booking;
+use App\Models\Refund;
 use App\Services\BookingService;
+use App\Services\CancellationPolicyService;
 use App\Support\Admin\ListQuery;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -19,8 +23,9 @@ use Illuminate\View\View;
 /**
  * Admin → Bookings (PLAN 4.8): the list (search, whitelisted filters and sort, pages), a month calendar, and a
  * booking's page — guest contact (admin only), every price line, payments, history, notes and the status changes
- * allowed now (BookingService). Expired holds are left out unless asked for. Cancellations with refunds and
- * captain assignment come with Phases 5 and 8.
+ * allowed now (BookingService). Expired holds are left out unless asked for. Since 5.4 the page also cancels with a
+ * refund, refunds, and approves / declines a guest's refund (BookingRefundController); the list finds the bookings
+ * whose refund waits for approval. Captain assignment comes with Phase 8.
  */
 class BookingController extends Controller
 {
@@ -36,11 +41,14 @@ class BookingController extends Controller
         $when = $list->pick('when', ['upcoming', 'past']);
         $kind = $list->pick('kind', [BoatOwnership::House->value, BoatOwnership::Owner->value]);
         $captain = $list->pick('captain', ['none', 'assigned']);
+        $refund = $list->pick('refund', ['requested']);
         [$sort, $column, $dir] = $list->sort(self::SORTS, 'date', 'desc');
         $like = '%'.addcslashes($q, '%_\\').'%';
 
         $bookings = Booking::query()
             ->with(['boat:id,title,ownership', 'experience:id,name', 'captain:id,name'])
+            ->withCount(['refunds as refunds_awaiting' => fn ($query) => $query->where('status', RefundStatus::Requested)])
+            ->when($refund, fn ($query) => $query->whereHas('refunds', fn ($refunds) => $refunds->where('status', RefundStatus::Requested)))
             ->when($status, fn ($query) => $query->where('status', $status), fn ($query) => $query->where('status', '!=', BookingStatus::Expired))
             ->when($q !== '', fn ($query) => $query->where(fn ($where) => $where
                 ->where('reference', 'like', $like)
@@ -60,7 +68,8 @@ class BookingController extends Controller
 
         return view('admin.bookings.index', [
             'bookings' => $bookings,
-            'filters' => compact('q', 'status', 'when', 'kind', 'captain'),
+            'filters' => compact('q', 'status', 'when', 'kind', 'captain', 'refund'),
+            'awaitingRefunds' => Refund::query()->awaitingApproval()->count(),
             'statuses' => collect(BookingStatus::cases())->mapWithKeys(fn (BookingStatus $s) => [$s->value => $s->label()])->all(),
             'sort' => $sort,
             'dir' => $dir,
@@ -99,14 +108,27 @@ class BookingController extends Controller
         ]);
     }
 
-    public function show(Booking $booking, BookingService $bookings): View
+    public function show(Booking $booking, BookingService $bookings, CancellationPolicyService $policy): View
     {
         Gate::authorize('manage-bookings');
-        $booking->load(['boat.harbor', 'experience', 'items', 'captain', 'customer', 'payments', 'promoCode', 'statusHistory.actor']);
+        $booking->load(['boat.harbor', 'experience', 'items', 'captain', 'customer', 'payments', 'promoCode', 'statusHistory.actor', 'refunds.decider', 'disputes']);
+        $canRefund = request()->user()->can('issue-refunds');
+        $cancellable = $canRefund && $booking->status === BookingStatus::Confirmed && $booking->ends_at->isFuture();
 
         return view('admin.bookings.show', [
             'booking' => $booking,
             'targets' => $bookings->adminTargets($booking),
+            'money' => [
+                'refundable' => $policy->refundableCents($booking),
+                'fee' => $policy->feeToKeep($booking),
+                'card_fee' => $policy->cardFeeCents($booking),
+                'preview' => $cancellable ? $policy->preview($booking) : null,
+                'max' => $booking->refunds->mapWithKeys(fn (Refund $refund) => [$refund->ulid => $policy->refundableCents($booking, $refund)])->all(),
+            ],
+            'canRefund' => $canRefund,
+            'cancellable' => $cancellable,
+            'cancelCauses' => RefundReason::cancelCauses(),
+            'refundCauses' => RefundReason::refundCauses(),
         ]);
     }
 

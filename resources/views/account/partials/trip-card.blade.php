@@ -18,7 +18,12 @@
     };
     $payment = match (true) {
         $isHold => 'Not paid yet · your time is held until '.$trip->hold_expires_at->setTimezone($tz)->format('g:i A'),
-        $status === App\Enums\BookingStatus::Cancelled => $trip->amount_refunded_cents > 0 ? 'Refunded '.money($trip->amount_refunded_cents, 'always').' to '.$card : 'Cancelled',
+        $status === App\Enums\BookingStatus::Cancelled => match (true) {
+            $trip->refunds->contains('status', App\Enums\RefundStatus::Requested) => 'Cancelled · refund under review',
+            $trip->refunds->contains('status', App\Enums\RefundStatus::Pending) => 'Cancelled · refund on its way',
+            $trip->amount_refunded_cents > 0 => 'Refunded '.money($trip->amount_refunded_cents, 'always').' to '.$card,
+            default => 'Cancelled',
+        },
         default => 'Paid in full · '.money($trip->amount_paid_cents, 'always'),
     };
     $link = $isHold ? route('checkout.show', $trip) : route('account.trips.show', $trip);

@@ -24,7 +24,9 @@ use App\Models\Payment;
 use App\Services\AvailabilityService;
 use App\Services\BoatQuotes;
 use App\Services\CheckoutPricing;
+use App\Services\Payments\FakeGateway;
 use App\Services\Payments\PaymentGateway;
+use App\Services\Payments\SavedCards;
 use App\Services\PromoService;
 use App\Services\PublicCatalog;
 use App\Services\SettingsService;
@@ -35,7 +37,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Fluent;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -90,7 +91,7 @@ class CheckoutController extends Controller
     }
 
     /** The checkout page of a held booking. */
-    public function show(Booking $booking, PublicCatalog $catalog, CheckoutPricing $pricing, SettingsService $settings, PaymentGateway $gateway): View|RedirectResponse
+    public function show(Booking $booking, PublicCatalog $catalog, CheckoutPricing $pricing, SettingsService $settings, PaymentGateway $gateway, SavedCards $cards): View|RedirectResponse
     {
         Gate::authorize('view', $booking);
         if (in_array($booking->status, [BookingStatus::Confirmed, BookingStatus::Completed], true)) {
@@ -116,6 +117,7 @@ class CheckoutController extends Controller
             'defaultGratuity' => (int) $settings->all()['default_gratuity'],
             'gratuityAmounts' => $booking->isPayable() ? rescue(fn () => $pricing->gratuityAmounts($booking, $gratuityOptions), [], report: false) : [],
             'gratuity' => intdiv((int) $booking->gratuity_bp, 100),
+            'savedCards' => $cards->for(request()->user()),
             'occasions' => CheckoutOptions::OCCASIONS,
             'heard' => CheckoutOptions::HEARD,
             'editUrl' => route('yachts.show', array_filter([$booking->boat->slug, 'experience' => $booking->experience?->slug, 'date' => $local->toDateString(), 'hours' => $booking->hours, 'guests' => $booking->guests])).'#book',
@@ -215,9 +217,17 @@ class CheckoutController extends Controller
             throw QuoteException::on('card', 'Your card was declined. Try another card.');
         }
 
+        $saved = $payment->provider_payment_method_id
+            ? $booking->customer?->paymentMethods()->where('provider_payment_method_id', $payment->provider_payment_method_id)->first()
+            : null;
         $booking = $confirm->handle($payment, new Intent(
             (string) $payment->provider_intent_id, PaymentIntentStatus::Succeeded, $payment->amount_cents,
-            chargeId: 'fake_ch_'.Str::lower((string) Str::ulid()), cardBrand: strtolower((string) $request->validated('brand')), cardLast4: (string) $request->validated('last4'),
+            chargeId: 'fake_ch_'.FakeGateway::id(),
+            cardBrand: $saved?->brand ?? strtolower((string) $request->validated('brand')),
+            cardLast4: $saved?->last4 ?? (string) $request->validated('last4'),
+            paymentMethodId: $saved?->provider_payment_method_id ?? ($payment->save_card ? 'fake_pm_'.FakeGateway::id() : null),
+            cardExpMonth: $saved?->exp_month ?? (int) ($request->validated('exp_month') ?? 12),
+            cardExpYear: $saved?->exp_year ?? (int) ($request->validated('exp_year') ?? now()->addYears(2)->year),
         ));
 
         return response()->json(['data' => ['redirect' => $booking->status === BookingStatus::Confirmed ? route('bookings.confirmation', $booking) : route('checkout.complete', $booking)]]);

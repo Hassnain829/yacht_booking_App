@@ -35,24 +35,25 @@
         <p>Every trip is paid in full at checkout. When you cancel:</p>
         <ul>
             <li>We work out how much of the trip price comes back to you under the boat's policy (for example 100% or 50%). Gratuity is always refunded in full.</li>
+            <li>The card processing fee charged on your payment isn't refundable, so it is taken off the refund.</li>
             <li>The refund goes back to the card you paid with.</li>
         </ul>
-        <p><strong>Example:</strong> a trip costs $1,000 and you paid the $1,000 at checkout. If you cancel in the 50% window, $500 comes back to you. If you cancel in the full-refund window, all $1,000 comes back.</p>
+        <p><strong>Example:</strong> a trip costs $1,000 and you paid the $1,000 at checkout (the card processing fee on it was about $29.30). If you cancel in the 50% window, $500 less the fee — $470.70 — comes back to you. If you cancel in the full-refund window, $970.70 comes back.</p>
 
         <h2 id="weather">Weather and safety</h2>
-        <p>Your captain has the final say on safety. If the captain or our team cancels a trip because of weather, water conditions or any other safety reason, you choose between a <strong>full refund</strong> of everything you paid or a <strong>free new date</strong>. We'll contact you as early as possible — usually the day before.</p>
+        <p>Your captain has the final say on safety. If the captain or our team cancels a trip because of weather, water conditions or any other safety reason, you get a <strong>full refund</strong> of what you paid (less the card processing fee, which isn't refundable). We'll contact you as early as possible — usually the day before.</p>
         <p>A light rain or a cloudy sky alone is not a safety cancellation. If you decide not to sail in conditions the captain considers safe, the normal policy applies.</p>
 
         <h2 id="owner">If the boat owner cancels</h2>
-        <p>If a boat owner cancels a confirmed trip, you get a <strong>full refund</strong> of everything you paid, whatever the policy. Our team will also try to find you a similar boat for the same date.</p>
+        <p>If a boat owner cancels a confirmed trip, you get a <strong>full refund</strong> of what you paid, whatever the policy. Our team will also try to find you a similar boat for the same date.</p>
 
         <h2 id="changes">Changing your date</h2>
         <p>Date changes are free up to 14 days before your charter, subject to availability. Contact us and we'll move your booking; any price difference is shown before you confirm.</p>
 
         <h2 id="how-to">How to cancel</h2>
-        <p>Open <strong>My trips</strong> in your account, choose the trip and select <strong>Cancel trip</strong>. You'll see the exact refund before you confirm. You can also call us at <a href="tel:{{ $b['phone_href'] }}">{{ $b['phone'] }}</a> or email <a href="mailto:{{ $b['email'] }}">{{ $b['email'] }}</a>.</p>
+        <p>Open <strong>My trips</strong> in your account, choose the trip and select <strong>Cancel trip</strong>. You'll see the exact refund before you confirm. Your time is released right away; our team reviews the refund, usually within 1 business day, and emails you when it's sent. You can also call us at <a href="tel:{{ $b['phone_href'] }}">{{ $b['phone'] }}</a> or email <a href="mailto:{{ $b['email'] }}">{{ $b['email'] }}</a>.</p>
 
         <h2 id="timing">When the money arrives</h2>
-        <p>Refunds go back to the card you paid with. We send them the same day; your bank usually shows them within 5–10 business days.</p>
+        <p>Refunds go back to the card you paid with. We send them as soon as our team approves them; your bank usually shows them within 5–10 business days.</p>
     </x-legal-page>
 @endsection

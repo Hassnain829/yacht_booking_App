@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Phase1;
 
+use App\Models\CustomerPaymentMethod;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -40,10 +41,11 @@ class AccountPagesTest extends TestCase
     public function test_profile_page_renders_every_section_without_card_numbers(): void
     {
         $user = User::factory()->create(['email' => 'jane.doe@example.com']);
+        CustomerPaymentMethod::factory()->for($user)->default()->create();
         $html = $this->actingAs($user)->get('/account')
             ->assertOk()
             ->assertSee('value="jane.doe@example.com"', false) // the real account since Phase 2.5
-            ->assertSee('Visa •••• 4242') // saved cards stay demo until Phase 5
+            ->assertSee('Visa •••• 4242') // the guest's saved card since 5.3
             ->assertDontSee('data-demo-form', false)
             ->assertSee('name="_token"', false)
             ->getContent();

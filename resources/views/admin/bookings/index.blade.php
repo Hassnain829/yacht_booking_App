@@ -1,6 +1,7 @@
 @extends('layouts.admin', ['title' => 'Bookings', 'active' => 'bookings'])
 
-{{-- Admin → Bookings (4.8): every trip, searchable, with whitelisted filters and sort. Expired holds only on request. --}}
+{{-- Admin → Bookings (4.8): every trip, searchable, with whitelisted filters and sort. Expired holds only on request.
+     Since 5.4: the guests' refunds waiting for approval (D23) — a banner, `?refund=requested`, and a pill on the row. --}}
 @php
     $select = 'rounded-xl border border-navy-200 bg-white px-3 py-2.5 text-sm text-navy-900 focus:border-navy-950 focus:outline-hidden focus:ring-4 focus:ring-navy-100';
     $tz = config('app.display_timezone');
@@ -12,6 +13,16 @@
             <x-button :href="route('admin.bookings.calendar')" variant="outline" icon-left="calendar-days">Calendar</x-button>
         </x-slot:actions>
     </x-admin.page-header>
+
+    @if ($awaitingRefunds > 0 && $filters['refund'] === null)
+        <a href="{{ route('admin.bookings.index', ['refund' => 'requested']) }}" class="mt-6 flex items-center gap-3 rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-900 ring-1 ring-amber-200 transition hover:bg-amber-100">
+            <i data-lucide="hand-coins" class="h-5 w-5 shrink-0 text-amber-600"></i>
+            <span class="flex-1">{{ $awaitingRefunds }} {{ Str::plural('refund', $awaitingRefunds) }} {{ $awaitingRefunds === 1 ? 'waits' : 'wait' }} for your approval. No money goes back until you approve it.</span>
+            <i data-lucide="arrow-right" class="h-4 w-4 shrink-0"></i>
+        </a>
+    @elseif ($filters['refund'] === 'requested')
+        <p class="mt-6 flex items-center gap-3 rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-900 ring-1 ring-amber-200"><i data-lucide="hand-coins" class="h-5 w-5 shrink-0 text-amber-600"></i>Showing the bookings whose refund waits for your approval.</p>
+    @endif
 
     <form method="GET" action="{{ route('admin.bookings.index') }}" class="mt-6 flex flex-wrap items-end gap-3 rounded-2xl bg-white p-4 shadow-xs ring-1 ring-navy-100" role="search">
         <div class="relative min-w-[14rem] flex-1">
@@ -71,7 +82,7 @@
                     <td>{{ trim($b->contact_first_name.' '.$b->contact_last_name) ?: '—' }}</td>
                     <td>{{ $b->guests }}</td>
                     <td>@if ($b->captain){{ $b->captain->name }}@elseif ($b->status === App\Enums\BookingStatus::Confirmed && $b->ends_at->isFuture())<x-admin.pill tone="warning">Not assigned</x-admin.pill>@else<span class="text-navy-300">—</span>@endif</td>
-                    <td><x-admin.pill :tone="$b->status->tone()">{{ $b->status->label() }}</x-admin.pill></td>
+                    <td><x-admin.pill :tone="$b->status->tone()">{{ $b->status->label() }}</x-admin.pill>@if ($b->refunds_awaiting > 0)<span class="mt-1 block"><x-admin.pill tone="warning">Refund to approve</x-admin.pill></span>@endif</td>
                     <td class="whitespace-nowrap font-bold text-navy-950">{{ money($b->total_cents, 'always') }}@if ($b->status === App\Enums\BookingStatus::Hold)<span class="block text-[11px] font-semibold text-navy-400">not paid yet</span>@endif</td>
                 </tr>
             @empty

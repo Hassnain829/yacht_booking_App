@@ -35,15 +35,6 @@ class DemoCustomer
         return $this->now;
     }
 
-    /** @return Collection<int, Fluent> */
-    public function cards(): Collection
-    {
-        return collect($this->config['cards'])->map(fn (array $card) => new Fluent([
-            ...$card,
-            'expires' => sprintf('%02d/%02d', $card['exp_month'], $card['exp_year'] % 100),
-        ]));
-    }
-
     /** @return Collection<int, Fluent> upcoming first (soonest), then past (newest) */
     public function trips(): Collection
     {

@@ -24,7 +24,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * UserAccountService makes owners and changes status, `app:create-admin` creates the admin.
  */
 #[Fillable(['first_name', 'last_name', 'email', 'phone', 'password', 'marketing_opt_in'])]
-#[Hidden(['id', 'password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes', 'last_login_ip'])]
+#[Hidden(['id', 'password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes', 'last_login_ip', 'stripe_customer_id'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
@@ -61,6 +61,16 @@ class User extends Authenticatable implements MustVerifyEmail
     public function boats(): HasMany
     {
         return $this->hasMany(Boat::class, 'owner_id');
+    }
+
+    /**
+     * Cards saved with the payment provider (5.3), the default first.
+     *
+     * @return HasMany<CustomerPaymentMethod, $this>
+     */
+    public function paymentMethods(): HasMany
+    {
+        return $this->hasMany(CustomerPaymentMethod::class)->orderByDesc('is_default')->orderByDesc('id');
     }
 
     public function isAdmin(): bool

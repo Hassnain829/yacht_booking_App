@@ -1,5 +1,6 @@
 @extends('layouts.app', [
     'title' => 'Trip '.$trip->reference,
+    'page' => 'account-trip',
     'headerSolid' => true,
     'robots' => 'noindex',
     'mainClass' => 'min-h-screen pb-24 pt-28',
@@ -7,8 +8,9 @@
 
 {{--
     Trip detail (PLAN 4.7): the guest's own booking, in the Phase 1 design. The refund preview comes from the policy
-    the trip was booked under (App\Support\Booking\RefundPreview). Online cancellation (Phase 5) and the problem
-    report (Phase 7) aren't built yet: those boxes say how to reach the team with the reference.
+    the trip was booked under, less the card processing fee (CancellationPolicyService, D23). Since 5.4 the guest
+    cancels here (the dialog posts to account.trips.cancel); the refund waits for the team's approval and its state
+    shows on this page. The problem report (Phase 7) isn't built yet: that box says how to reach the team.
 --}}
 @php
     $tz = config('app.display_timezone');
@@ -25,6 +27,18 @@
         App\Enums\BookingStatus::Completed => ['Completed', 'bg-navy-100 text-navy-700'],
         App\Enums\BookingStatus::Cancelled => ['Cancelled', 'bg-red-100 text-red-700'],
         default => [$status->label(), 'bg-navy-100 text-navy-700'],
+    };
+    $refundLine = fn (App\Models\Refund $refund) => match ($refund->status) {
+        App\Enums\RefundStatus::Requested => 'Your refund of '.money($refund->amount_cents, 'always').' is being reviewed by our team — usually within 1 business day. We\'ll email you when it\'s sent.',
+        App\Enums\RefundStatus::Pending => 'Your refund of '.money($refund->amount_cents, 'always').' is on its way to '.$card.'. It can take 5–10 business days to show.',
+        App\Enums\RefundStatus::Succeeded => money($refund->amount_cents, 'always').' was refunded to '.$card.($refund->refunded_at ? ' on '.$refund->refunded_at->setTimezone($tz)->format('M j, Y') : '').'.',
+        App\Enums\RefundStatus::Rejected => 'Your refund request was declined'.($refund->decision_note ? ': '.$refund->decision_note : '.'),
+        default => 'We couldn\'t send your refund of '.money($refund->amount_cents, 'always').' yet. Our team is on it.',
+    };
+    $flash = match (session('status')) {
+        'cancelled-refund-requested' => 'Your trip is cancelled. Your refund is being reviewed by our team, and we\'ll email you when it\'s sent.',
+        'cancelled' => 'Your trip is cancelled. A confirmation is on its way to your email.',
+        default => null,
     };
     $facts = [
         ['calendar-days', 'Date', $start->format('l, F j, Y')],
@@ -43,6 +57,9 @@
             </div>
         </x-slot:actions>
 
+        @if ($flash)
+            <p class="mt-6 flex items-start gap-3 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200" role="status"><i data-lucide="circle-check" class="mt-0.5 h-4 w-4 shrink-0"></i>{{ $flash }}</p>
+        @endif
         <div class="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
             <div class="space-y-6">
                 {{-- Trip summary --}}
@@ -124,6 +141,9 @@
                         @if ($trip->amount_refunded_cents > 0)
                             <div class="flex justify-between gap-4"><dt class="text-navy-600">Refunded</dt><dd class="font-semibold text-red-600">−{{ money($trip->amount_refunded_cents, 'always') }}</dd></div>
                         @endif
+                        @foreach ($trip->refunds->whereIn('status', [App\Enums\RefundStatus::Requested, App\Enums\RefundStatus::Pending]) as $open)
+                            <div class="flex justify-between gap-4"><dt class="text-navy-600">{{ $open->status === App\Enums\RefundStatus::Requested ? 'Refund under review' : 'Refund on its way' }}</dt><dd class="font-semibold text-navy-700">{{ money($open->amount_cents, 'always') }}</dd></div>
+                        @endforeach
                     </dl>
                     <div class="mt-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
                         <button type="button" data-soon class="inline-flex items-center justify-center gap-2 rounded-full border border-navy-200 px-4 py-2.5 text-sm font-bold text-navy-900 transition hover:border-navy-950 hover:bg-navy-950 hover:text-white"><i data-lucide="file-text" class="h-4 w-4"></i>Receipt</button>
@@ -150,17 +170,25 @@
                     @endif
 
                     @if ($status === App\Enums\BookingStatus::Cancelled)
-                        <p class="mt-5 rounded-2xl bg-red-50 p-4 text-sm text-red-900 ring-1 ring-red-200">Cancelled{{ $trip->cancelled_at ? ' on '.$trip->cancelled_at->setTimezone($tz)->format('M j, Y') : '' }}.{{ $trip->amount_refunded_cents > 0 ? ' '.money($trip->amount_refunded_cents, 'always').' was refunded to '.$card.'.' : '' }}</p>
+                        <div class="mt-5 space-y-2 rounded-2xl bg-red-50 p-4 text-sm text-red-900 ring-1 ring-red-200">
+                            <p class="font-bold">Cancelled{{ $trip->cancelled_at ? ' on '.$trip->cancelled_at->setTimezone($tz)->format('M j, Y') : '' }}.</p>
+                            @forelse ($trip->refunds as $item)
+                                <p>{{ $refundLine($item) }}</p>
+                            @empty
+                                <p>{{ $trip->amount_refunded_cents > 0 ? money($trip->amount_refunded_cents, 'always').' was refunded to '.$card.'.' : 'No refund was due under this policy.' }}</p>
+                            @endforelse
+                        </div>
                     @elseif ($refund)
                         <div class="mt-5 rounded-2xl bg-navy-50/70 p-4">
                             <p class="text-xs font-bold uppercase tracking-[0.15em] text-navy-400">If you cancel now</p>
                             <p class="mt-1 text-2xl font-extrabold text-navy-950">{{ money($refund['refund_cents'], 'always') }} <span class="text-sm font-semibold text-navy-500">back to your card</span></p>
-                            <p class="mt-1 text-xs text-navy-500">{{ $refund['percent'] }}% refund under this policy (the crew gratuity always comes back).</p>
+                            <p class="mt-1 text-xs text-navy-500">{{ $refund['percent'] }}% refund under this policy (the crew gratuity always comes back){{ $refund['fee_cents'] > 0 ? ', less the '.money($refund['fee_cents'], 'always').' card processing fee, which isn\'t refundable' : '' }}.</p>
                             @if ($refund['next'])
                                 <p class="mt-2 text-xs font-semibold text-amber-800">After {{ $refund['next']['at']->setTimezone($tz)->format('M j, g:i A') }}: {{ $refund['next']['percent'] }}% refund.</p>
                             @endif
                         </div>
-                        <p class="mt-4 text-xs leading-relaxed text-navy-600">Call {{ $business['phone'] }} or email {{ $business['email'] }} with your reference <span class="whitespace-nowrap">{{ $trip->reference }}</span> to cancel — we process it under this policy right away.</p>
+                        <button type="button" data-open-cancel class="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full border border-red-200 px-6 py-3 text-sm font-bold text-red-700 transition hover:border-red-600 hover:bg-red-600 hover:text-white">Cancel trip</button>
+                        <p class="mt-3 text-xs leading-relaxed text-navy-500">Your time is freed right away. Our team reviews the refund, usually within 1 business day, and emails you when it's sent.</p>
                     @else
                         <p class="mt-5 text-xs text-navy-500">This trip has ended.</p>
                     @endif
@@ -170,3 +198,26 @@
         </div>
     </x-account.shell>
 @endsection
+
+@if ($refund)
+    @push('modals')
+        <dialog id="cancel-dialog" aria-labelledby="cancel-dialog-title" @if ($errors->has('reason') || $errors->has('note') || $errors->has('cancel')) data-open-on-load @endif class="m-auto w-[calc(100%-2rem)] max-w-lg rounded-3xl bg-white p-0 text-navy-900 shadow-2xl backdrop:bg-navy-950/60">
+            <form id="cancel-form" method="POST" action="{{ route('account.trips.cancel', $trip) }}" class="p-6 md:p-8">
+                @csrf
+                <input type="hidden" name="idempotency_key" value="{{ Str::uuid() }}">
+                <h2 id="cancel-dialog-title" class="font-display text-3xl text-navy-950">Cancel this trip?</h2>
+                <p class="mt-3 text-sm leading-relaxed text-navy-600">{{ $trip->experience?->name ?? 'Your private charter' }} on {{ $start->format('D, M j') }}. Under the {{ $policy['name'] ?? '' }} policy you get <strong class="text-navy-950">{{ money($refund['refund_cents'], 'always') }}</strong> back to {{ $card }} ({{ $refund['percent'] }}%{{ $refund['fee_cents'] > 0 ? ', less the '.money($refund['fee_cents'], 'always').' card fee' : '' }}). Our team reviews it, usually within 1 business day; refunds then take 5–10 business days to appear.</p>
+                @error('cancel')
+                    <p class="mt-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700 ring-1 ring-red-200" role="alert">{{ $message }}</p>
+                @enderror
+                <x-form.select name="reason" label="Why are you cancelling?" class="mt-5" required placeholder="Choose a reason" :options="$cancelReasons" />
+                <x-form.textarea name="note" label="Anything we should know? (optional)" class="mt-4" rows="2" maxlength="500" />
+                <p class="mt-3 text-xs text-navy-400">Worried about the weather? If we cancel for weather or safety, you get a full refund (the card processing fee isn't refundable).</p>
+                <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <x-button type="button" variant="outline" data-close-dialog>Keep my trip</x-button>
+                    <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-full bg-red-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-red-700">Cancel trip</button>
+                </div>
+            </form>
+        </dialog>
+    @endpush
+@endif

@@ -140,6 +140,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('payment', fn (Request $request) => Limit::perMinute(10)->by($perVisitor($request)));
         RateLimiter::for('payment-status', fn (Request $request) => Limit::perMinute(60)->by($perVisitor($request)));
         RateLimiter::for('webhooks', fn (Request $request) => Limit::perMinute(300)->by('ip:'.$request->ip()));
+        // A guest cancelling a trip (5.4) and managing saved cards (5.3).
+        RateLimiter::for('cancel', fn (Request $request) => Limit::perMinute(5)->by($perVisitor($request)));
+        RateLimiter::for('cards', fn (Request $request) => Limit::perMinute(10)->by($perVisitor($request)));
 
         // Files: uploads (listing photos, documents, complaint photos — Phases 3.4, 6, 7) and opening a private file.
         RateLimiter::for('uploads', fn (Request $request) => Limit::perMinute(30)->by($perVisitor($request)));

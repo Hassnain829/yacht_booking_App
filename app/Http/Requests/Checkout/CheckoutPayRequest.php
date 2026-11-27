@@ -3,14 +3,18 @@
 namespace App\Http\Requests\Checkout;
 
 use App\Models\Addon;
+use App\Models\CustomerPaymentMethod;
 use App\Rules\PlainText;
+use App\Services\Payments\PaymentGateway;
 use App\Support\Checkout\CheckoutOptions;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 /**
  * "Pay" on the checkout page (POST /checkout/{booking}/pay, PLAN 4.5): the final add-ons and gratuity, the lead
- * guest's details, occasion, note and the terms. Never a price: the total is QuoteService's. The `idempotent`
- * middleware and the payment's unique key stop a double payment.
+ * guest's details, occasion, note and the terms; since 5.3 the guest's saved card to pay with (`card`, one of their
+ * own cards of the provider in use) or whether to save the new one (`save_card`). Never a price: the total is
+ * QuoteService's. The `idempotent` middleware and the payment's unique key stop a double payment.
  */
 class CheckoutPayRequest extends CheckoutPriceRequest
 {
@@ -28,7 +32,31 @@ class CheckoutPayRequest extends CheckoutPriceRequest
             'heard' => ['nullable', 'string', Rule::in(CheckoutOptions::HEARD)],
             'notes' => ['nullable', 'string', 'max:1000', new PlainText],
             'agree' => ['accepted'],
+            'card' => ['nullable', 'string', 'size:26', Rule::exists('customer_payment_methods', 'ulid')->where('user_id', $this->user()->getKey())->where('provider', app(PaymentGateway::class)->name())],
+            'save_card' => ['nullable', 'boolean'],
         ];
+    }
+
+    public function after(): array
+    {
+        return [
+            function (Validator $validator) {
+                if ($validator->errors()->has('card') || $this->savedCard() === null) {
+                    return;
+                }
+                if ($this->savedCard()->isExpired()) {
+                    $validator->errors()->add('card', 'This card has expired. Choose another one or use a new card.');
+                }
+            },
+        ];
+    }
+
+    /** The guest's own saved card chosen to pay with, if any. */
+    public function savedCard(): ?CustomerPaymentMethod
+    {
+        $ulid = $this->input('card');
+
+        return is_string($ulid) && $ulid !== '' ? CustomerPaymentMethod::query()->where('ulid', strtolower($ulid))->where('user_id', $this->user()->getKey())->first() : null;
     }
 
     /** @return array<string, string> */
@@ -47,11 +75,15 @@ class CheckoutPayRequest extends CheckoutPriceRequest
     /**
      * What PrepareCheckoutPayment puts on the booking.
      *
-     * @return array{addons: list<Addon>, gratuity: int, first_name: string, last_name: string, email: string, phone: string, occasion: ?string, notes: ?string, heard: ?string}
+     * @return array{addons: list<Addon>, gratuity: int, first_name: string, last_name: string, email: string, phone: string, occasion: ?string, notes: ?string, heard: ?string, card: ?CustomerPaymentMethod, save_card: bool}
      */
     public function choices(): array
     {
+        $card = $this->savedCard();
+
         return [
+            'card' => $card,
+            'save_card' => $card === null && $this->boolean('save_card'),
             'addons' => $this->addons(),
             'gratuity' => $this->gratuity(),
             'first_name' => trim((string) $this->validated('first_name')),

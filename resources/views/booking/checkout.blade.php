@@ -10,7 +10,8 @@
     Checkout of a held booking (PLAN 4.5, D22: paid in full, no deposit). The mockup's design. Prices come from
     QuoteService: the lines below are the booking's, and resources/js/pages/checkout.js asks the price endpoint
     when add-ons or the gratuity change. "Pay" saves the final choices and takes the card through Stripe's
-    Payment Element (card data never touches our server) — or the fake gateway's test card, locally.
+    Payment Element (card data never touches our server) — or the fake gateway's test card, locally. Since 5.3 the
+    guest can pay with a saved card, or tick "Save this card for next time".
 --}}
 @php
     $tz = config('app.display_timezone');
@@ -22,6 +23,8 @@
     $exact = fn (int $cents) => money($cents);
     $cardField = 'w-full rounded-xl border border-navy-200 px-4 py-3.5 text-sm focus:border-navy-950 focus:outline-hidden focus:ring-4 focus:ring-navy-100';
     $step = 0;
+    // Saved cards (5.3): the default one is picked when it hasn't expired; otherwise "Use a new card".
+    $preferred = $savedCards->first(fn ($saved) => $saved->is_default && ! $saved->isExpired()) ?? $savedCards->first(fn ($saved) => ! $saved->isExpired());
 @endphp
 
 @section('content')
@@ -146,6 +149,31 @@
 
                     <p class="mt-6 flex items-start gap-3 rounded-2xl bg-brass-50 p-4 text-sm text-navy-700 ring-1 ring-brass-200"><i data-lucide="circle-check" class="mt-0.5 h-5 w-5 shrink-0 text-brass-600"></i><span><strong class="text-navy-950">Paid in full today.</strong> Your yacht is booked as soon as the payment goes through. Nothing more is charged before your trip.</span></p>
 
+                    @if ($savedCards->isNotEmpty())
+                        <div class="mt-6 space-y-3" role="radiogroup" aria-label="Pay with" data-saved-cards>
+                            @foreach ($savedCards as $saved)
+                                <label @class(['flex items-center gap-4 rounded-2xl p-4 ring-1 ring-navy-100 transition has-checked:ring-2 has-checked:ring-navy-950', 'cursor-pointer hover:ring-navy-300' => ! $saved->isExpired(), 'opacity-50' => $saved->isExpired()])>
+                                    <input type="radio" name="card" value="{{ $saved->ulid }}" class="h-4 w-4 shrink-0 accent-navy-950" @checked($preferred?->is($saved)) @disabled($saved->isExpired()) data-brand="{{ $saved->brandName() }}" data-last4="{{ $saved->last4 }}" data-exp-month="{{ $saved->exp_month }}" data-exp-year="{{ $saved->exp_year }}">
+                                    <x-card-brand :brand="$saved->brandName()" />
+                                    <span class="min-w-0 flex-1">
+                                        <span class="block text-sm font-bold text-navy-950">{{ $saved->label() }}</span>
+                                        <span class="block text-xs text-navy-500">{{ $saved->isExpired() ? 'Expired '.$saved->expires() : 'Expires '.$saved->expires() }}</span>
+                                    </span>
+                                    @if ($saved->is_default)
+                                        <span class="rounded-full bg-brass-100 px-2.5 py-1 text-[11px] font-bold text-brass-800">Default</span>
+                                    @endif
+                                </label>
+                            @endforeach
+                            <label class="flex cursor-pointer items-center gap-4 rounded-2xl p-4 ring-1 ring-navy-100 transition hover:ring-navy-300 has-checked:ring-2 has-checked:ring-navy-950">
+                                <input type="radio" name="card" value="" class="h-4 w-4 shrink-0 accent-navy-950" @checked($preferred === null)>
+                                <span class="grid h-10 w-14 shrink-0 place-items-center rounded-lg bg-navy-50 text-navy-500"><i data-lucide="credit-card" class="h-5 w-5"></i></span>
+                                <span class="text-sm font-bold text-navy-950">Use a new card</span>
+                            </label>
+                            <p class="hidden text-xs font-semibold text-red-600" role="alert" data-card-error></p>
+                        </div>
+                    @endif
+
+                    <div @class(['hidden' => $preferred !== null]) data-new-card>
                     @if ($checkoutData['provider'] === 'stripe')
                         {{-- Stripe's Payment Element: the card fields live in Stripe's own frames (PCI SAQ-A). --}}
                         <div id="payment-element" class="mt-6 min-h-24"></div>
@@ -175,12 +203,14 @@
                         </div>
                         <p class="mt-4 rounded-xl bg-navy-50 px-4 py-3 text-xs text-navy-500"><strong class="text-navy-800">Test mode:</strong> no real payment is taken. Use <button type="button" id="fill-demo" class="font-bold text-brass-700 underline">4242 4242 4242 4242</button> (or 4000 0000 0000 0002 to see a decline), any future expiry and any CVC.</p>
                     @endif
+                        <x-form.checkbox name="save_card" class="mt-5">Save this card for next time <span class="block text-xs font-normal text-navy-500">Kept securely by Stripe — we only see its brand and last 4 digits.</span></x-form.checkbox>
+                    </div>
                 </fieldset>
 
                 {{-- Agreement + pay --}}
                 <fieldset class="rounded-[2rem] bg-white p-6 shadow-card ring-1 ring-navy-100 md:p-8">
                     <legend class="sr-only">Agreements</legend>
-                    <x-form.checkbox name="agree" required>I agree to the <a href="{{ route('legal.cancellation') }}" target="_blank" class="font-bold text-navy-950 underline">{{ $booking->policy_snapshot['name'] ?? 'Cancellation' }} cancellation &amp; weather policy</a> and the passenger safety waiver, and confirm all guests will follow the captain's instructions.<span class="text-red-600" aria-hidden="true"> *</span></x-form.checkbox>
+                    <x-form.checkbox name="agree" required>I agree to the <a href="{{ route('legal.cancellation') }}" target="_blank" class="font-bold text-navy-950 underline">{{ $booking->policy_snapshot['name'] ?? 'Cancellation' }} cancellation &amp; weather policy</a> and the passenger safety waiver, and confirm all guests will follow the captain's instructions. The card processing fee is not refundable.<span class="text-red-600" aria-hidden="true"> *</span></x-form.checkbox>
                     <button type="submit" id="pay-btn" class="mt-8 inline-flex w-full items-center justify-center gap-3 rounded-full bg-brass-400 px-8 py-5 text-base font-extrabold text-navy-950 shadow-glow transition hover:-translate-y-0.5 hover:bg-brass-300 disabled:cursor-wait disabled:opacity-80">
                         <i data-lucide="lock" class="h-5 w-5"></i><span id="pay-label">Pay {{ $exact($booking->total_cents) }} &amp; confirm booking</span>
                     </button>

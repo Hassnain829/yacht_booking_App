@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Notifications\AccountDeleted;
 use App\Notifications\SecurityContext;
 use App\Notifications\TwoFactorChanged;
+use App\Services\Payments\SavedCards;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
@@ -26,6 +27,7 @@ class UserAccountService
         private AuditService $audit,
         private SessionService $sessions,
         private LoginEventService $log,
+        private SavedCards $cards,
     ) {}
 
     /**
@@ -93,6 +95,7 @@ class UserAccountService
 
         $email = $user->email;
         $context = SecurityContext::fromRequest();
+        $this->cards->removeAll($user); // saved cards are forgotten at the payment provider too (5.3)
 
         DB::transaction(function () use ($user) {
             $user->forceFill([

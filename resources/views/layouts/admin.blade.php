@@ -7,12 +7,13 @@
     $admin = app(\App\Support\Demo\DemoAdmin::class);
     $me = auth()->user(); // the signed-in admin (the admin area requires login)
     $counts = collect($admin->stats()['actions'])->mapWithKeys(fn ($a) => [$a[1] => $a[2]]);
+    $refundsToApprove = \App\Models\Refund::query()->awaitingApproval()->count(); // real since 5.4 (D23)
     $groups = [
         'Overview' => [
             ['dashboard', 'layout-dashboard', 'Dashboard', route('admin.dashboard'), null],
         ],
         'Operations' => [
-            ['bookings', 'calendar-check', 'Bookings', route('admin.bookings.index'), $counts['Trips without a captain'] ?: null],
+            ['bookings', 'calendar-check', 'Bookings', route('admin.bookings.index'), $refundsToApprove ?: null],
             ['captains', 'ship-wheel', 'Captains', route('admin.captains.index'), null],
             ['complaints', 'message-square-warning', 'Complaints', route('admin.complaints.index'), $counts['Open complaints'] ?: null],
             ['inbox', 'inbox', 'Inbox', route('admin.inbox.index'), $counts['New messages'] ?: null],

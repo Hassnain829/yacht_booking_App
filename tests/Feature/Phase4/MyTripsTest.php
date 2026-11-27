@@ -6,8 +6,8 @@ use App\Enums\BookingStatus;
 use App\Models\Boat;
 use App\Models\Booking;
 use App\Models\User;
+use App\Services\CancellationPolicyService;
 use App\Services\PublicCatalog;
-use App\Support\Booking\RefundPreview;
 use App\Support\StartTimes;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -17,8 +17,8 @@ use Tests\TestCase;
 
 /**
  * Phase 4.7 — My trips + trip detail: the guest's own bookings (someone else's is a 404), a hold that can still
- * be paid as "Finish checkout", and the refund the booking's own policy gives. Cancelling online (Phase 5) and the
- * problem report (Phase 7) point to the team for now.
+ * be paid as "Finish checkout", and the refund the booking's own policy gives (less the card fee since 5.4).
+ * Cancelling online: Phase5/CancelTripTest. The problem report (Phase 7) points to the team for now.
  */
 class MyTripsTest extends TestCase
 {
@@ -72,20 +72,23 @@ class MyTripsTest extends TestCase
     public function test_a_trip_page_shows_its_lines_the_card_and_the_refund_its_policy_gives(): void
     {
         $trip = $this->paidTrip($this->guest, 'azure', '2027-05-12');
-        $refund = RefundPreview::for($trip->fresh());
+        $policy = app(CancellationPolicyService::class);
+        $fee = CancellationPolicyService::estimateFee($trip->total_cents); // the fake gateway reports no fee: the estimate
+        $refund = $policy->preview($trip->fresh());
         $this->assertSame(100, $refund['percent'], 'Moderate: 5+ days ahead');
-        $this->assertSame($trip->total_cents, $refund['refund_cents']);
+        $this->assertSame([$trip->total_cents, $fee, $trip->total_cents - $fee], [$refund['policy_cents'], $refund['fee_cents'], $refund['refund_cents']], 'the card fee is kept back (D23)');
         $this->assertSame([50, '2027-05-07 12:00'], [$refund['next']['percent'], $refund['next']['at']->setTimezone('America/Chicago')->format('Y-m-d H:i')]);
 
         $this->actingAs($this->guest)->get("/account/trips/{$trip->ulid}")->assertOk()
             ->assertSee($trip->reference)->assertSee('Wednesday, May 12, 2027')->assertSee('Yacht charter')->assertSee('Licensed USCG captain')
             ->assertSee('Paid · Visa •••• 4242')->assertSee('Moderate policy')->assertSee('100% refund under this policy')
-            ->assertSee('After May 7, 12:00 PM: 50% refund.')->assertSee(route('bookings.calendar', $trip), false)
-            ->assertSeeText("with your reference {$trip->reference} to cancel")->assertSee('assigning a licensed USCG captain');
+            ->assertSee(money($fee, 'always').' card processing fee')->assertSee('After May 7, 12:00 PM: 50% refund.')
+            ->assertSee(route('bookings.calendar', $trip), false)->assertSee(route('account.trips.cancel', $trip), false)
+            ->assertSee('Cancel trip')->assertSee('assigning a licensed USCG captain');
 
         $this->travelTo(CarbonImmutable::parse('2027-05-10 12:00', 'America/Chicago')); // 2 days before
-        $late = RefundPreview::for($trip->fresh());
-        $this->assertSame([0, $trip->gratuity_cents], [$late['percent'], $late['refund_cents']], 'the gratuity always comes back');
+        $late = $policy->preview($trip->fresh());
+        $this->assertSame([0, $trip->gratuity_cents - $fee], [$late['percent'], $late['refund_cents']], 'the gratuity always comes back, less the card fee');
     }
 
     public function test_someone_elses_trip_is_a_404_and_a_guest_logs_in_first(): void
@@ -113,6 +116,6 @@ class MyTripsTest extends TestCase
         $this->get('/account/trips')->assertSee(route('account.trips.show', $recent).'#report', false);
         $this->get("/account/trips/{$recent->ulid}")->assertOk()->assertSee('Report a problem')->assertSee('Tell us by Wed, May 5 at 3:00 PM')->assertSee('This trip has ended.');
         $this->get("/account/trips/{$old->ulid}")->assertOk()->assertSee('The window to report a problem closed on Apr 23')->assertDontSee('id="report"', false);
-        $this->get("/account/trips/{$cancelled->ulid}")->assertOk()->assertSee('Cancelled on Apr 1, 2027. $1,500.00 was refunded')->assertDontSee('Your captain');
+        $this->get("/account/trips/{$cancelled->ulid}")->assertOk()->assertSee('Cancelled on Apr 1, 2027.')->assertSee('$1,500.00 was refunded')->assertDontSee('Your captain');
     }
 }

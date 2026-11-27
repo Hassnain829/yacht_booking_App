@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Account\PaymentMethodController as AccountPaymentMethodController;
 use App\Http\Controllers\Account\ProfileController as AccountProfileController;
 use App\Http\Controllers\Account\SessionController as AccountSessionController;
 use App\Http\Controllers\Account\TripController as AccountTripController;
@@ -9,6 +10,7 @@ use App\Http\Controllers\Admin\AmenityController as AdminAmenityController;
 use App\Http\Controllers\Admin\AuditLogController as AdminAuditLogController;
 use App\Http\Controllers\Admin\BoatController as AdminBoatController;
 use App\Http\Controllers\Admin\BookingController as AdminBookingController;
+use App\Http\Controllers\Admin\BookingRefundController as AdminBookingRefundController;
 use App\Http\Controllers\Admin\CancellationPolicyController as AdminPolicyController;
 use App\Http\Controllers\Admin\CaptainController as AdminCaptainController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
@@ -109,12 +111,23 @@ Route::prefix('owner')->name('owner.')->middleware(['auth', 'active', 'verified'
 });
 
 // Customer account — signed-in and active. My trips are the guest's own bookings (4.7; BookingPolicy: other people's
-// trips → 404). Saved cards stay demo until Phase 5.
+// trips → 404). A confirmed trip is cancelled online (5.4): its refund waits for the admin (D23). Saved cards (5.3):
+// the guest's own only (CustomerPaymentMethodPolicy); the server asks the provider whether a card was saved.
 Route::prefix('account')->name('account.')->middleware(['auth', 'active'])->group(function () {
     Route::get('/', [AccountProfileController::class, 'show'])->name('profile');
     Route::delete('/', [AccountProfileController::class, 'destroy'])->middleware('throttle:account-security')->name('destroy');
     Route::get('/trips', [AccountTripController::class, 'index'])->name('trips.index');
     Route::get('/trips/{booking}', [AccountTripController::class, 'show'])->where('booking', '[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}')->name('trips.show');
+    Route::post('/trips/{booking}/cancel', [AccountTripController::class, 'cancel'])->where('booking', '[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}')
+        ->middleware(['throttle:cancel', 'idempotent'])->name('trips.cancel');
+    Route::controller(AccountPaymentMethodController::class)->prefix('cards')->name('cards.')->middleware('throttle:cards')->group(function () {
+        Route::post('/setup', 'setup')->name('setup');
+        Route::post('/', 'store')->name('store');
+        Route::get('/added', 'added')->name('added'); // Stripe's return URL after a bank check
+        Route::post('/test-card', 'testCard')->name('test-card'); // fake gateway only (404 otherwise)
+        Route::post('/{card}/default', 'makeDefault')->where('card', '[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}')->name('default');
+        Route::delete('/{card}', 'destroy')->where('card', '[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}')->name('destroy');
+    });
 
     // Security (PLAN §8.1). The 2FA page shows the setup key and recovery codes, so it needs a recent
     // password confirmation; its buttons post to Fortify's /user/two-factor-* routes.
@@ -154,12 +167,19 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'active', 'verified'
 
     Route::get('/', AdminDashboardController::class)->name('dashboard');
     // Bookings (4.8): list, month calendar, a booking (by its reference) with its notes and status changes.
+    // Cancellations and refunds (5.4, D23): the admin cancels with a refund, refunds, or approves / declines a guest's.
     Route::get('/bookings', [AdminBookingController::class, 'index'])->name('bookings.index');
     Route::get('/bookings/calendar', [AdminBookingController::class, 'calendar'])->name('bookings.calendar');
     Route::controller(AdminBookingController::class)->prefix('bookings/{booking:reference}')->name('bookings.')->where(['booking' => 'CYB-[A-Z0-9]{6}'])->group(function () {
         Route::get('/', 'show')->name('show');
         Route::put('/notes', 'notes')->middleware('throttle:admin')->name('notes');
         Route::post('/status', 'status')->middleware('throttle:admin-sensitive')->name('status');
+    });
+    Route::controller(AdminBookingRefundController::class)->prefix('bookings/{booking:reference}')->name('bookings.')->where(['booking' => 'CYB-[A-Z0-9]{6}', 'refund' => $ulid])->middleware('throttle:admin-sensitive')->group(function () {
+        Route::post('/cancel', 'cancel')->middleware('idempotent')->name('cancel');
+        Route::post('/refunds', 'store')->middleware('idempotent')->name('refunds.store');
+        Route::post('/refunds/{refund}/approve', 'approve')->name('refunds.approve');
+        Route::post('/refunds/{refund}/decline', 'decline')->name('refunds.decline');
     });
 
     // Fleet (3.4.1, 3.4.3–3.4.5)

@@ -45,7 +45,12 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
   - Experiences are free and have no length of their own: lengths are the boat's (`QuoteService::durations(Boat)`). An experience departs inside its window (`time_slots`, every half hour of it) on its days; the card and `AvailabilityService` say so when a date or time doesn't fit. Its extras (`addon_experience`) are optional add-ons suggested at checkout, charged only when ticked (D21, 2026-11-25).
 - **Bookings and payments (since 4.5):** paid in full at checkout (D22).
   - A trip is held by `App\Actions\Booking\HoldTrip` (boat-row lock = the double-booking lock), paid through `PrepareCheckoutPayment` and confirmed only by `ConfirmPaidBooking` — from Stripe's word (signed webhook, or the server retrieving the intent), never the browser's. Status changes go through `BookingService::transition()` (writes the history).
-  - Card payments go through `App\Services\Payments\PaymentGateway` (Stripe; `FakeGateway` only in local / tests, refused in production). Card data never touches our server: only the brand and last 4 are stored.
+  - Card payments go through `App\Services\Payments\PaymentGateway` (Stripe; `FakeGateway` only in local / tests, refused in production). Card data never touches our server: only the brand, last 4 and expiry are stored.
+  - Saved cards (5.3) go through `App\Services\Payments\SavedCards`. A card counts as saved only when the server has asked the provider, never on the browser's word.
+- **Cancellations and refunds (since 5.4, D23):**
+  - No money goes back without the admin. A guest's online cancellation (`CancelBooking::byGuest`) frees the time and only *requests* the refund. The admin approves or declines it, or cancels and refunds from the booking page.
+  - Refund amounts come only from `App\Services\CancellationPolicyService`: the booking's policy snapshot, less the card fee (kept once).
+  - Money moves only through `App\Services\RefundService`. It is counted on the payment and the booking once, when the provider says it succeeded.
 - **Availability** comes only from `App\Services\AvailabilityService` (PLAN §7.2, since 4.2):
   - A boat has **start times** per weekday (Boatsetter-style) on the `App\Support\StartTimes` grid (every half hour, 05:00–22:00, Chicago time), not opening hours. Experience start times sit on the same grid.
   - Anything that needs a boat's busy time (holds, captain offers, extensions) reads `busyIntervals()`, never its own query.
@@ -61,7 +66,7 @@ A Laravel 13 app for **chicagoyachtbooking.com**, a yacht charter marketplace. C
   - It is cached (3.6) and cleared by the model events of the catalog models. A change made **without model events** (a query-builder `update()` / `delete()`, a pivot `sync()` / `attach()`) must call `PublicCatalog::flushAfterCommit()`, or the site shows stale data for up to a day.
   - Page tests seed it with `Tests\Concerns\SeedsPublicCatalog` (+ RefreshDatabase).
 - **Phase 1 demo code** (delete when the real data arrives):
-  - Demo data lives in `config/demo*.php`, read through `App\Support\Demo\*` (shaped like the future models, dates relative to "now"). Since 4.8 only the still-demo screens use it (the owner area, the admin dashboard / listings / inbox / finance, saved cards, page content).
+  - Demo data lives in `config/demo*.php`, read through `App\Support\Demo\*` (shaped like the future models, dates relative to "now"). Since 5.3 only the still-demo screens use it (the owner area, the admin dashboard / listings / inbox / finance, page content).
   - `<form data-demo-form="message">` = a form whose endpoint doesn't exist yet: the browser validates it, then shows a toast. Remove the attribute when the endpoint is built.
 - **Components with built-in classes take props, never a second conflicting class:** `x-button` → `size`/`variant`, `x-admin.pill` → `tone`, `x-admin.table` → `min`.
 - **Files:**

@@ -24,4 +24,10 @@ class BookingPolicy
     {
         return $this->view($user, $booking);
     }
+
+    /** Cancel online (5.4): the guest's own trip (CancelBooking checks it can still be cancelled). */
+    public function cancel(User $user, Booking $booking): Response
+    {
+        return $this->view($user, $booking);
+    }
 }
